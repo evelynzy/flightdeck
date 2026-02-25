@@ -1,6 +1,6 @@
 import { useAppStore } from '../../stores/appStore';
 import type { AgentInfo } from '../../types';
-import { Square, Terminal } from 'lucide-react';
+import { RefreshCw, Square, Terminal } from 'lucide-react';
 
 interface Props {
   agent: AgentInfo;
@@ -50,6 +50,18 @@ export function AgentCard({ agent, api }: Props) {
           >
             <Terminal size={14} />
           </button>
+          {(agent.status === 'completed' || agent.status === 'failed') && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                api.restartAgent(agent.id);
+              }}
+              className="p-1 text-gray-400 hover:text-yellow-400"
+              title="Restart agent"
+            >
+              <RefreshCw size={14} />
+            </button>
+          )}
           {agent.status === 'running' && (
             <button
               onClick={(e) => {

@@ -41,6 +41,12 @@ export function apiRouter(
     res.json({ ok });
   });
 
+  router.post('/agents/:id/restart', (req, res) => {
+    const newAgent = agentManager.restart(req.params.id);
+    if (!newAgent) return res.status(404).json({ error: 'Agent not found' });
+    res.status(201).json(newAgent.toJSON());
+  });
+
   router.post('/agents/:id/input', (req, res) => {
     const { text } = req.body;
     const agent = agentManager.get(req.params.id);

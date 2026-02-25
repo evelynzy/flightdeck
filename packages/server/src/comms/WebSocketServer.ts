@@ -74,6 +74,18 @@ export class WebSocketServer {
       this.broadcastAll({ type: 'agent:exit', agentId, code });
     });
 
+    agentManager.on('agent:crashed', (data: any) => {
+      this.broadcastAll({ type: 'agent:crashed', ...data });
+    });
+
+    agentManager.on('agent:auto_restarted', (data: any) => {
+      this.broadcastAll({ type: 'agent:auto_restarted', ...data });
+    });
+
+    agentManager.on('agent:restart_limit', (data: any) => {
+      this.broadcastAll({ type: 'agent:restart_limit', ...data });
+    });
+
     agentManager.on('agent:sub_spawned', (parentId: string, childJson: any) => {
       this.broadcastAll({ type: 'agent:sub_spawned', parentId, child: childJson });
     });

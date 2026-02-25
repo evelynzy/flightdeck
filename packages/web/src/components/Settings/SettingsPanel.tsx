@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../../stores/appStore';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Sun, Moon } from 'lucide-react';
 
 interface Props {
   api: any;
@@ -43,9 +43,50 @@ export function SettingsPanel({ api }: Props) {
     setRoleIcon('🤖');
   };
 
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.classList.toggle('light', theme === 'light');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
   return (
     <div className="flex-1 overflow-auto p-4 max-w-2xl">
       <h2 className="text-xl font-semibold mb-6">Settings</h2>
+
+      {/* Theme */}
+      <section className="mb-8">
+        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">
+          Theme
+        </h3>
+        <div className="bg-surface-raised border border-gray-700 rounded-lg p-4 flex gap-2">
+          <button
+            onClick={() => setTheme('light')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${
+              theme === 'light'
+                ? 'bg-accent text-black font-medium'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Sun size={14} />
+            Light
+          </button>
+          <button
+            onClick={() => setTheme('dark')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${
+              theme === 'dark'
+                ? 'bg-accent text-black font-medium'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Moon size={14} />
+            Dark
+          </button>
+        </div>
+      </section>
 
       {/* Concurrency */}
       <section className="mb-8">

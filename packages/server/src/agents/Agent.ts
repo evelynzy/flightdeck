@@ -39,6 +39,7 @@ export class Agent {
   private config: ServerConfig;
   private dataListeners: Array<(data: string) => void> = [];
   private exitListeners: Array<(code: number) => void> = [];
+  private hungListeners: Array<(elapsedMs: number) => void> = [];
   private peers: AgentContextInfo[];
 
   constructor(role: Role, config: ServerConfig, taskId?: string, parentId?: string, peers: AgentContextInfo[] = []) {
@@ -88,6 +89,13 @@ export class Agent {
       }
       for (const listener of this.exitListeners) {
         listener(code);
+      }
+    });
+
+    this.pty.on('hung', (elapsedMs: number) => {
+      this.status = 'idle';
+      for (const listener of this.hungListeners) {
+        listener(elapsedMs);
       }
     });
   }
@@ -165,6 +173,7 @@ CREW_UPDATE -->`;
   dispose(): void {
     this.dataListeners.length = 0;
     this.exitListeners.length = 0;
+    this.hungListeners.length = 0;
   }
 
   resize(cols: number, rows: number): void {
@@ -177,6 +186,10 @@ CREW_UPDATE -->`;
 
   onExit(listener: (code: number) => void): void {
     this.exitListeners.push(listener);
+  }
+
+  onHung(listener: (elapsedMs: number) => void): void {
+    this.hungListeners.push(listener);
   }
 
   getBufferedOutput(): string {

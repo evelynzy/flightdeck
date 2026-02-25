@@ -4,6 +4,7 @@ import { AgentCard } from './AgentCard';
 import { AgentTimeline } from './AgentTimeline';
 import { SpawnDialog } from './SpawnDialog';
 import { Plus } from 'lucide-react';
+import { SkeletonCard } from '../Skeleton';
 
 interface Props {
   api: any;
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export function AgentDashboard({ api, ws }: Props) {
-  const { agents } = useAppStore();
+  const { agents, loading } = useAppStore();
   const [showSpawn, setShowSpawn] = useState(false);
 
   // Keyboard shortcut: 'n' to spawn new agent
@@ -46,7 +47,13 @@ export function AgentDashboard({ api, ws }: Props) {
         </div>
       </div>
 
-      {agents.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : agents.length === 0 ? (
         <div className="text-center text-gray-500 py-20">
           <p className="text-lg mb-2">No agents running</p>
           <p className="text-sm">Spawn an agent to get started — press <kbd className="bg-surface border border-gray-700 rounded px-1.5 py-0.5 text-xs">N</kbd></p>

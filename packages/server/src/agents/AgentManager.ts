@@ -19,12 +19,19 @@ export class AgentManager extends EventEmitter {
   private maxConcurrent: number;
   private lockRegistry: FileLockRegistry;
   private activityLedger: ActivityLedger;
+  /** If set, auto-kill agents after this many ms past the initial hung detection */
+  private autoKillTimeoutMs: number | null;
+  private hungTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private crashCounts: Map<string, number> = new Map();
+  private maxRestarts: number;
+  private autoRestart: boolean;
 
   constructor(
     config: ServerConfig,
     roleRegistry: RoleRegistry,
     lockRegistry: FileLockRegistry,
     activityLedger: ActivityLedger,
+    { maxRestarts = 3, autoRestart = true }: { maxRestarts?: number; autoRestart?: boolean } = {},
   ) {
     super();
     this.config = config;
@@ -32,6 +39,9 @@ export class AgentManager extends EventEmitter {
     this.lockRegistry = lockRegistry;
     this.activityLedger = activityLedger;
     this.maxConcurrent = config.maxConcurrentAgents;
+    this.maxRestarts = maxRestarts;
+    this.autoRestart = autoRestart;
+    this.autoKillTimeoutMs = null;
   }
 
   spawn(role: Role, taskId?: string, parentId?: string): Agent {
@@ -72,7 +82,43 @@ export class AgentManager extends EventEmitter {
     });
 
     agent.onExit((code) => {
+      this.clearHungTimer(agent.id);
       this.emit('agent:exit', agent.id, code);
+
+      if (code !== null && code !== 0) {
+        const agentRole = agent.role?.id ?? 'unknown';
+        const crashKey = `${agentRole}:${agent.taskId ?? ''}`;
+
+        this.activityLedger.log(agent.id, agentRole, 'error', `Agent crashed with exit code ${code}`);
+        this.emit('agent:crashed', { agentId: agent.id, code });
+
+        const count = (this.crashCounts.get(crashKey) ?? 0) + 1;
+        this.crashCounts.set(crashKey, count);
+
+        if (this.autoRestart && count < this.maxRestarts) {
+          setTimeout(() => {
+            const newAgent = this.spawn(agent.role, agent.taskId, agent.parentId);
+            this.emit('agent:auto_restarted', { agentId: newAgent.id, previousAgentId: agent.id, crashCount: count });
+          }, 2000);
+        } else if (count >= this.maxRestarts) {
+          this.emit('agent:restart_limit', { agentId: agent.id });
+        }
+      }
+    });
+
+    agent.onHung((elapsedMs) => {
+      this.emit('agent:hung', { agentId: agent.id, elapsedMs });
+
+      if (this.autoKillTimeoutMs !== null && !this.hungTimers.has(agent.id)) {
+        const timer = setTimeout(() => {
+          this.hungTimers.delete(agent.id);
+          if (agent.status === 'idle') {
+            this.kill(agent.id);
+            this.emit('agent:hung_killed', { agentId: agent.id });
+          }
+        }, this.autoKillTimeoutMs);
+        this.hungTimers.set(agent.id, timer);
+      }
     });
 
     agent.start();
@@ -83,6 +129,7 @@ export class AgentManager extends EventEmitter {
   kill(id: string): boolean {
     const agent = this.agents.get(id);
     if (!agent) return false;
+    this.clearHungTimer(id);
     agent.kill();
     this.emit('agent:killed', id);
     return true;
@@ -100,8 +147,40 @@ export class AgentManager extends EventEmitter {
     return this.getAll().filter((a) => a.status === 'running' || a.status === 'creating').length;
   }
 
+  restart(id: string): Agent | null {
+    const agent = this.agents.get(id);
+    if (!agent) return null;
+    const { role, taskId } = agent;
+    agent.kill();
+    this.agents.delete(id);
+    const newAgent = this.spawn(role, taskId);
+    this.emit('agent:restarted', { oldId: id, newAgent: newAgent.toJSON() });
+    return newAgent;
+  }
+
   setMaxConcurrent(n: number): void {
     this.maxConcurrent = n;
+  }
+
+  setAutoRestart(enabled: boolean): void {
+    this.autoRestart = enabled;
+  }
+
+  setMaxRestarts(n: number): void {
+    this.maxRestarts = n;
+  }
+
+  /** Set auto-kill timeout (ms) for hung agents. Pass null to disable. */
+  setAutoKillTimeout(ms: number | null): void {
+    this.autoKillTimeoutMs = ms;
+  }
+
+  private clearHungTimer(agentId: string): void {
+    const timer = this.hungTimers.get(agentId);
+    if (timer) {
+      clearTimeout(timer);
+      this.hungTimers.delete(agentId);
+    }
   }
 
   shutdownAll(): void {

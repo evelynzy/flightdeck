@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { useAppStore } from '../../stores/appStore';
-import { X, Send, Maximize2, Minimize2 } from 'lucide-react';
+import { resolveShortId } from '../../utils/resolveShortId';
+import { X, Send, Maximize2, Minimize2, Megaphone } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 
 interface Props {
@@ -23,8 +24,50 @@ export function ChatPanel({ agentId, ws }: Props) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [inputText, setInputText] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [broadcast, setBroadcast] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { agents, setSelectedAgent } = useAppStore();
   const agent = agents.find((a) => a.id === agentId);
+
+  const activeAgents = useMemo(
+    () => agents.filter((a) => a.status === 'running' || a.status === 'idle'),
+    [agents],
+  );
+
+  const mentionSuggestions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return activeAgents.filter(
+      (a) =>
+        a.id.slice(0, 8).toLowerCase().startsWith(q) ||
+        a.role.name.toLowerCase().includes(q),
+    );
+  }, [mentionQuery, activeAgents]);
+
+  const updateMentionState = (value: string, cursorPos: number) => {
+    const before = value.slice(0, cursorPos);
+    const match = before.match(/@(\w*)$/);
+    if (match) {
+      setMentionQuery(match[1]);
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  };
+
+  const insertMention = (mentionAgent: typeof agents[0]) => {
+    const shortId = mentionAgent.id.slice(0, 8);
+    const cursorPos = inputRef.current?.selectionStart ?? inputText.length;
+    const before = inputText.slice(0, cursorPos);
+    const after = inputText.slice(cursorPos);
+    const atIdx = before.lastIndexOf('@');
+    const newText = before.slice(0, atIdx) + `@${shortId} ` + after;
+    setInputText(newText);
+    setMentionQuery(null);
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!termRef.current) return;
@@ -85,10 +128,28 @@ export function ChatPanel({ agentId, ws }: Props) {
     };
   }, [agentId, ws]);
 
+  const runningAgents = agents.filter((a) => a.status === 'running');
+
   const handleSend = () => {
     if (!inputText.trim()) return;
-    ws.sendInput(agentId, inputText + '\n');
+    if (broadcast) {
+      const allAgents = useAppStore.getState().agents;
+      const running = allAgents.filter((a) => a.status === 'running');
+      running.forEach((a) => ws.sendInput(a.id, inputText + '\n'));
+    } else {
+      ws.sendInput(agentId, inputText + '\n');
+    }
+    // Send to @mentioned agents
+    const mentionPattern = /@([a-f0-9]{4,8})\b/g;
+    let m;
+    while ((m = mentionPattern.exec(inputText)) !== null) {
+      const fullId = useAppStore.getState().agents.find((a) => a.id.startsWith(m![1]))?.id;
+      if (fullId && fullId !== agentId) {
+        ws.sendInput(fullId, inputText + '\n');
+      }
+    }
     setInputText('');
+    setMentionQuery(null);
   };
 
   return (
@@ -117,21 +178,80 @@ export function ChatPanel({ agentId, ws }: Props) {
 
       <div ref={termRef} className="flex-1 overflow-hidden" />
 
-      <div className="border-t border-gray-700 p-2 flex gap-2 shrink-0">
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type a message..."
-          className="flex-1 bg-surface border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent"
-        />
-        <button
-          onClick={handleSend}
-          className="p-2 bg-accent text-black rounded-lg hover:bg-accent-muted transition-colors"
-        >
-          <Send size={14} />
-        </button>
+      <div className="border-t border-gray-700 p-2 shrink-0 relative">
+        {mentionSuggestions.length > 0 && (
+          <div className="absolute bottom-full left-2 right-2 mb-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
+            {mentionSuggestions.map((a, i) => (
+              <button
+                key={a.id}
+                onClick={() => insertMention(a)}
+                className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-700 ${i === mentionIndex ? 'bg-gray-700' : ''}`}
+              >
+                <span>{a.role.icon}</span>
+                <span>{a.role.name}</span>
+                <span className="text-xs text-gray-500 font-mono">{a.id.slice(0, 8)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {broadcast && (
+          <div className="text-xs text-accent mb-1 px-1">
+            Broadcasting to {runningAgents.length} agents
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              updateMentionState(e.target.value, e.target.selectionStart ?? e.target.value.length);
+            }}
+            onKeyDown={(e) => {
+              if (mentionSuggestions.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setMentionIndex((i) => Math.min(i + 1, mentionSuggestions.length - 1));
+                  return;
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setMentionIndex((i) => Math.max(i - 1, 0));
+                  return;
+                }
+                if (e.key === 'Tab' || e.key === 'Enter') {
+                  if (mentionSuggestions[mentionIndex]) {
+                    e.preventDefault();
+                    insertMention(mentionSuggestions[mentionIndex]);
+                    return;
+                  }
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setMentionQuery(null);
+                  return;
+                }
+              }
+              if (e.key === 'Enter') handleSend();
+            }}
+            placeholder="Type a message... (@ to mention)"
+            className={`flex-1 bg-surface border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent ${broadcast ? 'border-accent' : 'border-gray-700'}`}
+          />
+          <button
+            onClick={() => setBroadcast(!broadcast)}
+            className={`p-2 rounded-lg transition-colors ${broadcast ? 'text-accent bg-accent/10' : 'text-gray-400 hover:text-gray-200'}`}
+            title="Broadcast to all running agents"
+          >
+            <Megaphone size={14} />
+          </button>
+          <button
+            onClick={handleSend}
+            className="p-2 bg-accent text-black rounded-lg hover:bg-accent-muted transition-colors"
+          >
+            <Send size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );

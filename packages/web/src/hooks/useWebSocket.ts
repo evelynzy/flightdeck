@@ -28,6 +28,7 @@ export function useWebSocket() {
         case 'init':
           setAgents(msg.agents);
           setTasks(msg.tasks);
+          useAppStore.getState().setLoading(false);
           break;
         case 'agent:spawned':
           addAgent(msg.agent);
@@ -97,5 +98,14 @@ export function useWebSocket() {
     [send],
   );
 
-  return { send, subscribe, unsubscribe, sendInput, resizeAgent };
+  const broadcastInput = useCallback(
+    (text: string) => {
+      const allAgents = useAppStore.getState().agents;
+      const running = allAgents.filter((a) => a.status === 'running');
+      running.forEach((a) => sendInput(a.id, text));
+    },
+    [sendInput],
+  );
+
+  return { send, subscribe, unsubscribe, sendInput, resizeAgent, broadcastInput };
 }

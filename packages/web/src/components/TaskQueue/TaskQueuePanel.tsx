@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { TaskDetail } from './TaskDetail';
 import type { Task } from '../../types';
+import { SkeletonRow } from '../Skeleton';
 
 interface Props {
   api: any;
@@ -17,12 +19,13 @@ const STATUS_BADGES: Record<string, { color: string; label: string }> = {
 };
 
 export function TaskQueuePanel({ api }: Props) {
-  const { tasks, roles } = useAppStore();
+  const { tasks, roles, loading } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newPriority, setNewPriority] = useState(0);
   const [newRole, setNewRole] = useState('');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
@@ -115,25 +118,42 @@ export function TaskQueuePanel({ api }: Props) {
           <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-2">
             {section} ({grouped[section].length})
           </h3>
-          {grouped[section].length === 0 ? (
+          {loading && section === 'active' ? (
+            <div className="space-y-2">
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </div>
+          ) : grouped[section].length === 0 ? (
             <p className="text-sm text-gray-600">No tasks</p>
           ) : (
             <div className="space-y-2">
               {grouped[section].map((task) => (
-                <TaskRow key={task.id} task={task} api={api} />
+                <TaskRow key={task.id} task={task} api={api} onClick={() => setSelectedTask(task)} />
               ))}
             </div>
           )}
         </div>
       ))}
+
+      {selectedTask && (
+        <TaskDetail
+          task={selectedTask}
+          api={api}
+          onClose={() => setSelectedTask(null)}
+        />
+      )}
     </div>
   );
 }
 
-function TaskRow({ task, api }: { task: Task; api: any }) {
+function TaskRow({ task, api, onClick }: { task: Task; api: any; onClick: () => void }) {
   const badge = STATUS_BADGES[task.status] || STATUS_BADGES.queued;
   return (
-    <div className="flex items-center gap-3 bg-surface-raised border border-gray-700 rounded-lg p-3">
+    <div
+      className="flex items-center gap-3 bg-surface-raised border border-gray-700 rounded-lg p-3 cursor-pointer hover:border-gray-500 transition-colors"
+      onClick={onClick}
+    >
       <GripVertical size={14} className="text-gray-600 cursor-grab" />
       <span className={`w-2 h-2 rounded-full shrink-0 ${badge.color}`} />
       <div className="flex-1 min-w-0">
@@ -144,7 +164,7 @@ function TaskRow({ task, api }: { task: Task; api: any }) {
       </div>
       <span className="text-[10px] text-gray-500 font-mono shrink-0">{badge.label}</span>
       <button
-        onClick={() => api.deleteTask(task.id)}
+        onClick={(e) => { e.stopPropagation(); api.deleteTask(task.id); }}
         className="p-1 text-gray-500 hover:text-red-400 shrink-0"
       >
         <Trash2 size={12} />

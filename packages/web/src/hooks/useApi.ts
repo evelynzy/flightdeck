@@ -36,6 +36,10 @@ export function useApi() {
     return fetchJSON(`/agents/${id}`, { method: 'DELETE' });
   }, []);
 
+  const restartAgent = useCallback(async (id: string) => {
+    return fetchJSON(`/agents/${id}/restart`, { method: 'POST' });
+  }, []);
+
   const createTask = useCallback(
     async (title: string, description?: string, priority?: number, assignedRole?: string) => {
       return fetchJSON('/tasks', {
@@ -97,6 +101,7 @@ export function useApi() {
   return {
     spawnAgent,
     killAgent,
+    restartAgent,
     createTask,
     updateTask,
     deleteTask,

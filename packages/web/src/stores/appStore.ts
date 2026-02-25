@@ -8,6 +8,7 @@ interface AppState {
   config: ServerConfig | null;
   selectedAgentId: string | null;
   connected: boolean;
+  loading: boolean;
 
   setAgents: (agents: AgentInfo[]) => void;
   addAgent: (agent: AgentInfo) => void;
@@ -21,6 +22,7 @@ interface AppState {
   setConfig: (config: ServerConfig) => void;
   setSelectedAgent: (id: string | null) => void;
   setConnected: (connected: boolean) => void;
+  setLoading: (loading: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -30,6 +32,7 @@ export const useAppStore = create<AppState>((set) => ({
   config: null,
   selectedAgentId: null,
   connected: false,
+  loading: true,
 
   setAgents: (agents) => set({ agents }),
   addAgent: (agent) => set((s) => ({ agents: [...s.agents, agent] })),
@@ -55,4 +58,5 @@ export const useAppStore = create<AppState>((set) => ({
   setConfig: (config) => set({ config }),
   setSelectedAgent: (selectedAgentId) => set({ selectedAgentId }),
   setConnected: (connected) => set({ connected }),
+  setLoading: (loading) => set({ loading }),
 }));
