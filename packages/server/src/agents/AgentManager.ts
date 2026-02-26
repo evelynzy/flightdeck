@@ -44,7 +44,7 @@ export class AgentManager extends EventEmitter {
     this.autoKillTimeoutMs = null;
   }
 
-  spawn(role: Role, taskId?: string, parentId?: string, mode?: AgentMode): Agent {
+  spawn(role: Role, taskId?: string, parentId?: string, mode?: AgentMode, autopilot?: boolean): Agent {
     if (this.getRunningCount() >= this.maxConcurrent) {
       throw new Error(
         `Concurrency limit reached (${this.maxConcurrent}). Kill an agent or increase the limit.`,
@@ -60,7 +60,7 @@ export class AgentManager extends EventEmitter {
       lockedFiles: [],
     }));
 
-    const agent = new Agent(role, this.config, taskId, parentId, peers, mode);
+    const agent = new Agent(role, this.config, taskId, parentId, peers, mode, autopilot);
 
     // Track parent-child relationship
     if (parentId) {

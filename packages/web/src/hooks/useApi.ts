@@ -25,10 +25,10 @@ export function useApi() {
     setConfig(config);
   }, [setConfig]);
 
-  const spawnAgent = useCallback(async (roleId: string, taskId?: string) => {
+  const spawnAgent = useCallback(async (roleId: string, taskId?: string, autopilot?: boolean) => {
     return fetchJSON('/agents', {
       method: 'POST',
-      body: JSON.stringify({ roleId, taskId }),
+      body: JSON.stringify({ roleId, taskId, autopilot }),
     });
   }, []);
 

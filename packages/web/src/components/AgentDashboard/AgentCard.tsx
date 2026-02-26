@@ -128,6 +128,11 @@ export function AgentCard({ agent, api }: Props) {
           <span className={`text-[10px] px-1 py-0.5 rounded ${agent.mode === 'acp' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}`}>
             {agent.mode === 'acp' ? 'ACP' : 'PTY'}
           </span>
+          {agent.autopilot && (
+            <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">
+              autopilot
+            </span>
+          )}
         </div>
         <span className="text-[10px] text-gray-500 font-mono">{agent.id.slice(0, 8)}</span>
       </div>

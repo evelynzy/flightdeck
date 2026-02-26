@@ -22,6 +22,7 @@ export interface AgentJSON {
   role: Role;
   status: AgentStatus;
   mode: AgentMode;
+  autopilot: boolean;
   taskId?: string;
   parentId?: string;
   childIds: string[];
@@ -37,6 +38,7 @@ export class Agent {
   public readonly role: Role;
   public readonly createdAt: Date;
   public readonly mode: AgentMode;
+  public readonly autopilot: boolean;
   public status: AgentStatus = 'creating';
   public taskId?: string;
   public parentId?: string;
@@ -58,7 +60,7 @@ export class Agent {
   private permissionRequestListeners: Array<(request: any) => void> = [];
   private peers: AgentContextInfo[];
 
-  constructor(role: Role, config: ServerConfig, taskId?: string, parentId?: string, peers: AgentContextInfo[] = [], mode?: AgentMode) {
+  constructor(role: Role, config: ServerConfig, taskId?: string, parentId?: string, peers: AgentContextInfo[] = [], mode?: AgentMode, autopilot?: boolean) {
     this.id = uuid();
     this.role = role;
     this.config = config;
@@ -66,6 +68,7 @@ export class Agent {
     this.parentId = parentId;
     this.createdAt = new Date();
     this.mode = mode ?? config.defaultAgentMode;
+    this.autopilot = autopilot ?? false;
     this.pty = new PtyManager();
     this.peers = peers;
   }
@@ -125,7 +128,7 @@ export class Agent {
   }
 
   private startAcp(initialPrompt: string): void {
-    this.acpConnection = new AcpConnection();
+    this.acpConnection = new AcpConnection({ autopilot: this.autopilot });
     this.status = 'running';
 
     this.acpConnection.on('text', (text: string) => {
@@ -340,6 +343,7 @@ CREW_UPDATE -->`;
       role: this.role,
       status: this.status,
       mode: this.mode,
+      autopilot: this.autopilot,
       taskId: this.taskId,
       parentId: this.parentId,
       childIds: this.childIds,

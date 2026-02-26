@@ -30,10 +30,16 @@ export class AcpConnection extends EventEmitter {
   private _isConnected = false;
   private _isPrompting = false;
   private promptQueue: string[] = [];
+  private autopilot: boolean;
   private pendingPermission: {
     resolve: (result: acp.RequestPermissionResponse) => void;
     options: acp.PermissionOption[];
   } | null = null;
+
+  constructor(opts?: { autopilot?: boolean }) {
+    super();
+    this.autopilot = opts?.autopilot ?? false;
+  }
 
   get isConnected(): boolean { return this._isConnected; }
   get isPrompting(): boolean { return this._isPrompting; }
@@ -61,6 +67,18 @@ export class AcpConnection extends EventEmitter {
 
     const client: acp.Client = {
       requestPermission: async (params) => {
+        // Autopilot: immediately approve without user interaction
+        if (this.autopilot) {
+          const allowOption = params.options.find(
+            (o: acp.PermissionOption) => o.kind === 'allow_once'
+          );
+          return {
+            outcome: allowOption
+              ? { outcome: 'selected', optionId: allowOption.optionId }
+              : { outcome: 'cancelled' },
+          };
+        }
+
         return new Promise<acp.RequestPermissionResponse>((resolve) => {
           this.pendingPermission = { resolve, options: params.options };
           this.emit('permission_request', {

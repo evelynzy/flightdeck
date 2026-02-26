@@ -25,11 +25,11 @@ export function apiRouter(
   });
 
   router.post('/agents', (req, res) => {
-    const { roleId, taskId, mode } = req.body;
+    const { roleId, taskId, mode, autopilot } = req.body;
     const role = roleRegistry.get(roleId);
     if (!role) return res.status(400).json({ error: `Unknown role: ${roleId}` });
     try {
-      const agent = agentManager.spawn(role, taskId, undefined, mode);
+      const agent = agentManager.spawn(role, taskId, undefined, mode, autopilot);
       res.status(201).json(agent.toJSON());
     } catch (err: any) {
       res.status(429).json({ error: err.message });

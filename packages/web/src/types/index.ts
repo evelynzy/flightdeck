@@ -58,6 +58,7 @@ export interface AgentInfo {
   createdAt: string;
   outputPreview: string;
   mode: AgentMode;
+  autopilot: boolean;
   session?: AcpSessionInfo;
   plan?: AcpPlanEntry[];
   toolCalls?: AcpToolCall[];
