@@ -20,6 +20,26 @@ export function LeadDashboard({ api, ws }: Props) {
   const leadAgent = agents.find((a) => a.id === leadAgentId);
   const isActive = leadAgent && leadAgent.status === 'running';
 
+  // On mount, check if a lead already exists
+  useEffect(() => {
+    if (leadAgentId) return;
+    fetch('/api/lead').then((r) => {
+      if (r.ok) return r.json();
+      return null;
+    }).then((data) => {
+      if (data && data.id) {
+        useLeadStore.getState().setLeadAgentId(data.id);
+      }
+    }).catch(() => {});
+  }, [leadAgentId]);
+
+  // Subscribe to lead agent WS stream when leadAgentId is set
+  useEffect(() => {
+    if (!leadAgentId) return;
+    ws.subscribe(leadAgentId);
+    return () => ws.unsubscribe(leadAgentId);
+  }, [leadAgentId, ws]);
+
   // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,6 +98,10 @@ export function LeadDashboard({ api, ws }: Props) {
       const data = await resp.json();
       if (data.id) {
         useLeadStore.getState().setLeadAgentId(data.id);
+        if (task) {
+          useLeadStore.getState().addMessage({ type: 'text', text: task, sender: 'user' });
+        }
+        setInput('');
       }
     } catch {
       // ignore
