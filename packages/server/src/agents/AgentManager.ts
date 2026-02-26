@@ -431,27 +431,33 @@ export class AgentManager extends EventEmitter {
       const msg = JSON.parse(match[1]);
       if (!msg.to || !msg.content) return;
 
-      // Resolve "to" — could be agent ID, role ID, or role name
+      // Resolve "to" — could be full UUID, short ID prefix, role ID, or role name
       let targetId = msg.to;
       if (!this.agents.has(targetId)) {
-        // Try to find by role ID
-        const byRoleId = this.getAll().find((a) => a.role.id === msg.to && a.status === 'running');
-        if (byRoleId) {
-          targetId = byRoleId.id;
+        // Try short ID prefix match (agents see 8-char prefixes in context)
+        const byPrefix = this.getAll().find((a) => a.id.startsWith(msg.to) && a.status === 'running');
+        if (byPrefix) {
+          targetId = byPrefix.id;
         } else {
-          // Try by role name (case-insensitive)
-          const lower = msg.to.toLowerCase();
-          const byRoleName = this.getAll().find((a) =>
-            a.role.name.toLowerCase() === lower && a.status === 'running'
-          );
-          if (byRoleName) {
-            targetId = byRoleName.id;
+          // Try to find by role ID
+          const byRoleId = this.getAll().find((a) => a.role.id === msg.to && a.status === 'running');
+          if (byRoleId) {
+            targetId = byRoleId.id;
           } else {
-            // Try partial match
-            const partial = this.getAll().find((a) =>
-              a.role.id.includes(lower) || a.role.name.toLowerCase().includes(lower) && a.status === 'running'
+            // Try by role name (case-insensitive)
+            const lower = msg.to.toLowerCase();
+            const byRoleName = this.getAll().find((a) =>
+              a.role.name.toLowerCase() === lower && a.status === 'running'
             );
-            if (partial) targetId = partial.id;
+            if (byRoleName) {
+              targetId = byRoleName.id;
+            } else {
+              // Try partial match on role
+              const partial = this.getAll().find((a) =>
+                (a.role.id.includes(lower) || a.role.name.toLowerCase().includes(lower)) && a.status === 'running'
+              );
+              if (partial) targetId = partial.id;
+            }
           }
         }
       }

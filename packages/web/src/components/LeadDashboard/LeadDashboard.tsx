@@ -381,7 +381,7 @@ export function LeadDashboard({ api, ws }: Props) {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((msg, i) => (
+              {messages.filter((msg) => msg.sender !== 'system' && msg.text).map((msg, i) => (
                 <div
                   key={i}
                   className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}

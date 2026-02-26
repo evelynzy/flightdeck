@@ -7,7 +7,7 @@ export type AgentMode = 'pty' | 'acp';
 export interface AcpTextChunk {
   type: 'text';
   text: string;
-  sender?: 'agent' | 'user';
+  sender?: 'agent' | 'user' | 'system';
 }
 
 export interface AcpToolCall {

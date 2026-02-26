@@ -116,7 +116,9 @@ export function AcpOutput({ agentId }: Props) {
               </div>
               {tc.content && tc.status === 'completed' && (
                 <pre className="mt-1 text-[11px] text-gray-400 font-mono overflow-hidden max-h-24 bg-surface/50 rounded p-1">
-                  {tc.content.slice(0, 500)}
+                  {Array.isArray(tc.content)
+                    ? tc.content.map((c: any) => typeof c === 'string' ? c : c?.text ?? c?.content ?? JSON.stringify(c)).join('\n').slice(0, 500)
+                    : String(tc.content).slice(0, 500)}
                 </pre>
               )}
             </div>
@@ -127,7 +129,7 @@ export function AcpOutput({ agentId }: Props) {
       {/* Messages Section */}
       {messages.length > 0 && (
         <div className="space-y-2">
-          {messages.map((msg, i) => {
+          {messages.filter((msg) => msg.sender !== 'system' && msg.text).map((msg, i) => {
             const sender = msg.sender ?? 'agent';
             return (
               <div

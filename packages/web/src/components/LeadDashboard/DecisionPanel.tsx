@@ -19,8 +19,8 @@ export function DecisionPanel({ decisions }: Props) {
             No decisions yet
           </p>
         ) : (
-          decisions.map((d) => (
-            <div key={d.id} className="bg-gray-800 border border-gray-700 rounded p-2">
+          decisions.map((d, i) => (
+            <div key={d.id || `dec-${i}`} className="bg-gray-800 border border-gray-700 rounded p-2">
               <div className="flex items-start gap-2">
                 <Lightbulb className="w-3.5 h-3.5 text-yellow-400 mt-0.5 shrink-0" />
                 <div className="min-w-0">
