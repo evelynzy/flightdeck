@@ -70,8 +70,10 @@ export function ChatPanel({ agentId, ws }: Props) {
     inputRef.current?.focus();
   };
 
+  const isPty = agent?.mode !== 'acp';
+
   useEffect(() => {
-    if (!termRef.current) return;
+    if (!isPty || !termRef.current) return;
 
     const terminal = new Terminal({
       theme: {
@@ -127,7 +129,7 @@ export function ChatPanel({ agentId, ws }: Props) {
       terminal.dispose();
       window.removeEventListener('ws-message', handleWsMessage);
     };
-  }, [agentId, ws]);
+  }, [agentId, ws, isPty]);
 
   const runningAgents = agents.filter((a) => a.status === 'running');
 

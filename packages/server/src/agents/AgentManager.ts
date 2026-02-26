@@ -74,9 +74,10 @@ export class AgentManager extends EventEmitter {
 
     // Listen for data to detect sub-agent spawn requests and coordination commands
     agent.onData((data) => {
-      this.emit('agent:data', agent.id, data);
       if (agent.mode === 'acp') {
         this.emit('agent:text', agent.id, data);
+      } else {
+        this.emit('agent:data', agent.id, data);
       }
       this.detectSpawnRequest(agent.id, data);
       this.detectLockRequest(agent, data);

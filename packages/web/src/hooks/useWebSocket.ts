@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useToastStore } from '../components/Toast';
 import type { WsMessage } from '../types';
@@ -146,5 +146,8 @@ export function useWebSocket() {
     [sendInput],
   );
 
-  return { send, subscribe, unsubscribe, sendInput, resizeAgent, broadcastInput };
+  return useMemo(
+    () => ({ send, subscribe, unsubscribe, sendInput, resizeAgent, broadcastInput }),
+    [send, subscribe, unsubscribe, sendInput, resizeAgent, broadcastInput],
+  );
 }
