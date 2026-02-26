@@ -99,6 +99,48 @@ export interface WsMessage {
     | 'agent:plan'
     | 'agent:permission_request'
     | 'agent:permission_response'
+    | 'agent:delegated'
+    | 'agent:completion_reported'
+    | 'lead:decision'
+    | 'lead:progress'
     | string;
   [key: string]: any;
+}
+
+export interface Decision {
+  id: string;
+  agentId: string;
+  agentRole: string;
+  title: string;
+  rationale: string;
+  timestamp: string;
+}
+
+export interface Delegation {
+  id: string;
+  fromAgentId: string;
+  toAgentId: string;
+  toRole: string;
+  task: string;
+  context?: string;
+  status: 'active' | 'completed' | 'failed';
+  createdAt: string;
+  completedAt?: string;
+  result?: string;
+}
+
+export interface LeadProgress {
+  totalDelegations: number;
+  active: number;
+  completed: number;
+  failed: number;
+  completionPct: number;
+  teamSize: number;
+  teamAgents: Array<{
+    id: string;
+    role: Role;
+    status: AgentStatus;
+    taskId?: string;
+  }>;
+  delegations: Delegation[];
 }

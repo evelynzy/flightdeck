@@ -126,6 +126,23 @@ export class WebSocketServer {
     activityLedger.on('activity', (entry: any) => {
       this.broadcastAll({ type: 'activity', entry });
     });
+
+    // Forward lead events
+    agentManager.on('lead:decision', (data: any) => {
+      this.broadcastAll({ type: 'lead:decision', ...data });
+    });
+
+    agentManager.on('lead:progress', (data: any) => {
+      this.broadcastAll({ type: 'lead:progress', ...data });
+    });
+
+    agentManager.on('agent:delegated', (data: any) => {
+      this.broadcastAll({ type: 'agent:delegated', ...data });
+    });
+
+    agentManager.on('agent:completion_reported', (data: any) => {
+      this.broadcastAll({ type: 'agent:completion_reported', ...data });
+    });
   }
 
   private handleMessage(
