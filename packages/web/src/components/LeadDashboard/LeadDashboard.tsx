@@ -344,6 +344,7 @@ export function LeadDashboard({ api, ws }: Props) {
 
   const messages = currentProject?.messages ?? [];
   const decisions = currentProject?.decisions ?? [];
+  const pendingConfirmations = decisions.filter((d: any) => d.needsConfirmation && d.status === 'recorded');
   const progress = currentProject?.progress ?? null;
   const progressSummary = currentProject?.progressSummary ?? null;
   const progressHistory = currentProject?.progressHistory ?? [];
@@ -816,10 +817,15 @@ export function LeadDashboard({ api, ws }: Props) {
             <div className="border-l border-gray-700 flex flex-col items-center py-2 w-10 shrink-0">
               <button
                 onClick={() => setSidebarCollapsed(false)}
-                className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200"
+                className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200 relative"
                 title="Expand sidebar"
               >
                 <PanelRightOpen className="w-4 h-4" />
+                {pendingConfirmations.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-yellow-500 rounded-full text-[8px] font-bold text-black flex items-center justify-center" title={`${pendingConfirmations.length} decision(s) need confirmation`}>
+                    {pendingConfirmations.length}
+                  </span>
+                )}
               </button>
             </div>
           ) : (

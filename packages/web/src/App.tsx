@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useApi } from './hooks/useApi';
 import { useAppStore } from './stores/appStore';
@@ -79,11 +79,13 @@ export function App() {
           </header>
 
           <Routes>
-            <Route path="/" element={<LeadDashboard api={api} ws={ws} />} />
+            <Route path="/" element={<Navigate to="/lead" replace />} />
+            <Route path="/lead" element={<LeadDashboard api={api} ws={ws} />} />
             <Route path="/agents" element={<AgentDashboard api={api} ws={ws} />} />
             <Route path="/overview" element={<FleetOverview api={api} ws={ws} />} />
             <Route path="/tasks" element={<TaskQueuePanel api={api} />} />
             <Route path="/settings" element={<SettingsPanel api={api} />} />
+            <Route path="*" element={<Navigate to="/lead" replace />} />
           </Routes>
         </div>
 
