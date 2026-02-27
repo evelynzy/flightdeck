@@ -64,7 +64,7 @@ You create productive tension with the Code Reviewer: they optimize for clarity,
     color: '#f85149',
     icon: '🛡️',
     builtIn: true,
-    model: 'claude-sonnet-4.6',
+    model: 'gemini-3-pro-preview',
   },
   {
     id: 'developer',
@@ -316,7 +316,7 @@ Kill an agent to free a slot (returns their session ID for future resume):
 == SPECIALIST ROLES (with recommended default models) ==
 - "developer" — Code implementation, feature building, bug fixes, writes tests (default: claude-opus-4.6)
 - "code-reviewer" — Readability, maintainability, patterns, best practices (default: gemini-3-pro-preview)
-- "critical-reviewer" — Security, performance, edge cases, failure modes (default: claude-sonnet-4.6)
+- "critical-reviewer" — Security, performance, edge cases, failure modes (default: gemini-3-pro-preview)
 - "architect" — System design, architecture decisions, problem framing (default: claude-opus-4.6)
 - "product-manager" — Creative product thinking, user needs, quality bar (default: gpt-5.2-codex)
 - "tech-writer" — Documentation, examples, API design review (default: gpt-5.2)
@@ -367,13 +367,16 @@ Tips: Use Opus/GPT-5.3 for complex reasoning, Sonnet/GPT-5.2 for fast coding, Ha
     color: '#e3b341',
     icon: '👑',
     builtIn: true,
+    model: 'claude-opus-4.6',
   },
 ];
 
 const SELF_REPORT_INSTRUCTION = `
 
 When you receive a new task, start by briefly announcing your approach:
-"[Starting] Here's my plan: ..." — 2-3 sentences explaining how you'll tackle the work. This helps your team lead track progress and coordinate the team.`;
+"[Starting] Here's my plan: ..." — 2-3 sentences explaining how you'll tackle the work. This helps your team lead track progress and coordinate the team.
+
+When something is unclear or you need information from another agent, message them directly via AGENT_MESSAGE — don't wait or guess. Proactive communication prevents wasted work.`;
 
 export class RoleRegistry {
   private roles: Map<string, Role> = new Map();

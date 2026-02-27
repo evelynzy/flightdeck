@@ -17,6 +17,19 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'text-red-400',
 };
 
+const AVAILABLE_MODELS = [
+  'claude-opus-4.6',
+  'claude-sonnet-4.6',
+  'claude-sonnet-4.5',
+  'claude-haiku-4.5',
+  'gpt-5.3-codex',
+  'gpt-5.2-codex',
+  'gpt-5.2',
+  'gpt-5.1-codex',
+  'gemini-3-pro-preview',
+  'gpt-4.1',
+];
+
 export function AgentCard({ agent, api }: Props) {
   const { setSelectedAgent, selectedAgentId } = useAppStore();
   const isSelected = selectedAgentId === agent.id;
@@ -110,6 +123,37 @@ export function AgentCard({ agent, api }: Props) {
       {agent.task && (
         <div className="text-xs text-gray-400 mb-1">
           Task: <span className="text-gray-300">{agent.task.length > 60 ? agent.task.slice(0, 60) + '...' : agent.task}</span>
+        </div>
+      )}
+
+      {(agent.status === 'running' || agent.status === 'idle') && (
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-[10px] text-gray-500">Model:</span>
+          <select
+            value={agent.model || agent.role.model || ''}
+            onChange={(e) => {
+              e.stopPropagation();
+              api.updateAgent(agent.id, { model: e.target.value });
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="text-[10px] bg-gray-800 border border-gray-700 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:border-accent cursor-pointer"
+          >
+            {(() => {
+              const currentModel = agent.model || agent.role.model || '';
+              const options = AVAILABLE_MODELS.includes(currentModel)
+                ? AVAILABLE_MODELS
+                : [currentModel, ...AVAILABLE_MODELS];
+              return options.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ));
+            })()}
+          </select>
+        </div>
+      )}
+
+      {!(agent.status === 'running' || agent.status === 'idle') && agent.model && (
+        <div className="text-[10px] text-gray-500 mb-1">
+          Model: <span className="text-gray-400">{agent.model}</span>
         </div>
       )}
 

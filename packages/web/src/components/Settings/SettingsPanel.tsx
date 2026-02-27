@@ -10,8 +10,14 @@ interface Props {
 export function SettingsPanel({ api }: Props) {
   const { config, roles } = useAppStore();
   const { soundEnabled, toggleSound } = useSettingsStore();
-  const [maxAgents, setMaxAgents] = useState(config?.maxConcurrentAgents || 5);
+  const [maxAgents, setMaxAgents] = useState(config?.maxConcurrentAgents || 10);
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (config?.maxConcurrentAgents != null) {
+      setMaxAgents(config.maxConcurrentAgents);
+    }
+  }, [config?.maxConcurrentAgents]);
 
   // New role form
   const [showRoleForm, setShowRoleForm] = useState(false);
@@ -111,6 +117,7 @@ export function SettingsPanel({ api }: Props) {
             max={20}
             value={maxAgents}
             onChange={(e) => handleMaxAgentsChange(Number(e.target.value))}
+            disabled={!config}
             className="w-full accent-accent"
           />
           <div className="flex justify-between text-[10px] text-gray-600 mt-1">

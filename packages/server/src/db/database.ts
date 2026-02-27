@@ -87,6 +87,17 @@ CREATE TABLE IF NOT EXISTS decisions (
 CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
 CREATE INDEX IF NOT EXISTS idx_decisions_needs_confirmation ON decisions(needs_confirmation);
 CREATE INDEX IF NOT EXISTS idx_decisions_lead_id ON decisions(lead_id);
+
+CREATE TABLE IF NOT EXISTS agent_memory (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_memory_lead ON agent_memory(lead_id);
+CREATE INDEX IF NOT EXISTS idx_agent_memory_agent ON agent_memory(agent_id);
 `;
 
 export class Database {

@@ -1,4 +1,6 @@
 import { v4 as uuid } from 'uuid';
+import { mkdirSync, existsSync } from 'fs';
+import { join } from 'path';
 import { PtyManager } from '../pty/PtyManager.js';
 import { AcpConnection } from '../acp/AcpConnection.js';
 import type { ToolCallInfo, PlanEntry } from '../acp/AcpConnection.js';
@@ -105,6 +107,7 @@ export class Agent {
   }
 
   start(): void {
+    this.ensureSharedWorkspace();
     const contextManifest = this.buildContextManifest(this.peers, this.budget);
     // Include both the role system prompt and context manifest.
     // The system prompt is also in the .agent.md file (via --agent flag) for
@@ -120,6 +123,13 @@ export class Agent {
       this.startAcp(initialPrompt);
     } else {
       this.startPty(initialPrompt);
+    }
+  }
+
+  private ensureSharedWorkspace(): void {
+    const sharedDir = join(this.cwd || process.cwd(), '.ai-crew', 'shared');
+    if (!existsSync(sharedDir)) {
+      try { mkdirSync(sharedDir, { recursive: true }); } catch {}
     }
   }
 
@@ -351,6 +361,13 @@ You are agent ${shortId} with role "${this.role.name}".
 
 ${crewSection}
 ${budgetSection}
+
+== SHARED WORKSPACE ==
+Path: .ai-crew/shared/ (inside your working directory)
+Use this directory for documents, reports, or artifacts that other agents need to read.
+Convention: .ai-crew/shared/<your-role>-<short-id>/<filename>
+Example: .ai-crew/shared/architect-a1b2c3d4/design-doc.md
+All team members have access to this directory. Create your subdirectory before writing files.
 
 == COORDINATION RULES ==
 1. DO NOT modify files that another agent has locked (listed above).

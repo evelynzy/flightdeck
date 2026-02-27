@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Crown, Send, Users, CheckCircle, AlertCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3 } from 'lucide-react';
+import { Crown, Send, Users, CheckCircle, AlertCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useLeadStore } from '../../stores/leadStore';
 import type { ActivityEvent, AgentComm, ProgressSnapshot, AgentReport } from '../../stores/leadStore';
 import type { AcpTextChunk } from '../../types';
@@ -31,6 +31,7 @@ export function LeadDashboard({ api, ws }: Props) {
   const [showProgressDetail, setShowProgressDetail] = useState(false);
   const [expandedReport, setExpandedReport] = useState<AgentReport | null>(null);
   const [reportsExpanded, setReportsExpanded] = useState(true);
+  const [pendingBannerExpanded, setPendingBannerExpanded] = useState(false);
   const isResizing = useRef(false);
 
   const leadAgents = agents.filter((a) => a.role.id === 'lead');
@@ -248,6 +249,30 @@ export function LeadDashboard({ api, ws }: Props) {
               timestamp: Date.now(),
             });
           }
+        }
+      }
+
+      // Context compaction — add system message to relevant lead's chat
+      if (msg.type === 'agent:context_compacted' && msg.agentId) {
+        const compactedId = msg.agentId;
+        // Find the lead project this agent belongs to (could be the lead itself or a child)
+        let targetLeadId: string | null = null;
+        if (store.projects[compactedId]) {
+          targetLeadId = compactedId;
+        } else {
+          const parentAgent = agents.find((a) => a.id === compactedId);
+          if (parentAgent?.parentId && store.projects[parentAgent.parentId]) {
+            targetLeadId = parentAgent.parentId;
+          }
+        }
+        if (targetLeadId) {
+          const pct = msg.percentDrop != null ? `${msg.percentDrop}%` : '?%';
+          store.addMessage(targetLeadId, {
+            type: 'text',
+            text: `🔄 Context compacted for agent ${compactedId.slice(0, 8)}: ${pct} reduction`,
+            sender: 'system',
+            timestamp: Date.now(),
+          });
         }
       }
     };
@@ -680,10 +705,61 @@ export function LeadDashboard({ api, ws }: Props) {
               </div>
             )}
 
+            {/* Pending decisions banner */}
+            {pendingConfirmations.length > 0 && (
+              <div className="border-b border-amber-700/50 bg-amber-900/30">
+                <button
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-amber-200 hover:bg-amber-900/40 transition-colors"
+                  onClick={() => setPendingBannerExpanded(!pendingBannerExpanded)}
+                >
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="font-mono font-medium">⚠ {pendingConfirmations.length} decision{pendingConfirmations.length !== 1 ? 's' : ''} need{pendingConfirmations.length === 1 ? 's' : ''} your confirmation</span>
+                  {pendingBannerExpanded ? <ChevronUp className="w-3.5 h-3.5 ml-auto text-amber-400" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto text-amber-400" />}
+                </button>
+                {pendingBannerExpanded && (
+                  <div className="px-4 pb-3 space-y-2">
+                    {pendingConfirmations.map((d: any) => (
+                      <div key={d.id} className="bg-gray-800/80 border border-amber-700/40 rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-mono font-semibold text-gray-200">{d.title}</span>
+                              {d.agentRole && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 shrink-0">{d.agentRole}</span>
+                              )}
+                            </div>
+                            {d.rationale && (
+                              <p className="text-xs font-mono text-gray-400 line-clamp-2">{d.rationale}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              onClick={() => handleConfirmDecision(d.id)}
+                              className="p-1.5 rounded bg-green-800 hover:bg-green-700 text-green-200 transition-colors"
+                              title="Confirm"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRejectDecision(d.id)}
+                              className="p-1.5 rounded bg-red-800 hover:bg-red-700 text-red-200 transition-colors"
+                              title="Reject"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Messages with prompt navigation */}
             <div className="flex-1 relative min-h-0">
               <div ref={chatContainerRef} className="absolute inset-0 overflow-y-auto p-4 space-y-1">
-              {messages.filter((msg) => msg.sender !== 'system' && msg.text).map((msg, i, filtered) => {
+              {messages.filter((msg) => msg.text).map((msg, i, filtered) => {
                 if (msg.queued) return null; // queued messages rendered below
                 const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -709,6 +785,18 @@ export function LeadDashboard({ api, ws }: Props) {
                         <InlineMarkdown text={msg.text} />
                       </div>
                       <span className="text-[10px] text-gray-600 mt-1.5 shrink-0">{ts}</span>
+                    </div>
+                  );
+                }
+
+                if (msg.sender === 'system') {
+                  return (
+                    <div key={i} className="flex justify-center py-1">
+                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-800/60 border border-gray-700/50 text-xs font-mono text-gray-400">
+                        <RefreshCw className="w-3 h-3 text-gray-500" />
+                        {msg.text}
+                        {ts && <span className="text-[10px] text-gray-600 ml-1">{ts}</span>}
+                      </div>
                     </div>
                   );
                 }

@@ -76,6 +76,17 @@ export function apiRouter(
     res.json({ ok: true });
   });
 
+  router.patch('/agents/:id', (req, res) => {
+    const agent = agentManager.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    const { model } = req.body;
+    if (model !== undefined) {
+      agent.model = model;
+      logger.info('api', `Updated model for ${agent.role.name} (${req.params.id.slice(0, 8)}): ${model}`);
+    }
+    res.json(agent.toJSON());
+  });
+
   router.post('/agents/:id/permission', (req, res) => {
     const { approved } = req.body;
     const ok = agentManager.resolvePermission(req.params.id, approved);

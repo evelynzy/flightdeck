@@ -7,6 +7,7 @@ import type { FileLockRegistry } from '../coordination/FileLockRegistry.js';
 import type { ActivityLedger } from '../coordination/ActivityLedger.js';
 import type { MessageBus } from '../comms/MessageBus.js';
 import type { DecisionLog } from '../coordination/DecisionLog.js';
+import type { AgentMemory, MemoryEntry } from '../coordination/AgentMemory.js';
 import { logger } from '../utils/logger.js';
 import { writeAgentFiles } from './agentFiles.js';
 
@@ -46,6 +47,7 @@ export class AgentManager extends EventEmitter {
   private activityLedger: ActivityLedger;
   private messageBus: MessageBus;
   private decisionLog: DecisionLog;
+  private agentMemory: AgentMemory;
   /** If set, auto-kill agents after this many ms past the initial hung detection */
   private autoKillTimeoutMs: number | null;
   private hungTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
@@ -67,6 +69,7 @@ export class AgentManager extends EventEmitter {
     activityLedger: ActivityLedger,
     messageBus: MessageBus,
     decisionLog: DecisionLog,
+    agentMemory: AgentMemory,
     { maxRestarts = 3, autoRestart = true }: { maxRestarts?: number; autoRestart?: boolean } = {},
   ) {
     super();
@@ -76,6 +79,7 @@ export class AgentManager extends EventEmitter {
     this.activityLedger = activityLedger;
     this.messageBus = messageBus;
     this.decisionLog = decisionLog;
+    this.agentMemory = agentMemory;
     this.maxConcurrent = config.maxConcurrentAgents;
     this.maxRestarts = maxRestarts;
     this.autoRestart = autoRestart;
@@ -186,6 +190,7 @@ export class AgentManager extends EventEmitter {
 
       // Also report to parent lead so it can resume this agent later
       if (agent.parentId) {
+        this.agentMemory.store(agent.parentId, agent.id, 'sessionId', sessionId);
         const parent = this.agents.get(agent.parentId);
         if (parent && (parent.status === 'running' || parent.status === 'idle')) {
           const msg = `[System] ${agent.role.name} (${agent.id.slice(0, 8)}) session ready: ${sessionId}`;
@@ -553,7 +558,7 @@ export class AgentManager extends EventEmitter {
         const taskPrompt = req.context ? `${req.task}\n\nContext: ${req.context}` : req.task;
         child.sendMessage(taskPrompt);
 
-        const ackMsg = `[System] Agent queued: ${role.name} (${child.id.slice(0, 8)})${req.model ? ` on ${req.model}` : ''} — task: ${req.task.slice(0, 120)}`;
+        const ackMsg = `[System] Queued: ${role.name} (${child.id.slice(0, 8)})${req.model ? ` [${req.model}]` : ''}`;
         agent.sendMessage(ackMsg);
         this.emit('agent:message_sent', {
           from: child.id, fromRole: role.name,
@@ -566,7 +571,7 @@ export class AgentManager extends EventEmitter {
           childId: child.id, childRole: role.id, delegationId: delegation.id,
         });
       } else {
-        const ackMsg = `[System] Agent queued: ${role.name} (${child.id.slice(0, 8)})${req.model ? ` on ${req.model}` : ''} — ready for tasks. Use DELEGATE to assign work.`;
+        const ackMsg = `[System] Queued: ${role.name} (${child.id.slice(0, 8)})${req.model ? ` [${req.model}]` : ''} — ready for tasks.`;
         agent.sendMessage(ackMsg);
         this.emit('agent:message_sent', {
           from: child.id, fromRole: role.name,
@@ -574,6 +579,11 @@ export class AgentManager extends EventEmitter {
           content: ackMsg,
         });
       }
+
+      // Store memory for the lead
+      this.agentMemory.store(agent.id, child.id, 'role', role.name);
+      if (req.model) this.agentMemory.store(agent.id, child.id, 'model', req.model);
+      if (req.task) this.agentMemory.store(agent.id, child.id, 'task', req.task.slice(0, 200));
 
       this.emit('agent:sub_spawned', agent.id, child.toJSON());
     } catch (err: any) {
@@ -767,6 +777,10 @@ export class AgentManager extends EventEmitter {
       // Update the agent's task to reflect the new assignment
       child.task = req.task;
 
+      // Store memory for the lead
+      this.agentMemory.store(agent.id, child.id, 'task', req.task.slice(0, 200));
+      if (req.context) this.agentMemory.store(agent.id, child.id, 'context', req.context.slice(0, 200));
+
       // Send task + context to child
       const taskPrompt = req.context
         ? `${req.task}\n\nContext: ${req.context}`
@@ -868,10 +882,31 @@ export class AgentManager extends EventEmitter {
       ? `\n== AGENT BUDGET ==\nRunning: ${running} / ${this.maxConcurrent} | Available slots: ${Math.max(0, this.maxConcurrent - running)}${running >= this.maxConcurrent ? ' | ⚠ AT CAPACITY' : ''}\n`
       : '';
 
+    // Include memory entries for the lead
+    let memorySection = '';
+    if (agent.role.id === 'lead') {
+      const memories = this.agentMemory.getByLead(agent.id);
+      if (memories.length > 0) {
+        // Group by agent
+        const byAgent = new Map<string, MemoryEntry[]>();
+        for (const m of memories) {
+          const list = byAgent.get(m.agentId) || [];
+          list.push(m);
+          byAgent.set(m.agentId, list);
+        }
+        const lines: string[] = [];
+        for (const [agentId, entries] of byAgent) {
+          const facts = entries.map(e => `${e.key}: ${e.value}`).join(', ');
+          lines.push(`  - ${agentId.slice(0, 8)}: ${facts}`);
+        }
+        memorySection = `\n== AGENT MEMORY ==\nRecorded facts about your agents:\n${lines.join('\n')}\n`;
+      }
+    }
+
     const response = `<!-- CREW_ROSTER
 == ACTIVE CREW MEMBERS ==
 ${roster.map((r) => `- ${r.id} | ${r.role} (${r.roleId}) [${r.model}] | Status: ${r.status} | Task: ${r.task || 'idle'}${r.parentId ? ` | Parent: ${r.parentId}` : ''}`).join('\n')}
-${budgetLine}
+${budgetLine}${memorySection}
 To assign a task to an agent, use their ID:
 \`<!-- DELEGATE {"to": "agent-id", "task": "your task"} -->\`
 To create a new agent:

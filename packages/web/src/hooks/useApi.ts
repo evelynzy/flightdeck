@@ -104,6 +104,13 @@ export function useApi() {
     loadConfig();
   }, [loadRoles, loadConfig]);
 
+  const updateAgent = useCallback(async (id: string, patch: { model?: string }) => {
+    return fetchJSON(`/agents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }, []);
+
   const resolvePermission = useCallback(async (agentId: string, approved: boolean) => {
     return fetchJSON(`/agents/${agentId}/permission`, {
       method: 'POST',
@@ -119,6 +126,7 @@ export function useApi() {
     createTask,
     updateTask,
     deleteTask,
+    updateAgent,
     updateConfig,
     createRole,
     deleteRole,

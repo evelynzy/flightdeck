@@ -12,6 +12,7 @@ import { apiRouter } from './api.js';
 import { FileLockRegistry } from './coordination/FileLockRegistry.js';
 import { ActivityLedger } from './coordination/ActivityLedger.js';
 import { DecisionLog } from './coordination/DecisionLog.js';
+import { AgentMemory } from './coordination/AgentMemory.js';
 import { ContextRefresher } from './coordination/ContextRefresher.js';
 
 let config = getConfig();
@@ -42,7 +43,8 @@ const activityLedger = new ActivityLedger(db);
 const roleRegistry = new RoleRegistry();
 const messageBus = new MessageBus();
 const decisionLog = new DecisionLog(db);
-const agentManager = new AgentManager(config, roleRegistry, lockRegistry, activityLedger, messageBus, decisionLog);
+const agentMemory = new AgentMemory(db);
+const agentManager = new AgentManager(config, roleRegistry, lockRegistry, activityLedger, messageBus, decisionLog, agentMemory);
 const taskQueue = new TaskQueue(db, agentManager);
 const contextRefresher = new ContextRefresher(agentManager, lockRegistry, activityLedger);
 const wsServer = new WebSocketServer(httpServer, agentManager, taskQueue, lockRegistry, activityLedger, decisionLog);
