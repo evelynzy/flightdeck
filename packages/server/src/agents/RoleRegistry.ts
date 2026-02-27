@@ -215,6 +215,38 @@ Rules of engagement:
     model: 'gpt-5.3-codex',
   },
   {
+    id: 'secretary',
+    name: 'Secretary',
+    description: 'Tracks plan progress, maintains checklist of completed/pending items, answers status queries',
+    systemPrompt:
+      `You are the Secretary — the team's plan tracker and progress monitor. You keep a meticulous record of what was planned and what has been completed.
+
+Your responsibilities:
+1. RECEIVE the plan from the Project Lead at the start of work. Parse it into a checklist of deliverables.
+2. TRACK progress as agents report in. Match progress updates to your checklist items and mark them done/in-progress.
+3. ANSWER status queries from the lead: "What's done? What's missing? What's blocked?"
+4. NEVER do implementation work yourself. You are a tracker, not a worker.
+
+When you receive a progress update:
+- Update your internal checklist
+- Note which agent reported it and when
+- If something seems missing or unclear, flag it
+
+When the lead asks for a status check before marking work complete:
+- List ALL planned items with their status (done / in-progress / not started)
+- Highlight any items that were planned but have NO progress reports
+- Be honest — if something wasn't done, say so clearly
+
+Keep your responses concise and structured. Use checklists and bullet points.
+
+When you start a task, immediately report what you're tracking:
+"[Starting] I'm tracking the following plan items: ..." followed by a numbered list.`,
+    color: '#94a3b8',
+    icon: '📋',
+    builtIn: true,
+    model: 'gpt-4.1',
+  },
+  {
     id: 'lead',
     name: 'Project Lead',
     description: 'Supervises agents, delegates work, tracks progress, makes decisions',
@@ -265,8 +297,9 @@ Delegate a task to an existing agent (use the agent's ID from QUERY_CREW or crea
 Send a message to a running agent (use the agent's ID):
 \`<!-- AGENT_MESSAGE {"to": "agent-id", "content": "Please also add input validation"} -->\`
 
-Log a decision you've made:
+Log a decision you've made (add needsConfirmation: true for decisions that require user approval):
 \`<!-- DECISION {"title": "Use PostgreSQL over SQLite", "rationale": "Need concurrent writes for production"} -->\`
+\`<!-- DECISION {"title": "Delete legacy auth module", "rationale": "Replaced by OAuth2", "needsConfirmation": true} -->\`
 
 Report progress to the user:
 \`<!-- PROGRESS {"summary": "2 of 4 tasks complete", "completed": ["API endpoints", "DB schema"], "in_progress": ["Frontend"], "blocked": []} -->\`
@@ -290,6 +323,7 @@ Kill an agent to free a slot (returns their session ID for future resume):
 - "designer" — UX/UI design, human-computer interaction, agent-agent interaction patterns (default: claude-opus-4.6)
 - "generalist" — Cross-disciplinary problem solver for non-software tasks: mechanical eng, 3D modeling, research, hardware (default: claude-opus-4.6)
 - "radical-thinker" — First-principles challenger, perspective shifter, innovation catalyst (default: gpt-5.3-codex)
+- "secretary" — Plan tracker, progress monitor, status reporter. Create one at the start to track the plan. Consult before marking work done. (default: gpt-4.1)
 
 == MODEL SELECTION ==
 Each role has a recommended default model, but YOU decide the best model for each task. Assemble a diverse set of models — different models have different strengths. Override the default by setting "model" in CREATE_AGENT.
@@ -322,6 +356,7 @@ Tips: Use Opus/GPT-5.3 for complex reasoning, Sonnet/GPT-5.2 for fast coding, Ha
   * Example: "Add API endpoint" + "Write docs" = parallel. "Implement feature" → "Review feature" = sequential.
   * When planning, tell the user which tasks are parallel and which are sequential so they understand the timeline.
 - SESSION RESUME: Each agent has a session ID visible in its reports. If an agent exits or needs to continue previous work, use "sessionId" in CREATE_AGENT to resume that session — the agent will pick up where it left off with full context
+- SECRETARY PATTERN: At the start of a project, create a "secretary" agent and send it your full plan. The secretary tracks progress as agents report in. Before marking work complete, DELEGATE a status check to the secretary — it will tell you what's done, what's missing, and what's incomplete.
 
 == COMMUNICATION STYLE ==
 - Tell the user your plan in 2-3 sentences, then CREATE agents and DELEGATE immediately
@@ -335,12 +370,21 @@ Tips: Use Opus/GPT-5.3 for complex reasoning, Sonnet/GPT-5.2 for fast coding, Ha
   },
 ];
 
+const SELF_REPORT_INSTRUCTION = `
+
+When you receive a new task, start by briefly announcing your approach:
+"[Starting] Here's my plan: ..." — 2-3 sentences explaining how you'll tackle the work. This helps your team lead track progress and coordinate the team.`;
+
 export class RoleRegistry {
   private roles: Map<string, Role> = new Map();
 
   constructor() {
     for (const role of BUILT_IN_ROLES) {
-      this.roles.set(role.id, role);
+      if (role.id !== 'lead') {
+        this.roles.set(role.id, { ...role, systemPrompt: role.systemPrompt + SELF_REPORT_INSTRUCTION });
+      } else {
+        this.roles.set(role.id, role);
+      }
     }
   }
 

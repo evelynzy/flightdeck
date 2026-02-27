@@ -13,7 +13,7 @@ const defaults: ServerConfig = {
   host: '0.0.0.0',
   cliCommand: process.env.COPILOT_CLI_PATH || 'copilot',
   cliArgs: [],
-  maxConcurrentAgents: parseInt(process.env.MAX_AGENTS || '5', 10),
+  maxConcurrentAgents: parseInt(process.env.MAX_AGENTS || '10', 10),
   dbPath: process.env.DB_PATH || './ai-crew.db',
   defaultAgentMode: (process.env.AGENT_MODE as 'pty' | 'acp') || 'acp',
 };

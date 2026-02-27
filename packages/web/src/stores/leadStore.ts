@@ -69,6 +69,7 @@ interface LeadState {
 
   setDecisions: (leadId: string, decisions: Decision[]) => void;
   addDecision: (leadId: string, decision: Decision) => void;
+  updateDecision: (leadId: string, decisionId: string, updates: Partial<Decision>) => void;
   setProgress: (leadId: string, progress: LeadProgress) => void;
   setProgressSummary: (leadId: string, summary: string) => void;
   addProgressSnapshot: (leadId: string, snapshot: ProgressSnapshot) => void;
@@ -123,6 +124,15 @@ export const useLeadStore = create<LeadState>((set) => ({
     set((s) => {
       const proj = s.projects[leadId] || emptyProject();
       return { projects: { ...s.projects, [leadId]: { ...proj, decisions: [...proj.decisions, decision] } } };
+    }),
+
+  updateDecision: (leadId, decisionId, updates) =>
+    set((s) => {
+      const proj = s.projects[leadId] || emptyProject();
+      const decisions = proj.decisions.map((d) =>
+        d.id === decisionId ? { ...d, ...updates } : d,
+      );
+      return { projects: { ...s.projects, [leadId]: { ...proj, decisions } } };
     }),
 
   setProgress: (leadId, progress) =>

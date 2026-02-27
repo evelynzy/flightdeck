@@ -71,6 +71,22 @@ CREATE TABLE IF NOT EXISTS activity_log (
 );
 CREATE INDEX IF NOT EXISTS idx_activity_agent ON activity_log(agent_id);
 CREATE INDEX IF NOT EXISTS idx_activity_type ON activity_log(action_type);
+
+CREATE TABLE IF NOT EXISTS decisions (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  agent_role TEXT NOT NULL,
+  lead_id TEXT,
+  title TEXT NOT NULL,
+  rationale TEXT DEFAULT '',
+  needs_confirmation INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'recorded',
+  confirmed_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
+CREATE INDEX IF NOT EXISTS idx_decisions_needs_confirmation ON decisions(needs_confirmation);
+CREATE INDEX IF NOT EXISTS idx_decisions_lead_id ON decisions(lead_id);
 `;
 
 export class Database {
@@ -99,5 +115,19 @@ export class Database {
 
   close(): void {
     this.db.close();
+  }
+
+  /** Get a setting value from the settings table */
+  getSetting(key: string): string | undefined {
+    const row = this.get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
+    return row?.value;
+  }
+
+  /** Set a setting value in the settings table (upsert) */
+  setSetting(key: string, value: string): void {
+    this.run(
+      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      [key, value],
+    );
   }
 }

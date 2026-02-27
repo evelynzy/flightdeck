@@ -260,7 +260,7 @@ export class Agent {
       this.contextWindowUsed = info.used;
 
       // Detect compaction: significant drop (>30%) in context usage
-      if (previousUsed > 0 && info.used < previousUsed * 0.7 && previousUsed > 1000) {
+      if (previousUsed > 0 && info.used < previousUsed * 0.7 && previousUsed > 10000) {
         const percentDrop = Math.round(((previousUsed - info.used) / previousUsed) * 100);
         for (const listener of this.contextCompactedListeners) {
           listener({ previousUsed, currentUsed: info.used, percentDrop });

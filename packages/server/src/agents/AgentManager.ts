@@ -806,10 +806,10 @@ export class AgentManager extends EventEmitter {
       if (!decision.title) return;
 
       const needsConfirmation = decision.needsConfirmation === true;
-      const recorded = this.decisionLog.add(agent.id, agent.role?.id ?? 'unknown', decision.title, decision.rationale ?? '', needsConfirmation);
+      const leadId = agent.parentId || agent.id;
+      const recorded = this.decisionLog.add(agent.id, agent.role?.id ?? 'unknown', decision.title, decision.rationale ?? '', needsConfirmation, leadId);
       logger.info('lead', `Decision by ${agent.role.name}: "${decision.title}"${needsConfirmation ? ' [needs confirmation]' : ''}`, { rationale: decision.rationale?.slice(0, 100) });
       // Include leadId so frontend routes to the correct project
-      const leadId = agent.parentId || agent.id;
       this.emit('lead:decision', {
         id: recorded.id,
         agentId: agent.id,

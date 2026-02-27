@@ -155,7 +155,7 @@ export class TaskQueue extends EventEmitter {
           status: 'in_progress',
           assignedAgentId: candidate.id,
         });
-        candidate.task = `${task.title}: ${task.description}`.slice(0, 500);
+        candidate.task = `${task.title}${task.description ? ': ' + task.description : ''}`.slice(0, 500);
         const prompt = `## Task Assigned\n**${task.title}**\n\n${task.description}\n\nPlease work on this task now.`;
         candidate.write(prompt);
       }
