@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Crown, Send, Users, CheckCircle, AlertCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Pencil } from 'lucide-react';
 import { useLeadStore } from '../../stores/leadStore';
 import type { ActivityEvent, AgentComm, ProgressSnapshot, AgentReport } from '../../stores/leadStore';
-import type { AcpTextChunk, ChatGroup, GroupMessage, DagStatus } from '../../types';
+import type { AcpTextChunk, ChatGroup, GroupMessage, DagStatus, Project } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import { TaskDagPanelContent } from './TaskDagPanel';
 
@@ -50,14 +50,27 @@ export function LeadDashboard({ api, ws }: Props) {
   const [renamingLeadId, setRenamingLeadId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const isResizing = useRef(false);
+  const [persistedProjects, setPersistedProjects] = useState<Project[]>([]);
+  const [resumingProjectId, setResumingProjectId] = useState<string | null>(null);
 
   const leadAgents = agents.filter((a) => a.role.id === 'lead' && !a.parentId);
+  // Map active lead projectIds for merging
+  const activeProjectIds = new Set(leadAgents.map((a) => a.projectId).filter(Boolean));
+  // Inactive persisted projects (no active lead)
+  const inactiveProjects = persistedProjects.filter((p) => !activeProjectIds.has(p.id) && p.status !== 'archived');
   const currentProject = selectedLeadId ? projects[selectedLeadId] : null;
   const leadAgent = agents.find((a) => a.id === selectedLeadId);
   const isActive = leadAgent && (leadAgent.status === 'running' || leadAgent.status === 'idle');
 
-  // On mount, load existing leads from server
+  // On mount, load existing leads and persisted projects from server
   useEffect(() => {
+    // Load persisted projects
+    fetch('/api/projects')
+      .then((r) => r.json())
+      .then((data: Project[]) => { if (Array.isArray(data)) setPersistedProjects(data); })
+      .catch(() => {});
+
+    // Load active leads
     fetch('/api/lead').then((r) => r.json()).then((leads: any[]) => {
       if (Array.isArray(leads)) {
         leads.forEach((l) => {
@@ -586,7 +599,7 @@ export function LeadDashboard({ api, ws }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {leadAgents.length === 0 && !showNewProject && (
+          {leadAgents.length === 0 && inactiveProjects.length === 0 && !showNewProject && (
             <div className="p-4 text-center">
               <Crown className="w-10 h-10 text-yellow-400/50 mx-auto mb-2" />
               <p className="text-xs text-gray-500 font-mono mb-3">No projects yet</p>
@@ -708,6 +721,70 @@ export function LeadDashboard({ api, ws }: Props) {
               </button>
             );
           })}
+
+          {/* Inactive persisted projects */}
+          {inactiveProjects.length > 0 && (
+            <>
+              {leadAgents.length > 0 && (
+                <div className="px-3 py-1.5 text-[10px] font-medium text-gray-600 uppercase tracking-wider border-t border-gray-700/50">
+                  Past Projects
+                </div>
+              )}
+              {inactiveProjects.map((proj) => {
+                const isSelected = selectedLeadId === `project:${proj.id}`;
+                return (
+                  <button
+                    key={proj.id}
+                    onClick={() => {
+                      const key = `project:${proj.id}`;
+                      useLeadStore.getState().addProject(key);
+                      useLeadStore.getState().selectLead(key);
+                    }}
+                    className={`w-full text-left px-3 py-2.5 border-b border-gray-700/50 transition-colors group ${
+                      isSelected
+                        ? 'bg-yellow-600/15 border-l-2 border-l-yellow-500'
+                        : 'hover:bg-gray-800 border-l-2 border-l-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0 bg-gray-600" />
+                      <span className="text-sm font-mono truncate flex-1 text-gray-400">{proj.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setResumingProjectId(proj.id);
+                          fetch(`/api/projects/${proj.id}/resume`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({}),
+                          })
+                            .then((r) => r.json())
+                            .then((data) => {
+                              if (data.id) {
+                                useLeadStore.getState().addProject(data.id);
+                                useLeadStore.getState().selectLead(data.id);
+                                fetch('/api/projects').then((r) => r.json()).then((ps: Project[]) => {
+                                  if (Array.isArray(ps)) setPersistedProjects(ps);
+                                }).catch(() => {});
+                              }
+                            })
+                            .catch(() => {})
+                            .finally(() => setResumingProjectId(null));
+                        }}
+                        className="text-[10px] text-yellow-500 hover:text-yellow-400 bg-yellow-900/30 hover:bg-yellow-900/50 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                        title="Resume project"
+                      >
+                        {resumingProjectId === proj.id ? <Loader2 size={10} className="animate-spin" /> : 'Resume'}
+                      </button>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-0.5 pl-4 font-mono">
+                      {proj.status} · {proj.updatedAt?.slice(0, 10)}
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
         </div>
 
         {/* New project button at bottom of sidebar */}
