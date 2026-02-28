@@ -5,6 +5,7 @@ import type { FileLockRegistry } from '../coordination/FileLockRegistry.js';
 import type { ActivityLedger } from '../coordination/ActivityLedger.js';
 import type { DecisionLog } from '../coordination/DecisionLog.js';
 import type { ChatGroupRegistry } from '../comms/ChatGroupRegistry.js';
+import { getAuthSecret } from '../middleware/auth.js';
 import { v4 as uuid } from 'uuid';
 
 interface ClientConnection {
@@ -28,8 +29,8 @@ export class WebSocketServer {
     this.wss = new WsServer({ server, path: '/ws' });
 
     this.wss.on('connection', (ws, req) => {
-      // Check auth if SERVER_SECRET is set
-      const secret = process.env.SERVER_SECRET;
+      // Check auth if secret is configured
+      const secret = getAuthSecret();
       if (secret) {
         const url = new URL(req.url || '', `http://${req.headers.host}`);
         const token = url.searchParams.get('token');

@@ -1,14 +1,37 @@
 import { Request, Response, NextFunction } from 'express';
+import { randomBytes } from 'crypto';
+
+/**
+ * Auto-generated token used when SERVER_SECRET is not explicitly set.
+ * Generated once per server start — printed to console for the user.
+ */
+let autoToken: string | null = null;
+
+export function getAuthSecret(): string | null {
+  return process.env.SERVER_SECRET || autoToken;
+}
+
+/**
+ * Initialize auth — auto-generates a token if SERVER_SECRET is not set.
+ * Returns the token (or null if auth is explicitly disabled via AUTH=none).
+ */
+export function initAuth(): string | null {
+  if (process.env.SERVER_SECRET) return process.env.SERVER_SECRET;
+  if (process.env.AUTH === 'none') return null;
+
+  autoToken = randomBytes(24).toString('base64url');
+  return autoToken;
+}
 
 /**
  * Bearer token auth middleware.
- * If SERVER_SECRET env var is set, requires `Authorization: Bearer <secret>` header.
- * If SERVER_SECRET is not set, auth is disabled (development mode).
+ * If a secret exists (either SERVER_SECRET or auto-generated), requires auth.
+ * Auth can be explicitly disabled with AUTH=none env var.
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env.SERVER_SECRET;
+  const secret = getAuthSecret();
 
-  // If no secret configured, auth is disabled (dev mode)
+  // If no secret configured, auth is disabled
   if (!secret) {
     next();
     return;

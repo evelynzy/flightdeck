@@ -120,7 +120,10 @@ export const agentInputSchema = z.object({
 /** POST /api/coordination/locks */
 export const acquireLockSchema = z.object({
   agentId: z.string().min(1, 'agentId is required'),
-  filePath: z.string().min(1, 'filePath is required'),
+  filePath: z.string().min(1, 'filePath is required').refine(
+    (p) => !p.includes('\0') && !p.replace(/\\/g, '/').includes('/../'),
+    'Invalid file path',
+  ),
   reason: z.string().optional(),
 });
 

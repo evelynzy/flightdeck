@@ -8,7 +8,7 @@ import { AgentManager } from './agents/AgentManager.js';
 import { RoleRegistry } from './agents/RoleRegistry.js';
 import { Database } from './db/database.js';
 import { apiRouter } from './api.js';
-import { authMiddleware } from './middleware/auth.js';
+import { authMiddleware, initAuth, getAuthSecret } from './middleware/auth.js';
 import { FileLockRegistry } from './coordination/FileLockRegistry.js';
 import { ActivityLedger } from './coordination/ActivityLedger.js';
 import { DecisionLog } from './coordination/DecisionLog.js';
@@ -19,10 +19,33 @@ import { ContextRefresher } from './coordination/ContextRefresher.js';
 import { Scheduler } from './utils/Scheduler.js';
 import { ProjectRegistry } from './projects/ProjectRegistry.js';
 
+// Initialize auth (auto-generates token if not set)
+const authToken = initAuth();
+
 let config = getConfig();
 
 const app = express();
-app.use(cors());
+
+// CORS — restrict to localhost origins in production
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (curl, server-to-server, same-origin)
+    if (!origin) return cb(null, true);
+    const allowed = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    cb(allowed ? null : new Error('CORS: origin not allowed'), allowed);
+  },
+  credentials: true,
+}));
+
+// Security headers
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '0'); // modern browsers use CSP instead
+  next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 
 const httpServer = createServer(app);
@@ -93,18 +116,33 @@ import fs from 'fs';
 if (fs.existsSync(webDistPath)) {
   app.use(express.static(webDistPath));
   // SPA fallback — serve index.html for any non-API route
+  // Inject auth token into HTML so frontend can authenticate seamlessly
+  const indexHtml = fs.readFileSync(path.join(webDistPath, 'index.html'), 'utf-8');
   app.get('/{*path}', (_req, res) => {
-    res.sendFile(path.join(webDistPath, 'index.html'));
+    const secret = getAuthSecret();
+    if (secret) {
+      const injected = indexHtml.replace(
+        '</head>',
+        `<script>window.__AI_CREW_TOKEN__=${JSON.stringify(secret)}</script></head>`,
+      );
+      res.type('html').send(injected);
+    } else {
+      res.type('html').send(indexHtml);
+    }
   });
 }
 
 httpServer.listen(config.port, config.host, () => {
-  console.log(`🚀 AI Crew server running on http://${config.host}:${config.port}`);
+  const url = `http://${config.host}:${config.port}`;
+  console.log(`🚀 AI Crew server running on ${url}`);
+  if (authToken) {
+    console.log(`🔑 Auth token: ${authToken}`);
+    console.log(`   (set SERVER_SECRET env var to use a fixed token, or AUTH=none to disable)`);
+  } else {
+    console.log(`⚠️  Auth disabled (AUTH=none)`);
+  }
   if (config.host === '0.0.0.0') {
     console.warn('⚠️  WARNING: Server is binding to all interfaces (0.0.0.0). Set HOST=127.0.0.1 for local-only access.');
-  }
-  if (!process.env.SERVER_SECRET) {
-    console.warn('⚠️  WARNING: No SERVER_SECRET set. API endpoints are unauthenticated.');
   }
   contextRefresher.start();
 });

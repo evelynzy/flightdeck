@@ -11,6 +11,7 @@ import type { ActivityLedger, ActionType } from './coordination/ActivityLedger.j
 import type { DecisionLog } from './coordination/DecisionLog.js';
 import { logger } from './utils/logger.js';
 import { writeAgentFiles } from './agents/agentFiles.js';
+import { rateLimit } from './middleware/rateLimit.js';
 import {
   validateBody,
   spawnAgentSchema,
@@ -21,6 +22,10 @@ import {
   agentInputSchema,
   acquireLockSchema,
 } from './validation/schemas.js';
+
+// Rate limiters for expensive operations
+const spawnLimiter = rateLimit({ windowMs: 60_000, max: 30, message: 'Too many agent spawn requests' });
+const messageLimiter = rateLimit({ windowMs: 10_000, max: 50, message: 'Too many messages' });
 
 export function apiRouter(
   agentManager: AgentManager,
@@ -39,7 +44,7 @@ export function apiRouter(
     res.json(agentManager.getAll().map((a) => a.toJSON()));
   });
 
-  router.post('/agents', validateBody(spawnAgentSchema), (req, res) => {
+  router.post('/agents', spawnLimiter, validateBody(spawnAgentSchema), (req, res) => {
     const { roleId, task, mode, autopilot, model } = req.body;
     const role = roleRegistry.get(roleId);
     if (!role) {
@@ -240,7 +245,7 @@ export function apiRouter(
   });
 
   // --- Project Lead ---
-  router.post('/lead/start', (req, res) => {
+  router.post('/lead/start', spawnLimiter, (req, res) => {
     const { task, name, model, cwd, sessionId: resumeSessionId, projectId } = req.body;
     const role = roleRegistry.get('lead');
     if (!role) return res.status(500).json({ error: 'Project Lead role not found' });
@@ -310,9 +315,9 @@ export function apiRouter(
     res.json(agent.toJSON());
   });
 
-  router.post('/lead/:id/message', validateBody(leadMessageSchema), async (req, res) => {
+  router.post('/lead/:id/message', messageLimiter, validateBody(leadMessageSchema), async (req, res) => {
     const { text, mode = 'interrupt' } = req.body;
-    const agent = agentManager.get(req.params.id);
+    const agent = agentManager.get(req.params.id as string);
     if (!agent || agent.role.id !== 'lead') return res.status(404).json({ error: 'Lead not found' });
 
     agent.lastHumanMessageAt = new Date();
@@ -486,7 +491,8 @@ export function apiRouter(
   router.get('/search', (req, res) => {
     const q = (req.query.q as string ?? '').trim();
     if (!q || q.length < 2) return res.status(400).json({ error: 'query must be at least 2 characters' });
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    if (q.length > 200) return res.status(400).json({ error: 'query too long (max 200 chars)' });
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const pattern = `%${q}%`;
 
     // Search agent conversation messages

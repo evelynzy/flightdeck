@@ -51,6 +51,19 @@ export class FileLockRegistry extends EventEmitter {
     this.db = db;
   }
 
+  /** Validate file path to prevent traversal attacks */
+  private validatePath(filePath: string): void {
+    // Reject path traversal attempts
+    const normalized = filePath.replace(/\\/g, '/');
+    if (normalized.includes('/../') || normalized.startsWith('../') || normalized.endsWith('/..')) {
+      throw new Error(`Invalid file path: path traversal detected`);
+    }
+    // Reject null bytes
+    if (filePath.includes('\0')) {
+      throw new Error(`Invalid file path: null bytes not allowed`);
+    }
+  }
+
   acquire(
     agentId: string,
     agentRole: string,
@@ -58,6 +71,7 @@ export class FileLockRegistry extends EventEmitter {
     reason = '',
     ttlSeconds = 300,
   ): { ok: boolean; holder?: string } {
+    this.validatePath(filePath);
     this._cleanExpired();
 
     const activeLocks = this.db.drizzle

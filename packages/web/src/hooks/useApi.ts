@@ -5,7 +5,9 @@ import { useAppStore } from '../stores/appStore';
 const API_BASE = '/api';
 
 export function getAuthToken(): string | null {
-  // Check URL params first, then localStorage
+  // Check injected token from server (production), then URL params, then localStorage
+  const injected = (window as any).__AI_CREW_TOKEN__;
+  if (injected) return injected;
   const params = new URLSearchParams(window.location.search);
   return params.get('token') || localStorage.getItem('ai-crew-token');
 }
