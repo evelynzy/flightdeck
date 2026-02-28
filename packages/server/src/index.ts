@@ -16,6 +16,7 @@ import { AgentMemory } from './agents/AgentMemory.js';
 import { TaskDAG } from './tasks/TaskDAG.js';
 import { ChatGroupRegistry } from './comms/ChatGroupRegistry.js';
 import { ContextRefresher } from './coordination/ContextRefresher.js';
+import { Scheduler } from './utils/Scheduler.js';
 
 let config = getConfig();
 
@@ -52,6 +53,19 @@ const agentManager = new AgentManager(config, roleRegistry, lockRegistry, activi
 const contextRefresher = new ContextRefresher(agentManager, lockRegistry, activityLedger);
 const wsServer = new WebSocketServer(httpServer, agentManager, lockRegistry, activityLedger, decisionLog, chatGroupRegistry);
 
+// Register scheduled background tasks
+const scheduler = new Scheduler();
+scheduler.register({
+  id: 'expired-lock-cleanup',
+  interval: 60_000, // every minute
+  run: () => { lockRegistry.cleanExpired(); },
+});
+scheduler.register({
+  id: 'activity-log-prune',
+  interval: 3_600_000, // every hour
+  run: () => activityLedger.prune(50_000),
+});
+
 // Health check (no auth required)
 app.get('/health', (_req, res) => {
   res.json({
@@ -81,6 +95,7 @@ httpServer.listen(config.port, config.host, () => {
 function gracefulShutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   contextRefresher.stop();
+  scheduler.stop();
   agentManager.shutdownAll();
   activityLedger.stop();
   lockRegistry.cleanExpired();
