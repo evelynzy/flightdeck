@@ -4,6 +4,8 @@ import type { RoleRegistry } from './agents/RoleRegistry.js';
 import type { ServerConfig } from './config.js';
 import { updateConfig, getConfig } from './config.js';
 import type { Database } from './db/database.js';
+import { agentPlans } from './db/schema.js';
+import { eq } from 'drizzle-orm';
 import type { FileLockRegistry } from './coordination/FileLockRegistry.js';
 import type { ActivityLedger, ActionType } from './coordination/ActivityLedger.js';
 import type { DecisionLog } from './coordination/DecisionLog.js';
@@ -74,6 +76,22 @@ export function apiRouter(
     const newAgent = agentManager.restart(req.params.id);
     if (!newAgent) return res.status(404).json({ error: 'Agent not found' });
     res.status(201).json(newAgent.toJSON());
+  });
+
+  router.get('/agents/:id/plan', (req, res) => {
+    const agent = agentManager.get(req.params.id);
+    if (agent) {
+      return res.json({ agentId: agent.id, plan: agent.plan });
+    }
+    const row = _db.drizzle
+      .select()
+      .from(agentPlans)
+      .where(eq(agentPlans.agentId, req.params.id))
+      .get();
+    if (row) {
+      return res.json({ agentId: row.agentId, plan: JSON.parse(row.planJson) });
+    }
+    res.status(404).json({ error: 'Agent not found' });
   });
 
   router.post('/agents/:id/input', validateBody(agentInputSchema), (req, res) => {

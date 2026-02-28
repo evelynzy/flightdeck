@@ -9,11 +9,14 @@ import type { MessageBus } from '../comms/MessageBus.js';
 import type { DecisionLog } from '../coordination/DecisionLog.js';
 import type { AgentMemory } from './AgentMemory.js';
 import type { ChatGroupRegistry } from '../comms/ChatGroupRegistry.js';
+import type { Database } from '../db/database.js';
 import { TaskDAG } from '../tasks/TaskDAG.js';
 import { logger } from '../utils/logger.js';
 import { writeAgentFiles } from './agentFiles.js';
 import { CommandDispatcher } from './CommandDispatcher.js';
 import { HeartbeatMonitor } from './HeartbeatMonitor.js';
+import { agentPlans } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 // Re-export Delegation so existing consumers (api.ts, etc.) continue to work
 export type { Delegation } from './CommandDispatcher.js';
@@ -30,6 +33,7 @@ export class AgentManager extends EventEmitter {
   private agentMemory: AgentMemory;
   private chatGroupRegistry: ChatGroupRegistry;
   private taskDAG: TaskDAG;
+  private db?: Database;
   /** If set, auto-kill agents after this many ms past the initial hung detection */
   private autoKillTimeoutMs: number | null;
   private hungTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
@@ -49,7 +53,7 @@ export class AgentManager extends EventEmitter {
     agentMemory: AgentMemory,
     chatGroupRegistry: ChatGroupRegistry,
     taskDAG: TaskDAG,
-    { maxRestarts = 3, autoRestart = true }: { maxRestarts?: number; autoRestart?: boolean } = {},
+    { maxRestarts = 3, autoRestart = true, db }: { maxRestarts?: number; autoRestart?: boolean; db?: Database } = {},
   ) {
     super();
     this.config = config;
@@ -61,6 +65,7 @@ export class AgentManager extends EventEmitter {
     this.agentMemory = agentMemory;
     this.chatGroupRegistry = chatGroupRegistry;
     this.taskDAG = taskDAG;
+    this.db = db;
     this.maxConcurrent = config.maxConcurrentAgents;
     this.maxRestarts = maxRestarts;
     this.autoRestart = autoRestart;
@@ -175,6 +180,24 @@ export class AgentManager extends EventEmitter {
 
     agent.onPlan((entries) => {
       this.emit('agent:plan', { agentId: agent.id, plan: entries });
+      // Persist plan to SQLite
+      if (this.db) {
+        this.db.drizzle
+          .insert(agentPlans)
+          .values({
+            agentId: agent.id,
+            leadId: agent.parentId || null,
+            planJson: JSON.stringify(entries),
+          })
+          .onConflictDoUpdate({
+            target: agentPlans.agentId,
+            set: {
+              planJson: JSON.stringify(entries),
+              updatedAt: new Date().toISOString(),
+            },
+          })
+          .run();
+      }
     });
 
     agent.onPermissionRequest((request) => {

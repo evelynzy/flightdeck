@@ -155,3 +155,12 @@ export const dagTasks = sqliteTable('dag_tasks', {
   index('idx_dag_tasks_lead').on(table.leadId),
   index('idx_dag_tasks_status').on(table.dagStatus),
 ]);
+
+// ── Agent Plans ──────────────────────────────────────────────────────
+
+export const agentPlans = sqliteTable('agent_plans', {
+  agentId: text('agent_id').primaryKey(),
+  leadId: text('lead_id'),
+  planJson: text('plan_json').notNull().default('[]'),
+  updatedAt: text('updated_at').default(sql`(datetime('now'))`),
+});

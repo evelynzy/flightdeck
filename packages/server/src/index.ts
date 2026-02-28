@@ -48,7 +48,7 @@ const decisionLog = new DecisionLog(db);
 const agentMemory = new AgentMemory(db);
 const chatGroupRegistry = new ChatGroupRegistry(db);
 const taskDAG = new TaskDAG(db);
-const agentManager = new AgentManager(config, roleRegistry, lockRegistry, activityLedger, messageBus, decisionLog, agentMemory, chatGroupRegistry, taskDAG);
+const agentManager = new AgentManager(config, roleRegistry, lockRegistry, activityLedger, messageBus, decisionLog, agentMemory, chatGroupRegistry, taskDAG, { db });
 const contextRefresher = new ContextRefresher(agentManager, lockRegistry, activityLedger);
 const wsServer = new WebSocketServer(httpServer, agentManager, lockRegistry, activityLedger, decisionLog, chatGroupRegistry);
 
