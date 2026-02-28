@@ -207,10 +207,8 @@ export class CommandDispatcher {
         if (newlyReady.length > 0) {
           const dagParent = this.ctx.getAgent(agent.parentId);
           if (dagParent) {
-            const delegated = this.autoDelegateReadyTasks(dagParent, newlyReady);
-            if (delegated.length > 0) {
-              dagParent.sendMessage(`[System] DAG: Task "${dagTask.id}" done. Auto-started: ${delegated.map(d => d.id).join(', ')}`);
-            }
+            const readyNames = newlyReady.map(d => d.id).join(', ');
+            dagParent.sendMessage(`[System] DAG: Task "${dagTask.id}" done. Newly ready tasks: ${readyNames}. Use DELEGATE or CREATE_AGENT to assign them.`);
           }
         }
       }
@@ -931,11 +929,10 @@ CREW_ROSTER ]]]`;
         }
         msg += '\nConsider adding depends_on between these tasks or confirming parallel execution.';
       }
-      // Auto-delegate ready tasks
+      // Notify lead about ready tasks for manual delegation
       const readyTasks = tasks.filter(t => t.dagStatus === 'ready');
-      const delegated = this.autoDelegateReadyTasks(agent, readyTasks);
-      if (delegated.length > 0) {
-        msg += `\nAuto-delegated ${delegated.length} ready tasks: ${delegated.map(d => d.id).join(', ')}`;
+      if (readyTasks.length > 0) {
+        msg += `\n${readyTasks.length} tasks are ready: ${readyTasks.map(d => d.id).join(', ')}. Use DELEGATE or CREATE_AGENT to assign them.`;
       }
       agent.sendMessage(msg);
       this.ctx.emit('dag:updated', { leadId: agent.id });
@@ -999,12 +996,7 @@ CREW_ROSTER ]]]`;
       const req = JSON.parse(match[1]);
       const ok = this.ctx.taskDAG.retryTask(agent.id, req.id);
       if (ok) {
-        agent.sendMessage(`[System] Task "${req.id}" reset to ready. Dependents unblocked.`);
-        const ready = this.ctx.taskDAG.resolveReady(agent.id).filter(t => t.id === req.id);
-        if (ready.length > 0) {
-          const delegated = this.autoDelegateReadyTasks(agent, ready);
-          if (delegated.length > 0) agent.sendMessage(`[System] Auto-delegated: ${delegated.map(d => d.id).join(', ')}`);
-        }
+        agent.sendMessage(`[System] Task "${req.id}" reset to ready. Dependents unblocked. Use DELEGATE or CREATE_AGENT to assign it.`);
       } else {
         agent.sendMessage(`[System] Cannot retry task "${req.id}" (must be failed).`);
       }
@@ -1019,11 +1011,7 @@ CREW_ROSTER ]]]`;
       const req = JSON.parse(match[1]);
       const ok = this.ctx.taskDAG.skipTask(agent.id, req.id);
       if (ok) {
-        agent.sendMessage(`[System] Task "${req.id}" skipped. Dependents may now be ready.`);
-        const ready = this.ctx.taskDAG.resolveReady(agent.id);
-        const delegated = this.autoDelegateReadyTasks(agent, ready);
-        if (delegated.length > 0) agent.sendMessage(`[System] Auto-delegated: ${delegated.map(d => d.id).join(', ')}`);
-      } else {
+        agent.sendMessage(`[System] Task "${req.id}" skipped. Dependents may now be ready. Use TASK_STATUS to check.`);      } else {
         agent.sendMessage(`[System] Cannot skip task "${req.id}".`);
       }
     } catch { agent.sendMessage('[System] SKIP_TASK error: invalid payload.'); }
@@ -1039,8 +1027,7 @@ CREW_ROSTER ]]]`;
       const task = this.ctx.taskDAG.addTask(agent.id, req);
       let msg = `[System] Task "${task.id}" added (${task.dagStatus}).`;
       if (task.dagStatus === 'ready') {
-        const delegated = this.autoDelegateReadyTasks(agent, [task]);
-        if (delegated.length > 0) msg += ` Auto-delegated.`;
+        msg += ` Ready for delegation — use DELEGATE or CREATE_AGENT to assign it.`;
       }
       agent.sendMessage(msg);
     } catch (err: any) { agent.sendMessage(`[System] ADD_TASK error: ${err.message}`); }
@@ -1094,40 +1081,6 @@ CREW_ROSTER ]]]`;
   }
 
   /** Auto-delegate ready tasks to idle agents or create new ones */
-  private autoDelegateReadyTasks(lead: Agent, readyTasks: DagTask[]): DagTask[] {
-    const delegated: DagTask[] = [];
-    for (const task of readyTasks) {
-      // Find idle agent with matching role
-      const idle = this.ctx.getAllAgents().find(a =>
-        a.parentId === lead.id && a.role.id === task.role && a.status === 'idle'
-      );
-      if (idle) {
-        // Reuse idle agent
-        const taskPrompt = `[DAG Task] ${task.id}: ${task.description}\nFiles: ${task.files.join(', ') || 'none declared'}`;
-        idle.task = task.description.slice(0, 500);
-        idle.sendMessage(taskPrompt);
-        this.ctx.taskDAG.startTask(lead.id, task.id, idle.id);
-        delegated.push(task);
-      } else {
-        // Try to create new agent
-        const role = this.ctx.roleRegistry?.get(task.role);
-        if (role) {
-          try {
-            const child = this.ctx.spawnAgent(role, task.description, lead.id, true, task.model, lead.cwd);
-            const taskPrompt = `[DAG Task] ${task.id}: ${task.description}\nFiles: ${task.files.join(', ') || 'none declared'}`;
-            child.sendMessage(taskPrompt);
-            this.ctx.taskDAG.startTask(lead.id, task.id, child.id);
-            delegated.push(task);
-          } catch (err) {
-            logger.debug('command', 'Failed to auto-delegate task (budget limit)', { error: (err as Error).message });
-            // Budget limit reached — task stays ready for later
-          }
-        }
-      }
-    }
-    return delegated;
-  }
-
   // ── Group chat handlers ────────────────────────────────────────────
 
   private detectCreateGroup(agent: Agent, data: string): void {
