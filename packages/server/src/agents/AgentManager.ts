@@ -624,7 +624,18 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
   /** Get recent messages from an agent's conversation history */
   getMessageHistory(agentId: string, limit = 200): import('../db/ConversationStore.js').ThreadMessage[] {
     if (!this.conversationStore) return [];
-    return this.conversationStore.getRecentMessages(agentId, limit).reverse(); // chronological order
+    const raw = this.conversationStore.getRecentMessages(agentId, limit * 10).reverse(); // chronological order
+    // Consolidate consecutive messages from the same sender into single messages
+    const consolidated: typeof raw = [];
+    for (const msg of raw) {
+      const prev = consolidated[consolidated.length - 1];
+      if (prev && prev.sender === msg.sender) {
+        prev.content += msg.content;
+      } else {
+        consolidated.push({ ...msg });
+      }
+    }
+    return consolidated.slice(-limit);
   }
 
   /** Keep all lead agents' budget info in sync with current state */
