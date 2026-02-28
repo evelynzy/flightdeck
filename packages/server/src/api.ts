@@ -482,20 +482,35 @@ export function apiRouter(
   });
 
   router.post('/decisions/:id/confirm', (req, res) => {
-    const decision = decisionLog.confirm(req.params.id);
+    const decisionId = req.params.id as string;
+    const decision = decisionLog.confirm(decisionId);
     if (!decision) return res.status(404).json({ error: 'Decision not found' });
+
+    // Check for pending system actions tied to this decision
+    const sysAction = agentManager.consumePendingSystemAction(decisionId);
+    if (sysAction && sysAction.type === 'set_max_concurrent') {
+      agentManager.setMaxConcurrent(sysAction.value);
+      logger.info('api', `System action executed: max concurrent agents set to ${sysAction.value} (approved by user)`);
+    }
+
     // Notify the lead agent about the approval
     const leadId = decision.leadId || decision.agentId;
     const lead = agentManager.get(leadId);
     if (lead && (lead.status === 'running' || lead.status === 'idle')) {
-      lead.sendMessage(`[Decision Approved] "${decision.title}" by ${decision.agentRole} has been approved by the user.`);
+      const extra = sysAction ? ` The agent limit has been changed to ${sysAction.value}.` : '';
+      lead.sendMessage(`[Decision Approved] "${decision.title}" by ${decision.agentRole} has been approved by the user.${extra}`);
     }
     res.json(decision);
   });
 
   router.post('/decisions/:id/reject', (req, res) => {
-    const decision = decisionLog.reject(req.params.id);
+    const decisionId = req.params.id as string;
+    const decision = decisionLog.reject(decisionId);
     if (!decision) return res.status(404).json({ error: 'Decision not found' });
+
+    // Discard any pending system action
+    agentManager.consumePendingSystemAction(decisionId);
+
     // Notify the lead agent about the rejection
     const leadId = decision.leadId || decision.agentId;
     const lead = agentManager.get(leadId);

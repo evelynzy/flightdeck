@@ -38,6 +38,7 @@ const SKIP_TASK_REGEX = /\[\[\[\s*SKIP_TASK\s*(\{.*?\})\s*\]\]\]/s;
 const ADD_TASK_REGEX = /\[\[\[\s*ADD_TASK\s*(\{.*?\})\s*\]\]\]/s;
 const CANCEL_TASK_REGEX = /\[\[\[\s*CANCEL_TASK\s*(\{.*?\})\s*\]\]\]/s;
 const HALT_HEARTBEAT_REGEX = /\[\[\[\s*HALT_HEARTBEAT\s*\]\]\]/s;
+const REQUEST_LIMIT_CHANGE_REGEX = /\[\[\[\s*REQUEST_LIMIT_CHANGE\s*(\{.*?\})\s*\]\]\]/s;
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ export class CommandDispatcher {
   private textBuffers: Map<string, string> = new Map();
   private delegations: Map<string, Delegation> = new Map();
   private reportedCompletions: Set<string> = new Set();
+  private pendingSystemActions: Map<string, { type: string; value: number; agentId: string }> = new Map();
   private ctx: CommandContext;
 
   constructor(ctx: CommandContext) {
@@ -127,6 +129,7 @@ export class CommandDispatcher {
       { regex: ADD_TASK_REGEX, name: 'ADD_TASK', handler: (a, d) => this.handleAddTask(a, d) },
       { regex: CANCEL_TASK_REGEX, name: 'CANCEL_TASK', handler: (a, d) => this.handleCancelTask(a, d) },
       { regex: HALT_HEARTBEAT_REGEX, name: 'HALT_HEARTBEAT', handler: (a, _d) => this.handleHaltHeartbeat(a) },
+      { regex: REQUEST_LIMIT_CHANGE_REGEX, name: 'REQUEST_LIMIT_CHANGE', handler: (a, d) => this.handleRequestLimitChange(a, d) },
     ];
 
     let found = true;
@@ -321,6 +324,13 @@ export class CommandDispatcher {
   /** Access delegations map for heartbeat checks */
   getDelegationsMap(): Map<string, Delegation> {
     return this.delegations;
+  }
+
+  /** Get and remove a pending system action by decision ID */
+  consumePendingSystemAction(decisionId: string): { type: string; value: number; agentId: string } | undefined {
+    const action = this.pendingSystemActions.get(decisionId);
+    if (action) this.pendingSystemActions.delete(decisionId);
+    return action;
   }
 
   // ── Detect / handle methods (private) ──────────────────────────────
@@ -1042,6 +1052,32 @@ CREW_ROSTER ]]]`;
     this.ctx.markHumanInterrupt(agent.id);
     logger.info('lead', `Heartbeat halted by ${agent.role.name} (${agent.id.slice(0, 8)})`);
     agent.sendMessage('[System] Heartbeat nudges paused. They will resume automatically when you start running again.');
+  }
+
+  private handleRequestLimitChange(agent: Agent, data: string): void {
+    if (agent.role.id !== 'lead') { agent.sendMessage('[System] Only the Project Lead can request limit changes.'); return; }
+    const match = data.match(REQUEST_LIMIT_CHANGE_REGEX);
+    if (!match) return;
+    try {
+      const req = JSON.parse(match[1]);
+      const newLimit = parseInt(req.limit, 10);
+      if (!newLimit || newLimit < 1 || newLimit > 100) {
+        agent.sendMessage('[System] REQUEST_LIMIT_CHANGE error: limit must be between 1 and 100.');
+        return;
+      }
+      const currentLimit = this.ctx.maxConcurrent;
+      const decision = this.ctx.decisionLog.add(
+        agent.id,
+        agent.role.name,
+        `Increase agent limit from ${currentLimit} to ${newLimit}`,
+        req.reason || `Need more concurrent agents to parallelize work (current: ${currentLimit}, requested: ${newLimit})`,
+        true, // needsConfirmation
+        agent.parentId || agent.id,
+      );
+      this.pendingSystemActions.set(decision.id, { type: 'set_max_concurrent', value: newLimit, agentId: agent.id });
+      logger.info('lead', `Limit change requested by ${agent.role.name} (${agent.id.slice(0, 8)}): ${currentLimit} → ${newLimit}`);
+      agent.sendMessage(`[System] Your request to change the agent limit from ${currentLimit} to ${newLimit} has been submitted for user approval. You will be notified when the user responds.`);
+    } catch { agent.sendMessage('[System] REQUEST_LIMIT_CHANGE error: invalid payload. Use {"limit": 15, "reason": "..."}'); }
   }
 
   /** Auto-delegate ready tasks to idle agents or create new ones */

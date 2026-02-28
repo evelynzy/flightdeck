@@ -121,6 +121,7 @@ const mockAgentManager = {
   getTaskDAG: vi.fn().mockReturnValue(mockTaskDAG),
   markHumanInterrupt: vi.fn(),
   persistHumanMessage: vi.fn(),
+  consumePendingSystemAction: vi.fn().mockReturnValue(undefined),
 };
 
 const mockRole = { id: 'developer', name: 'Developer', description: '', systemPrompt: '', color: '#888', icon: '🤖', model: 'claude-sonnet-4.5' };

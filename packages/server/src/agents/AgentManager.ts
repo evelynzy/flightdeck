@@ -624,6 +624,11 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     this.heartbeat.trackHumanInterrupt(agentId);
   }
 
+  /** Get and remove a pending system action by decision ID (for confirm/reject handling) */
+  consumePendingSystemAction(decisionId: string): { type: string; value: number; agentId: string } | undefined {
+    return this.dispatcher.consumePendingSystemAction(decisionId);
+  }
+
   /** Persist a system message to the agent's conversation history */
   persistSystemMessage(agentId: string, text: string): void {
     const threadId = this.agentThreads.get(agentId);
