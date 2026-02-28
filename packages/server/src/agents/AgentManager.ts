@@ -131,6 +131,13 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     this.heartbeat = new HeartbeatMonitor({
       getAllAgents: () => this.getAll(),
       getDelegationsMap: () => this.dispatcher.getDelegationsMap(),
+      getDagSummary: (leadId: string) => {
+        try {
+          return this.taskDAG.getStatus(leadId).summary;
+        } catch {
+          return null;
+        }
+      },
       emit: (event: string, ...args: any[]) => this.emit(event as any, args[0]),
     });
     this.heartbeat.start();

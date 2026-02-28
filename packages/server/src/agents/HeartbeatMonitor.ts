@@ -2,9 +2,15 @@ import type { Agent } from './Agent.js';
 import type { Delegation } from './CommandDispatcher.js';
 import { logger } from '../utils/logger.js';
 
+export interface DagSummary {
+  pending: number; ready: number; running: number; done: number;
+  failed: number; blocked: number; paused: number; skipped: number;
+}
+
 export interface HeartbeatContext {
   getAllAgents(): Agent[];
   getDelegationsMap(): Map<string, Delegation>;
+  getDagSummary(leadId: string): DagSummary | null;
   emit(event: string, ...args: any[]): void;
 }
 
@@ -61,13 +67,21 @@ export class HeartbeatMonitor {
       const anyRunning = children.some((a) => a.status === 'running');
       if (anyRunning) continue;
 
-      // Check if there are active (incomplete) delegations — if none, work is done
+      // Check if there are active (incomplete) delegations
       const activeDelegations = Array.from(this.ctx.getDelegationsMap().values()).filter(
         (d) => d.fromAgentId === lead.id && d.status === 'active'
       );
-      if (activeDelegations.length === 0) continue; // all delegations completed → legitimately idle
 
-      // All children are idle/completed but there are uncompleted delegations — team is stalled
+      // Check if there are remaining DAG tasks (pending, ready, blocked, paused)
+      const dagSummary = this.ctx.getDagSummary(lead.id);
+      const remainingDagTasks = dagSummary
+        ? dagSummary.pending + dagSummary.ready + dagSummary.blocked + dagSummary.paused
+        : 0;
+
+      // If no active delegations AND no remaining DAG tasks, work is truly done
+      if (activeDelegations.length === 0 && remainingDagTasks === 0) continue;
+
+      // All children are idle/completed but there is remaining work — team is stalled
       const idleChildren = children.filter((a) => a.status === 'idle');
       const completedChildren = children.filter((a) => a.status === 'completed' || a.status === 'failed');
 
@@ -75,10 +89,25 @@ export class HeartbeatMonitor {
       this.leadNudgeCount.set(lead.id, nudgeCount);
 
       const roster = children.map((c) => `  - ${c.role.name} (${c.id.slice(0, 8)}): ${c.status}`).join('\n');
-      const nudge = `[System Heartbeat] Your team appears stalled — you've been idle for ${Math.floor(idleDuration / 1000)}s. ` +
-        `${idleChildren.length} agents idle, ${completedChildren.length} completed/failed, ${activeDelegations.length} active delegations.\n` +
-        `Team status:\n${roster}\n` +
-        `Please review agent reports and continue: delegate reviews, assign next tasks, or report final results to the user.`;
+
+      // Build context-aware nudge message
+      const parts: string[] = [];
+      parts.push(`[System Heartbeat] Your team appears stalled — you've been idle for ${Math.floor(idleDuration / 1000)}s.`);
+      parts.push(`${idleChildren.length} agents idle, ${completedChildren.length} completed/failed.`);
+      if (activeDelegations.length > 0) {
+        parts.push(`${activeDelegations.length} active delegations still pending.`);
+      }
+      if (remainingDagTasks > 0 && dagSummary) {
+        const dagDetails: string[] = [];
+        if (dagSummary.ready > 0) dagDetails.push(`${dagSummary.ready} ready`);
+        if (dagSummary.pending > 0) dagDetails.push(`${dagSummary.pending} pending`);
+        if (dagSummary.blocked > 0) dagDetails.push(`${dagSummary.blocked} blocked`);
+        if (dagSummary.paused > 0) dagDetails.push(`${dagSummary.paused} paused`);
+        parts.push(`DAG tasks remaining: ${dagDetails.join(', ')}.`);
+      }
+      parts.push(`\nTeam status:\n${roster}`);
+      parts.push(`\nPlease review agent reports and continue: delegate ready tasks, unblock blocked tasks, or report final results to the user.`);
+      const nudge = parts.join(' ');
 
       logger.warn('lead', `Heartbeat nudge #${nudgeCount} → ${lead.role.name} (${lead.id.slice(0, 8)}): idle ${Math.floor(idleDuration / 1000)}s, ${children.length} children`);
       lead.sendMessage(nudge);
