@@ -126,7 +126,7 @@ export class Agent {
   private ensureSharedWorkspace(): void {
     const sharedDir = join(this.cwd || process.cwd(), '.ai-crew', 'shared');
     if (!existsSync(sharedDir)) {
-      try { mkdirSync(sharedDir, { recursive: true }); } catch {}
+      try { mkdirSync(sharedDir, { recursive: true }); } catch (err) { logger.debug('agent', 'Shared dir already exists or cannot be created'); }
     }
   }
 

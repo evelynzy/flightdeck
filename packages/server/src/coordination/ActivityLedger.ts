@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { Database } from '../db/database.js';
+import { logger } from '../utils/logger.js';
 
 export type ActionType =
   | 'file_edit'
@@ -127,8 +128,8 @@ export class ActivityLedger extends EventEmitter {
           seen.add(file);
           recentFiles.push(file);
         }
-      } catch {
-        // skip malformed JSON
+      } catch (err) {
+        logger.debug('activity', 'Failed to parse activity details JSON', { error: (err as Error).message });
       }
     }
 
@@ -146,7 +147,8 @@ export class ActivityLedger extends EventEmitter {
     let details: Record<string, any> = {};
     try {
       details = JSON.parse(row.details ?? '{}');
-    } catch {
+    } catch (err) {
+      logger.debug('activity', 'Failed to parse activity row details', { error: (err as Error).message });
       details = {};
     }
     return {

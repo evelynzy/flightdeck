@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { v4 as uuid } from 'uuid';
 import type { Database } from '../db/database.js';
 import type { AgentManager } from '../agents/AgentManager.js';
+import { logger } from '../utils/logger.js';
 
 export type TaskStatus = 'queued' | 'assigned' | 'in_progress' | 'review' | 'done' | 'failed';
 
@@ -143,7 +144,8 @@ export class TaskQueue extends EventEmitter {
         if (role) {
           try {
             candidate = this.agentManager.spawn(role, task.id);
-          } catch {
+          } catch (err) {
+            logger.debug('tasks', 'Failed to auto-spawn agent for task', { error: (err as Error).message });
             // Concurrency limit reached, skip
             continue;
           }

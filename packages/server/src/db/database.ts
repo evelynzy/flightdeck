@@ -143,6 +143,11 @@ CREATE TABLE IF NOT EXISTS dag_tasks (
 );
 CREATE INDEX IF NOT EXISTS idx_dag_tasks_lead ON dag_tasks(lead_id);
 CREATE INDEX IF NOT EXISTS idx_dag_tasks_status ON dag_tasks(dag_status);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_file_locks_agent ON file_locks(agent_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_agent ON conversations(agent_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_memory_unique ON agent_memory(lead_id, agent_id, key);
 `;
 
 export class Database {
@@ -151,6 +156,7 @@ export class Database {
   constructor(dbPath: string) {
     this.db = new BetterSqlite3(dbPath);
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma('foreign_keys = ON');
     this.db.exec(SCHEMA);
     this.migrate();
   }
@@ -163,7 +169,9 @@ export class Database {
       if (!cols.some((c) => c.name === 'model')) {
         this.db.exec('ALTER TABLE roles ADD COLUMN model TEXT');
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.warn('Migration warning (roles.model):', (err as Error).message);
+    }
   }
 
   run(sql: string, params?: any[]): BetterSqlite3.RunResult {

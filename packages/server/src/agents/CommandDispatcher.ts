@@ -423,8 +423,8 @@ export class CommandDispatcher {
           holder: result.holder,
         });
       }
-    } catch {
-      // ignore malformed lock requests
+    } catch (err) {
+      logger.debug('command', 'Failed to parse LOCK_FILE command', { error: (err as Error).message });
     }
   }
 
@@ -442,8 +442,8 @@ export class CommandDispatcher {
         });
         agent.sendMessage(`[System] Lock released on \`${request.filePath}\`.`);
       }
-    } catch {
-      // ignore malformed lock releases
+    } catch (err) {
+      logger.debug('command', 'Failed to parse UNLOCK_FILE command', { error: (err as Error).message });
     }
   }
 
@@ -461,8 +461,8 @@ export class CommandDispatcher {
         entry.summary ?? '',
         entry.details ?? {},
       );
-    } catch {
-      // ignore malformed activity entries
+    } catch (err) {
+      logger.debug('command', 'Failed to parse ACTIVITY command', { error: (err as Error).message });
     }
   }
 
@@ -529,8 +529,8 @@ export class CommandDispatcher {
         toRole: targetAgent.role.name,
         content: msg.content,
       });
-    } catch {
-      // ignore malformed messages
+    } catch (err) {
+      logger.debug('command', 'Failed to parse AGENT_MESSAGE command', { error: (err as Error).message });
     }
   }
 
@@ -635,8 +635,8 @@ export class CommandDispatcher {
         needsConfirmation,
         status: recorded.status,
       });
-    } catch {
-      // ignore malformed decisions
+    } catch (err) {
+      logger.debug('command', 'Failed to parse DECISION command', { error: (err as Error).message });
     }
   }
 
@@ -658,8 +658,8 @@ export class CommandDispatcher {
         const progressMsg = `[Progress Update from ${agent.role.name} (${agent.id.slice(0, 8)})]\n${JSON.stringify(progress, null, 2)}`;
         secretary.sendMessage(progressMsg);
       }
-    } catch {
-      // ignore malformed progress
+    } catch (err) {
+      logger.debug('command', 'Failed to parse PROGRESS command', { error: (err as Error).message });
     }
   }
 
@@ -788,8 +788,8 @@ CREW_ROSTER ]]]`;
         toRole: 'Team',
         content: msg.content,
       });
-    } catch {
-      // ignore malformed broadcasts
+    } catch (err) {
+      logger.debug('command', 'Failed to parse BROADCAST command', { error: (err as Error).message });
     }
   }
 
@@ -835,8 +835,8 @@ CREW_ROSTER ]]]`;
       });
 
       logger.info('agent', `Lead ${agent.id.slice(0, 8)} killed ${roleName} (${shortId})${req.reason ? ': ' + req.reason : ''}`);
-    } catch {
-      // ignore malformed kill requests
+    } catch (err) {
+      logger.debug('command', 'Failed to parse KILL_AGENT command', { error: (err as Error).message });
     }
   }
 
@@ -1018,7 +1018,8 @@ CREW_ROSTER ]]]`;
             child.sendMessage(taskPrompt);
             this.ctx.taskDAG.startTask(lead.id, task.id, child.id);
             delegated.push(task);
-          } catch {
+          } catch (err) {
+            logger.debug('command', 'Failed to auto-delegate task (budget limit)', { error: (err as Error).message });
             // Budget limit reached — task stays ready for later
           }
         }
@@ -1074,7 +1075,7 @@ CREW_ROSTER ]]]`;
 
       this.ctx.emit('group:created', { group, leadId });
       logger.info('groups', `Agent ${agent.role.name} (${agent.id.slice(0, 8)}) created group "${req.name}" with ${group.memberIds.length} members`);
-    } catch { /* ignore malformed */ }
+    } catch (err) { logger.debug('command', 'Failed to parse CREATE_GROUP command', { error: (err as Error).message }); }
   }
 
   private detectAddToGroup(agent: Agent, data: string): void {
@@ -1114,7 +1115,7 @@ CREW_ROSTER ]]]`;
       } else {
         agent.sendMessage(`[System] No new members added to "${req.group}" (already members or not found).`);
       }
-    } catch { /* ignore */ }
+    } catch (err) { logger.debug('command', 'Failed to parse ADD_TO_GROUP command', { error: (err as Error).message }); }
   }
 
   private detectRemoveFromGroup(agent: Agent, data: string): void {
@@ -1135,7 +1136,7 @@ CREW_ROSTER ]]]`;
         const names = removed.map((id) => this.ctx.getAgent(id)?.role.name || id.slice(0, 8)).join(', ');
         agent.sendMessage(`[System] Removed ${names} from group "${req.group}".`);
       }
-    } catch { /* ignore */ }
+    } catch (err) { logger.debug('command', 'Failed to parse REMOVE_FROM_GROUP command', { error: (err as Error).message }); }
   }
 
   private detectGroupMessage(agent: Agent, data: string): void {
@@ -1173,7 +1174,7 @@ CREW_ROSTER ]]]`;
       agent.sendMessage(`[System] Message delivered to ${delivered} group member(s) in "${req.group}".`);
       this.ctx.emit('group:message', { message, groupName: req.group, leadId });
       logger.info('groups', `Group message in "${req.group}": ${agent.role.name} (${agent.id.slice(0, 8)}) → ${delivered} recipients`);
-    } catch { /* ignore */ }
+    } catch (err) { logger.debug('command', 'Failed to parse GROUP_MESSAGE command', { error: (err as Error).message }); }
   }
 
   private handleListGroups(agent: Agent): void {

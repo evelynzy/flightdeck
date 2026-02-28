@@ -56,7 +56,8 @@ export function apiRouter(
     try {
       await agent.interrupt();
       res.json({ ok: true });
-    } catch {
+    } catch (err) {
+      logger.debug('api', 'Failed to interrupt agent', { error: (err as Error).message });
       res.json({ ok: false, error: 'Cancel not supported for this agent mode' });
     }
   });
