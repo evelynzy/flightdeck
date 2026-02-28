@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Users, Settings, Crown, Network, History, LayoutDashboard, MessageSquare } from 'lucide-react';
+import { Users, Settings, Crown, Network, History, LayoutDashboard, MessageSquare, Database } from 'lucide-react';
 
 const links = [
   { to: '/', icon: Crown, label: 'Project Lead' },
@@ -8,6 +8,7 @@ const links = [
   { to: '/groups', icon: MessageSquare, label: 'Group Chats' },
   { to: '/org', icon: Network, label: 'Org Chart' },
   { to: '/tasks', icon: History, label: 'Tasks' },
+  { to: '/data', icon: Database, label: 'Database' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

@@ -8,6 +8,7 @@ import { AgentDashboard } from './components/AgentDashboard/AgentDashboard';
 import { TaskQueuePanel } from './components/TaskQueue/TaskQueuePanel';
 import { ChatPanel } from './components/ChatPanel/ChatPanel';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
+import { DataBrowser } from './components/DataBrowser/DataBrowser';
 import { LeadDashboard } from './components/LeadDashboard';
 import { OrgChart } from './components/OrgChart/OrgChart';
 import { OverviewPage } from './components/OverviewPage/OverviewPage';
@@ -115,6 +116,7 @@ export function App() {
             <Route path="/org" element={<OrgChart api={api} ws={ws} />} />
             <Route path="/tasks" element={<TaskQueuePanel api={api} />} />
             <Route path="/settings" element={<SettingsPanel api={api} />} />
+            <Route path="/data" element={<DataBrowser />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
