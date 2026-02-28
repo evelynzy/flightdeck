@@ -3,6 +3,7 @@ import { useAppStore } from '../../stores/appStore';
 import { useLeadStore, type AgentComm } from '../../stores/leadStore';
 import type { AgentInfo } from '../../types';
 import { Network, MessageSquare, Grid3X3, Users } from 'lucide-react';
+import { idColor } from '../../utils/markdown';
 
 // Unified message entry covering both 1:1 comms and group messages
 interface CommEntry {
@@ -43,7 +44,7 @@ function AgentNode({ agent }: { agent: AgentInfo }) {
     <div className={`border-2 rounded-lg px-3 py-2 text-center min-w-[140px] ${s.border}`}>
       {agent.role?.icon && <span className="mr-1">{agent.role.icon}</span>}
       <span className="text-sm font-medium text-white">{roleName}</span>
-      <div className="text-xs text-gray-400 font-mono">{shortId}</div>
+      <div className="text-xs font-mono" style={{ color: idColor(agent.id) }}>{shortId}</div>
       {modelLabel && <div className="text-xs text-gray-500 mt-0.5">{modelLabel}</div>}
       <div className={`text-[10px] mt-1 px-1.5 py-0.5 rounded-full inline-block ${s.badge}`}>
         {agent.status}

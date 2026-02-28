@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import type { AgentInfo } from '../../types';
 import { RefreshCw, Square, Terminal, Hand, Check } from 'lucide-react';
+import { AgentIdBadge } from '../../utils/markdown';
 
 interface Props {
   agent: AgentInfo;
@@ -205,7 +206,7 @@ export function AgentCard({ agent, api }: Props) {
             </span>
           )}
         </div>
-        <span className="text-[10px] text-gray-500 font-mono">{agent.id.slice(0, 8)}</span>
+        <AgentIdBadge id={agent.id} />
       </div>
     </div>
   );

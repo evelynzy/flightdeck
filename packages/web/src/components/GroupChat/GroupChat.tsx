@@ -3,6 +3,7 @@ import { useAppStore } from '../../stores/appStore';
 import { useGroupStore, groupKey } from '../../stores/groupStore';
 import { MessageSquare, Send, Users, X, Plus } from 'lucide-react';
 import type { ChatGroup, GroupMessage } from '../../types';
+import { MarkdownContent, AgentIdBadge, idColor } from '../../utils/markdown';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -381,9 +382,16 @@ export function GroupChat(_props: { api: any; ws: any }) {
             {/* Group info header */}
             <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-700/50 shrink-0">
               <Users className="w-4 h-4 text-gray-500" />
-              <span className="text-xs text-gray-500 truncate">
-                {selectedGroupData.memberIds.length} members: {memberNames}
-              </span>
+              <div className="flex items-center gap-2 text-xs text-gray-500 truncate flex-wrap">
+                <span>{selectedGroupData.memberIds.length} members:</span>
+                {selectedGroupData.memberIds.map((id) => (
+                  <span key={id} className="flex items-center gap-1">
+                    <span>{agentIcon(id)}</span>
+                    <span>{agentName(id)}</span>
+                    {id !== 'human' && <AgentIdBadge id={id} />}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* Messages */}
@@ -407,15 +415,23 @@ export function GroupChat(_props: { api: any; ws: any }) {
                 return (
                   <div key={msg.id} className={`flex ${human ? 'justify-end' : 'justify-start'}`}>
                     <div className={`flex gap-2 max-w-[75%] ${human ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                      <div
+                        className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs shrink-0 mt-0.5"
+                        style={{ borderColor: human ? undefined : idColor(msg.fromAgentId), borderWidth: human ? 0 : 2 }}
+                      >
                         {agentIcon(msg.fromAgentId)}
                       </div>
                       <div>
-                        <div className={`text-xs font-bold mb-0.5 ${human ? 'text-right text-blue-400' : 'text-accent'}`}>
-                          {agentName(msg.fromAgentId)}
+                        <div className={`flex items-center gap-1.5 mb-0.5 ${human ? 'justify-end' : ''}`}>
+                          <span className={`text-xs font-bold ${human ? 'text-blue-400' : 'text-accent'}`}>
+                            {agentName(msg.fromAgentId)}
+                          </span>
+                          {!human && <AgentIdBadge id={msg.fromAgentId} />}
                         </div>
                         <div className={`rounded-lg px-3 py-2 text-sm ${human ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-200'}`}>
-                          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                          <div className="whitespace-pre-wrap break-words prose-sm">
+                            <MarkdownContent text={msg.content} />
+                          </div>
                         </div>
                         <div className={`text-xs text-gray-500 mt-0.5 ${human ? 'text-right' : ''}`}>
                           {timeAgo(msg.timestamp)}
@@ -527,7 +543,7 @@ export function GroupChat(_props: { api: any; ws: any }) {
                         className="rounded border-gray-600 bg-gray-800 text-accent focus:ring-accent"
                       />
                       <span className="text-sm">{a.role.icon} {a.role.name}</span>
-                      <span className="text-xs text-gray-500 ml-auto">{a.id.slice(0, 8)}</span>
+                      <AgentIdBadge id={a.id} className="ml-auto" />
                     </label>
                   ))
                 )}

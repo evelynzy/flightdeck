@@ -3,6 +3,7 @@ import { useAppStore } from '../../stores/appStore';
 import { resolveShortId } from '../../utils/resolveShortId';
 import { X, Send, Maximize2, Minimize2, Megaphone } from 'lucide-react';
 import { AcpOutput } from './AcpOutput';
+import { AgentIdBadge } from '../../utils/markdown';
 
 interface Props {
   agentId: string;
@@ -133,7 +134,7 @@ export function ChatPanel({ agentId, ws }: Props) {
               >
                 <span>{a.role.icon}</span>
                 <span>{a.role.name}</span>
-                <span className="text-xs text-gray-500 font-mono">{a.id.slice(0, 8)}</span>
+                <AgentIdBadge id={a.id} />
               </button>
             ))}
           </div>
