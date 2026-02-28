@@ -14,6 +14,7 @@ export interface Decision {
   rationale: string;
   needsConfirmation: boolean;
   status: DecisionStatus;
+  autoApproved: boolean;
   confirmedAt: string | null;
   timestamp: string;
 }
@@ -28,6 +29,7 @@ function rowToDecision(row: typeof decisions.$inferSelect): Decision {
     rationale: row.rationale ?? '',
     needsConfirmation: row.needsConfirmation === 1,
     status: row.status as DecisionStatus,
+    autoApproved: row.autoApproved === 1,
     confirmedAt: row.confirmedAt,
     timestamp: row.createdAt!,
   };
@@ -35,6 +37,10 @@ function rowToDecision(row: typeof decisions.$inferSelect): Decision {
 
 export class DecisionLog extends EventEmitter {
   private db: Database;
+  /** Decision IDs that require human approval (system settings changes) — no auto-approve */
+  private systemDecisionIds = new Set<string>();
+  private autoApproveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private static AUTO_APPROVE_MS = 60_000;
 
   constructor(db: Database) {
     super();
@@ -57,8 +63,47 @@ export class DecisionLog extends EventEmitter {
       createdAt: timestamp,
     }).run();
 
-    const decision: Decision = { id, agentId, agentRole, leadId: leadId || null, title, rationale, needsConfirmation, status: 'recorded', confirmedAt: null, timestamp };
+    const decision: Decision = { id, agentId, agentRole, leadId: leadId || null, title, rationale, needsConfirmation, status: 'recorded', autoApproved: false, confirmedAt: null, timestamp };
     this.emit('decision', decision);
+
+    // Schedule auto-approve after 60s unless it's a system-level decision
+    if (!this.systemDecisionIds.has(id)) {
+      this.scheduleAutoApprove(id);
+    }
+    return decision;
+  }
+
+  /** Mark a decision as system-level (requires human approval, no auto-approve) */
+  markSystemDecision(id: string): void {
+    this.systemDecisionIds.add(id);
+    // Cancel any pending auto-approve timer
+    const timer = this.autoApproveTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.autoApproveTimers.delete(id);
+    }
+  }
+
+  private scheduleAutoApprove(id: string): void {
+    const timer = setTimeout(() => {
+      this.autoApproveTimers.delete(id);
+      const existing = this.getById(id);
+      if (existing && existing.status === 'recorded') {
+        this.autoApprove(id);
+      }
+    }, DecisionLog.AUTO_APPROVE_MS);
+    this.autoApproveTimers.set(id, timer);
+  }
+
+  private autoApprove(id: string): Decision | undefined {
+    const confirmedAt = new Date().toISOString();
+    this.db.drizzle
+      .update(decisions)
+      .set({ status: 'confirmed', autoApproved: 1, confirmedAt })
+      .where(eq(decisions.id, id))
+      .run();
+    const decision = this.getById(id);
+    if (decision) this.emit('decision:confirmed', decision);
     return decision;
   }
 
@@ -122,6 +167,7 @@ export class DecisionLog extends EventEmitter {
   }
 
   confirm(id: string): Decision | undefined {
+    this.cancelAutoApproveTimer(id);
     const existing = this.getById(id);
     if (!existing || existing.status !== 'recorded') return existing;
     const confirmedAt = new Date().toISOString();
@@ -136,6 +182,7 @@ export class DecisionLog extends EventEmitter {
   }
 
   reject(id: string): Decision | undefined {
+    this.cancelAutoApproveTimer(id);
     const existing = this.getById(id);
     if (!existing || existing.status !== 'recorded') return existing;
     const confirmedAt = new Date().toISOString();
@@ -149,7 +196,20 @@ export class DecisionLog extends EventEmitter {
     return decision;
   }
 
+  private cancelAutoApproveTimer(id: string): void {
+    const timer = this.autoApproveTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.autoApproveTimers.delete(id);
+    }
+    this.systemDecisionIds.delete(id);
+  }
+
   clear(): void {
+    // Cancel all pending timers
+    for (const timer of this.autoApproveTimers.values()) clearTimeout(timer);
+    this.autoApproveTimers.clear();
+    this.systemDecisionIds.clear();
     this.db.drizzle.delete(decisions).run();
   }
 }

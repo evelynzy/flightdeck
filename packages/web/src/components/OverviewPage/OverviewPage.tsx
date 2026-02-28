@@ -169,7 +169,11 @@ function DecisionTimelineItem({
           : 'border-gray-700 bg-gray-800/50';
 
   const statusBadge =
-    decision.status === 'confirmed' ? (
+    decision.status === 'confirmed' && decision.autoApproved ? (
+      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-600/30 text-blue-400">
+        ⏱️ Auto-approved {decision.confirmedAt ? fmtTime(decision.confirmedAt) : ''}
+      </span>
+    ) : decision.status === 'confirmed' ? (
       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-green-600/30 text-green-400">
         ✅ Confirmed {decision.confirmedAt ? fmtTime(decision.confirmedAt) : ''}
       </span>
@@ -535,7 +539,7 @@ export function OverviewPage({ api, ws }: Props) {
             <div>
               <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Status</span>
               <p className="text-sm mt-0.5">
-                {selectedDecision.status === 'confirmed' ? '✅ Confirmed' : selectedDecision.status === 'rejected' ? '❌ Rejected' : selectedDecision.needsConfirmation ? '⏳ Pending' : '📋 Recorded'}
+                {selectedDecision.status === 'confirmed' && selectedDecision.autoApproved ? '⏱️ Auto-approved' : selectedDecision.status === 'confirmed' ? '✅ Confirmed' : selectedDecision.status === 'rejected' ? '❌ Rejected' : selectedDecision.needsConfirmation ? '⏳ Pending' : '📋 Recorded'}
                 {selectedDecision.confirmedAt && <span className="text-gray-500 ml-2 text-xs">{fmtTime(selectedDecision.confirmedAt)}</span>}
               </p>
             </div>

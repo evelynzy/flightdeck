@@ -81,6 +81,7 @@ export const decisions = sqliteTable('decisions', {
   rationale: text('rationale').default(''),
   needsConfirmation: integer('needs_confirmation').default(0),
   status: text('status').default('recorded'),
+  autoApproved: integer('auto_approved').default(0),
   confirmedAt: text('confirmed_at'),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 }, (table) => [
