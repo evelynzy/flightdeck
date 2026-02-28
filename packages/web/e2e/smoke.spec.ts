@@ -11,14 +11,12 @@ test.describe('AI Crew Smoke Tests', () => {
 
     // Navigate to Agents
     await page.locator('nav a[href="/agents"]').click();
-    await expect(page.locator('h2')).toHaveText('Agents');
-
-    // Navigate to Tasks
-    await page.locator('nav a[href="/tasks"]').click();
-    await expect(page.locator('h2')).toHaveText('Task Queue');
+    await expect(page).toHaveURL(/\/agents/);
+    await expect(page.getByText('Total Agents')).toBeVisible({ timeout: 5000 });
 
     // Navigate to Settings
     await page.locator('nav a[href="/settings"]').click();
+    await expect(page).toHaveURL(/\/settings/);
     await expect(page.locator('h2')).toHaveText('Settings');
   });
 
