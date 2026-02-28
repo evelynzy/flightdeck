@@ -21,7 +21,7 @@ let config = getConfig();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 const httpServer = createServer(app);
 
@@ -67,15 +67,29 @@ app.get('/health', (_req, res) => {
 
 httpServer.listen(config.port, config.host, () => {
   console.log(`🚀 AI Crew server running on http://${config.host}:${config.port}`);
+  if (config.host === '0.0.0.0') {
+    console.warn('⚠️  WARNING: Server is binding to all interfaces (0.0.0.0). Set HOST=127.0.0.1 for local-only access.');
+  }
+  if (!process.env.SERVER_SECRET) {
+    console.warn('⚠️  WARNING: No SERVER_SECRET set. API endpoints are unauthenticated.');
+  }
   contextRefresher.start();
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('Shutting down...');
+function gracefulShutdown(signal: string) {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
   contextRefresher.stop();
   agentManager.shutdownAll();
   lockRegistry.cleanExpired();
   db.close();
-  httpServer.close();
-});
+  httpServer.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+  // Force exit after 5 seconds if graceful shutdown hangs
+  setTimeout(() => process.exit(1), 5000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

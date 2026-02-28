@@ -164,10 +164,33 @@ export function apiRouter(
   });
 
   router.patch('/config', (req, res) => {
-    const updated = updateConfig(req.body);
+    // Whitelist: only these fields can be modified at runtime
+    const MUTABLE_FIELDS = ['maxConcurrentAgents', 'host'] as const;
+    const sanitized: Partial<ServerConfig> = {};
+    for (const key of MUTABLE_FIELDS) {
+      if (req.body[key] !== undefined) {
+        (sanitized as any)[key] = req.body[key];
+      }
+    }
+    if (Object.keys(sanitized).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update. Allowed: ' + MUTABLE_FIELDS.join(', ') });
+    }
+    // Type validation
+    if (sanitized.maxConcurrentAgents !== undefined) {
+      const val = sanitized.maxConcurrentAgents;
+      if (typeof val !== 'number' || !Number.isInteger(val) || val < 1) {
+        return res.status(400).json({ error: 'maxConcurrentAgents must be a positive integer' });
+      }
+    }
+    if (sanitized.host !== undefined) {
+      if (typeof sanitized.host !== 'string' || sanitized.host.length === 0) {
+        return res.status(400).json({ error: 'host must be a non-empty string' });
+      }
+    }
+    const updated = updateConfig(sanitized);
     agentManager.setMaxConcurrent(updated.maxConcurrentAgents);
     // Persist maxConcurrentAgents to SQLite so it survives server restart
-    if (req.body.maxConcurrentAgents !== undefined) {
+    if (sanitized.maxConcurrentAgents !== undefined) {
       _db.setSetting('maxConcurrentAgents', String(updated.maxConcurrentAgents));
     }
     res.json(updated);

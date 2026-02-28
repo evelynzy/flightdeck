@@ -9,7 +9,7 @@ export interface ServerConfig {
 
 const defaults: ServerConfig = {
   port: 3001,
-  host: '0.0.0.0',
+  host: '127.0.0.1',
   cliCommand: process.env.COPILOT_CLI_PATH || 'copilot',
   cliArgs: [],
   maxConcurrentAgents: parseInt(process.env.MAX_AGENTS || '10', 10),

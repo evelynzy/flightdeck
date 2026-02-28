@@ -127,18 +127,11 @@ export class AcpConnection extends EventEmitter {
             timestamp: new Date().toISOString(),
           });
 
-          // Auto-approve after 60s timeout if no response
+          // Auto-DENY after 60s timeout — dangerous tools should not auto-approve
           setTimeout(() => {
             if (this.pendingPermission?.resolve === resolve) {
               this.pendingPermission = null;
-              const allowOption = params.options.find(
-                (o: acp.PermissionOption) => o.kind === 'allow_once'
-              );
-              resolve({
-                outcome: allowOption
-                  ? { outcome: 'selected', optionId: allowOption.optionId }
-                  : { outcome: 'cancelled' },
-              });
+              resolve({ outcome: { outcome: 'cancelled' } });
             }
           }, 60_000);
         });
