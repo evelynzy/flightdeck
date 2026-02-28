@@ -1082,9 +1082,12 @@ export function LeadDashboard({ api, ws }: Props) {
                     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                       e.preventDefault();
                       sendMessage('queue');
+                    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      sendMessage('interrupt');
                     }
                   }}
-                  placeholder={isActive ? 'Message the Lead... (Enter = send, Ctrl+Enter = new line)' : 'Project Lead is not active'}
+                  placeholder={isActive ? 'Message the Lead... (Enter = send, Ctrl+Enter = interrupt)' : 'Project Lead is not active'}
                   disabled={!isActive}
                   rows={1}
                   onInput={(e) => {
@@ -1110,7 +1113,7 @@ export function LeadDashboard({ api, ws }: Props) {
                     type="button"
                     onClick={() => sendMessage('interrupt')}
                     disabled={!isActive || !input.trim()}
-                    title="Interrupt current work"
+                    title="Interrupt current work (Ctrl+Enter)"
                     className="bg-red-700 hover:bg-red-600 disabled:bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1"
                   >
                     <AlertCircle className="w-3.5 h-3.5" />
