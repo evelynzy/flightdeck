@@ -51,11 +51,16 @@ export class WebSocketServer {
           const msg = JSON.parse(raw.toString());
           this.handleMessage(client, msg, agentManager);
         } catch {
-          ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
+          try { ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' })); } catch { /* broken */ }
         }
       });
 
       ws.on('close', () => {
+        this.clients.delete(clientId);
+      });
+
+      ws.on('error', () => {
+        // Silently handle broken pipe / connection reset — client already gone
         this.clients.delete(clientId);
       });
 
@@ -266,7 +271,11 @@ export class WebSocketServer {
     const payload = JSON.stringify(msg);
     for (const client of this.clients.values()) {
       if (client.ws.readyState === WebSocket.OPEN && filter(client)) {
-        client.ws.send(payload);
+        try {
+          client.ws.send(payload);
+        } catch {
+          // Connection broken — will be cleaned up on 'close'/'error' event
+        }
       }
     }
   }
