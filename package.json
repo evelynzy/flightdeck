@@ -2,12 +2,17 @@
   "name": "ai-crew",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "bin": {
+    "ai-crew": "./bin/ai-crew.mjs"
+  },
   "workspaces": [
     "packages/server",
     "packages/web",
     "packages/docs"
   ],
   "scripts": {
+    "start": "node bin/ai-crew.mjs",
     "dev": "npm run dev --workspace=packages/server & npm run dev --workspace=packages/web",
     "dev:server": "npm run dev --workspace=packages/server",
     "dev:web": "npm run dev --workspace=packages/web",

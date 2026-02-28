@@ -83,6 +83,21 @@ app.use('/api', authMiddleware);
 // Wire up API routes
 app.use('/api', apiRouter(agentManager, roleRegistry, config, db, lockRegistry, activityLedger, decisionLog, projectRegistry));
 
+// Serve built web frontend in production
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const webDistPath = path.resolve(__dirname, '../../web/dist');
+
+import fs from 'fs';
+if (fs.existsSync(webDistPath)) {
+  app.use(express.static(webDistPath));
+  // SPA fallback — serve index.html for any non-API route
+  app.get('/{*path}', (_req, res) => {
+    res.sendFile(path.join(webDistPath, 'index.html'));
+  });
+}
+
 httpServer.listen(config.port, config.host, () => {
   console.log(`🚀 AI Crew server running on http://${config.host}:${config.port}`);
   if (config.host === '0.0.0.0') {
