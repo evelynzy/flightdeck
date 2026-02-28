@@ -17,13 +17,13 @@ interface Props {
   api: any;
 }
 
-export function ChatPanel({ agentId, ws }: Props) {
+export function ChatPanel({ agentId, ws, api }: Props) {
   const [inputText, setInputText] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [broadcast, setBroadcast] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { agents, setSelectedAgent } = useAppStore();
   const agent = agents.find((a) => a.id === agentId);
 
@@ -144,10 +144,9 @@ export function ChatPanel({ agentId, ws }: Props) {
             Broadcasting to {runningAgents.length} agents
           </div>
         )}
-        <div className="flex gap-2">
-          <input
+        <div className="flex gap-2 items-end">
+          <textarea
             ref={inputRef}
-            type="text"
             value={inputText}
             onChange={(e) => {
               setInputText(e.target.value);
@@ -178,10 +177,26 @@ export function ChatPanel({ agentId, ws }: Props) {
                   return;
                 }
               }
-              if (e.key === 'Enter') handleSend();
+              if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                handleSend();
+              } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                if (inputText.trim()) {
+                  handleSend();
+                }
+                api.interruptAgent(agentId);
+              }
             }}
-            placeholder="Type a message... (@ to mention)"
-            className={`flex-1 bg-surface border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent ${broadcast ? 'border-accent' : 'border-gray-700'}`}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = 'auto';
+              el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+            }}
+            rows={1}
+            placeholder="Type a message... (Enter = send, Shift+Enter = newline, Ctrl+Enter = interrupt, @ to mention)"
+            className={`flex-1 bg-surface border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent resize-none overflow-y-auto ${broadcast ? 'border-accent' : 'border-gray-700'}`}
+            style={{ maxHeight: 150 }}
           />
           <button
             onClick={() => setBroadcast(!broadcast)}
