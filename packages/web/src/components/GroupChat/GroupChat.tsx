@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useGroupStore, groupKey } from '../../stores/groupStore';
-import { MessageSquare, Send, Users } from 'lucide-react';
+import { MessageSquare, Send, Users, X } from 'lucide-react';
 import type { ChatGroup, GroupMessage } from '../../types';
 
 /* ------------------------------------------------------------------ */
@@ -37,17 +37,19 @@ export function GroupChat(_props: { api: any; ws: any }) {
     setGroups,
     setMessages,
     selectGroup,
+    clearSelection,
   } = useGroupStore();
 
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
+  const [openTabs, setOpenTabs] = useState<Array<{ leadId: string; name: string }>>([]);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Derive leads: agents whose role.id is 'lead' with no parent
   const leads = agents.filter((a) => a.role.id === 'lead' && !a.parentId);
 
-  /* ---- Fetch groups for every lead on mount / when leads change ---- */
+  /* ---- Fetch groups for every lead on mount ---- */
   useEffect(() => {
     if (leads.length === 0) return;
     let cancelled = false;
@@ -61,11 +63,17 @@ export function GroupChat(_props: { api: any; ws: any }) {
             const data: ChatGroup[] = await res.json();
             allGroups.push(...data);
           }
-        } catch {
-          /* network error — skip silently */
+        } catch { /* skip */ }
+      }
+      if (!cancelled) {
+        setGroups(allGroups);
+        // Auto-open all groups as tabs
+        if (allGroups.length > 0) {
+          const tabs = allGroups.map((g) => ({ leadId: g.leadId, name: g.name }));
+          setOpenTabs(tabs);
+          if (!selectedGroup) selectGroup(tabs[0].leadId, tabs[0].name);
         }
       }
-      if (!cancelled) setGroups(allGroups);
     }
 
     void fetchAllGroups();
@@ -73,7 +81,21 @@ export function GroupChat(_props: { api: any; ws: any }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leads.map((l) => l.id).join(',')]);
 
-  /* ---- Fetch messages when selected group changes ---- */
+  /* ---- Auto-open new groups as tabs ---- */
+  useEffect(() => {
+    const newTabs = groups
+      .filter((g) => !openTabs.some((t) => t.leadId === g.leadId && t.name === g.name))
+      .map((g) => ({ leadId: g.leadId, name: g.name }));
+    if (newTabs.length > 0) {
+      setOpenTabs((prev) => [...prev, ...newTabs]);
+      if (!selectedGroup && newTabs.length > 0) {
+        selectGroup(newTabs[0].leadId, newTabs[0].name);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups.length]);
+
+  /* ---- Fetch messages when selected tab changes ---- */
   useEffect(() => {
     if (!selectedGroup) return;
     let cancelled = false;
@@ -88,14 +110,29 @@ export function GroupChat(_props: { api: any; ws: any }) {
           const data: GroupMessage[] = await res.json();
           if (!cancelled) setMessages(groupKey(leadId, name), data);
         }
-      } catch {
-        /* network error */
-      }
+      } catch { /* skip */ }
     }
 
     void fetchMessages();
+    // Clear unread for this tab
+    const key = groupKey(selectedGroup.leadId, selectedGroup.name);
+    setUnread((prev) => ({ ...prev, [key]: 0 }));
+
     return () => { cancelled = true; };
   }, [selectedGroup, setMessages]);
+
+  /* ---- Track unread for non-active tabs ---- */
+  const currentKey = selectedGroup ? groupKey(selectedGroup.leadId, selectedGroup.name) : null;
+  const prevMsgCounts = useRef<Record<string, number>>({});
+  useEffect(() => {
+    for (const [key, msgs] of Object.entries(messages)) {
+      const prevCount = prevMsgCounts.current[key] ?? 0;
+      if (msgs.length > prevCount && key !== currentKey) {
+        setUnread((prev) => ({ ...prev, [key]: (prev[key] ?? 0) + (msgs.length - prevCount) }));
+      }
+      prevMsgCounts.current[key] = msgs.length;
+    }
+  }, [messages, currentKey]);
 
   /* ---- Auto-scroll on new messages ---- */
   const currentMessages = selectedGroup
@@ -106,7 +143,7 @@ export function GroupChat(_props: { api: any; ws: any }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages.length]);
 
-  /* ---- Agent name resolver ---- */
+  /* ---- Agent name/icon resolvers ---- */
   const agentName = useCallback(
     (id: string): string => {
       if (id === 'human') return 'You';
@@ -123,6 +160,34 @@ export function GroupChat(_props: { api: any; ws: any }) {
       return agent?.role.icon ?? '🤖';
     },
     [agents],
+  );
+
+  /* ---- Tab management ---- */
+  const switchTab = useCallback(
+    (leadId: string, name: string) => {
+      selectGroup(leadId, name);
+      textareaRef.current?.focus();
+    },
+    [selectGroup],
+  );
+
+  const closeTab = useCallback(
+    (leadId: string, name: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpenTabs((prev) => {
+        const next = prev.filter((t) => !(t.leadId === leadId && t.name === name));
+        // If closing the active tab, switch to neighbor
+        if (selectedGroup?.leadId === leadId && selectedGroup?.name === name) {
+          if (next.length > 0) {
+            selectGroup(next[0].leadId, next[0].name);
+          } else {
+            clearSelection();
+          }
+        }
+        return next;
+      });
+    },
+    [selectedGroup, selectGroup, clearSelection],
   );
 
   /* ---- Send message ---- */
@@ -142,15 +207,13 @@ export function GroupChat(_props: { api: any; ws: any }) {
           body: JSON.stringify({ content: text }),
         },
       );
-    } catch {
-      /* network error */
-    } finally {
+    } catch { /* skip */ }
+    finally {
       setSending(false);
       textareaRef.current?.focus();
     }
   }, [inputText, selectedGroup, sending]);
 
-  /* ---- Textarea keyboard handling ---- */
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -161,19 +224,12 @@ export function GroupChat(_props: { api: any; ws: any }) {
     [handleSend],
   );
 
-  /* ---- Auto-grow textarea ---- */
   const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
     const ta = e.target;
     ta.style.height = 'auto';
-    ta.style.height = `${Math.min(ta.scrollHeight, 96)}px`; // max ~4 rows
+    ta.style.height = `${Math.min(ta.scrollHeight, 96)}px`;
   }, []);
-
-  /* ---- Group list, grouped by lead ---- */
-  const groupsByLead = leads.reduce<Record<string, ChatGroup[]>>((acc, lead) => {
-    acc[lead.id] = groups.filter((g) => g.leadId === lead.id);
-    return acc;
-  }, {});
 
   /* ---- Selected group metadata ---- */
   const selectedGroupData = selectedGroup
@@ -189,86 +245,85 @@ export function GroupChat(_props: { api: any; ws: any }) {
   /* ================================================================ */
 
   return (
-    <div className="flex h-full bg-[#1a1a2e] text-gray-200">
-      {/* ---- Left sidebar: Group list ---- */}
-      <div className="w-64 border-r border-gray-700 flex flex-col shrink-0">
-        <div className="h-12 flex items-center gap-2 px-4 border-b border-gray-700 shrink-0">
-          <MessageSquare className="w-4 h-4 text-accent" />
-          <span className="font-semibold text-sm">Group Chats</span>
-        </div>
+    <div className="flex flex-col h-full bg-[#1a1a2e] text-gray-200">
+      {/* ---- Tab bar ---- */}
+      <div className="flex items-center border-b border-gray-700 shrink-0 overflow-x-auto bg-[#1a1a2e]">
+        {openTabs.length === 0 ? (
+          <div className="flex items-center gap-2 px-4 h-10 text-gray-500 text-sm">
+            <MessageSquare className="w-4 h-4" />
+            No group chats yet
+          </div>
+        ) : (
+          openTabs.map((tab) => {
+            const key = groupKey(tab.leadId, tab.name);
+            const isActive =
+              selectedGroup?.leadId === tab.leadId &&
+              selectedGroup?.name === tab.name;
+            const badge = unread[key] ?? 0;
 
-        <div className="flex-1 overflow-y-auto">
-          {groups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 px-6 text-center gap-3">
-              <MessageSquare className="w-8 h-8" />
-              <p className="text-sm">No groups yet</p>
-              <p className="text-xs">
-                Group chats are created automatically when agents need to
-                coordinate across roles.
-              </p>
-            </div>
-          ) : (
-            Object.entries(groupsByLead).map(([leadId, leadGroups]) => {
-              if (leadGroups.length === 0) return null;
-              const lead = agents.find((a) => a.id === leadId);
-              return (
-                <div key={leadId}>
-                  <div className="px-3 py-2 text-xs text-gray-500 font-medium uppercase tracking-wide">
-                    {lead?.role.name ?? 'Lead'} — {lead?.projectName ?? leadId.slice(0, 8)}
-                  </div>
-                  {leadGroups.map((g) => {
-                    const key = groupKey(g.leadId, g.name);
-                    const groupMessages = messages[key] ?? [];
-                    const lastMsg = groupMessages[groupMessages.length - 1];
-                    const isSelected =
-                      selectedGroup?.leadId === g.leadId &&
-                      selectedGroup?.name === g.name;
+            return (
+              <button
+                key={key}
+                onClick={() => switchTab(tab.leadId, tab.name)}
+                className={`group flex items-center gap-1.5 px-3 h-10 text-sm border-b-2 whitespace-nowrap transition-colors shrink-0 ${
+                  isActive
+                    ? 'border-accent text-accent bg-accent/10'
+                    : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="max-w-[120px] truncate">{tab.name}</span>
+                {badge > 0 && (
+                  <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] text-center">
+                    {badge}
+                  </span>
+                )}
+                <X
+                  className="w-3 h-3 opacity-0 group-hover:opacity-60 hover:!opacity-100 ml-1 shrink-0"
+                  onClick={(e: React.MouseEvent) => closeTab(tab.leadId, tab.name, e)}
+                />
+              </button>
+            );
+          })
+        )}
 
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => selectGroup(g.leadId, g.name)}
-                        className={`w-full text-left px-3 py-2.5 transition-colors hover:bg-gray-700 ${
-                          isSelected
-                            ? 'bg-accent/20 border-l-2 border-accent'
-                            : 'border-l-2 border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium truncate">
-                            {g.name}
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <Users className="w-3 h-3" />
-                            {g.memberIds.length}
-                          </span>
-                        </div>
-                        {lastMsg && (
-                          <p className="text-xs text-gray-500 truncate mt-0.5">
-                            {agentName(lastMsg.fromAgentId)}: {lastMsg.content}
-                          </p>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })
-          )}
-        </div>
+        {/* Group directory dropdown */}
+        {groups.length > openTabs.length && (
+          <div className="relative ml-auto px-2">
+            <select
+              className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-400 px-2 py-1 cursor-pointer"
+              value=""
+              onChange={(e) => {
+                const [leadId, ...nameParts] = e.target.value.split(':');
+                const name = nameParts.join(':');
+                if (!openTabs.some((t) => t.leadId === leadId && t.name === name)) {
+                  setOpenTabs((prev) => [...prev, { leadId, name }]);
+                }
+                switchTab(leadId, name);
+              }}
+            >
+              <option value="" disabled>+ Open group…</option>
+              {groups
+                .filter((g) => !openTabs.some((t) => t.leadId === g.leadId && t.name === g.name))
+                .map((g) => (
+                  <option key={groupKey(g.leadId, g.name)} value={`${g.leadId}:${g.name}`}>
+                    {g.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
       </div>
 
-      {/* ---- Center: Message thread ---- */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* ---- Message area ---- */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {selectedGroup && selectedGroupData ? (
           <>
-            {/* Sticky header */}
-            <div className="h-12 flex items-center gap-3 px-4 border-b border-gray-700 shrink-0 bg-[#1a1a2e] sticky top-0 z-10">
-              <span className="font-semibold text-sm truncate">
-                {selectedGroup.name}
-              </span>
+            {/* Group info header */}
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-700/50 shrink-0">
+              <Users className="w-4 h-4 text-gray-500" />
               <span className="text-xs text-gray-500 truncate">
-                {memberNames}
+                {selectedGroupData.memberIds.length} members: {memberNames}
               </span>
             </div>
 
@@ -283,58 +338,27 @@ export function GroupChat(_props: { api: any; ws: any }) {
               {currentMessages.map((msg) => {
                 if (isSystem(msg)) {
                   return (
-                    <div
-                      key={msg.id}
-                      className="flex justify-center"
-                    >
-                      <span className="text-xs text-gray-500 italic">
-                        {msg.content}
-                      </span>
+                    <div key={msg.id} className="flex justify-center">
+                      <span className="text-xs text-gray-500 italic">{msg.content}</span>
                     </div>
                   );
                 }
 
                 const human = isHuman(msg);
                 return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${human ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`flex gap-2 max-w-[75%] ${
-                        human ? 'flex-row-reverse' : 'flex-row'
-                      }`}
-                    >
-                      {/* Avatar */}
+                  <div key={msg.id} className={`flex ${human ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`flex gap-2 max-w-[75%] ${human ? 'flex-row-reverse' : 'flex-row'}`}>
                       <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
                         {agentIcon(msg.fromAgentId)}
                       </div>
-
-                      {/* Bubble */}
                       <div>
-                        <div
-                          className={`text-xs font-bold mb-0.5 ${
-                            human ? 'text-right text-blue-400' : 'text-accent'
-                          }`}
-                        >
+                        <div className={`text-xs font-bold mb-0.5 ${human ? 'text-right text-blue-400' : 'text-accent'}`}>
                           {agentName(msg.fromAgentId)}
                         </div>
-                        <div
-                          className={`rounded-lg px-3 py-2 text-sm ${
-                            human
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-800 text-gray-200'
-                          }`}
-                        >
-                          <p className="whitespace-pre-wrap break-words">
-                            {msg.content}
-                          </p>
+                        <div className={`rounded-lg px-3 py-2 text-sm ${human ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-200'}`}>
+                          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                         </div>
-                        <div
-                          className={`text-xs text-gray-500 mt-0.5 ${
-                            human ? 'text-right' : ''
-                          }`}
-                        >
+                        <div className={`text-xs text-gray-500 mt-0.5 ${human ? 'text-right' : ''}`}>
                           {timeAgo(msg.timestamp)}
                         </div>
                       </div>
@@ -370,10 +394,9 @@ export function GroupChat(_props: { api: any; ws: any }) {
             </div>
           </>
         ) : (
-          /* No group selected */
           <div className="flex-1 flex flex-col items-center justify-center text-gray-500 gap-3">
             <MessageSquare className="w-10 h-10" />
-            <p className="text-sm">Select a group chat to view messages</p>
+            <p className="text-sm">Select a group chat tab to view messages</p>
           </div>
         )}
       </div>
