@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useGroupStore, groupKey } from '../../stores/groupStore';
-import { MessageSquare, Send, Users, X, Plus } from 'lucide-react';
+import { MessageSquare, Send, Users, X, Plus, Crown } from 'lucide-react';
 import type { ChatGroup, GroupMessage } from '../../types';
 import { MarkdownContent, AgentIdBadge, idColor } from '../../utils/markdown';
 
@@ -50,10 +50,26 @@ export function GroupChat(_props: { api: any; ws: any }) {
   const [newGroupMembers, setNewGroupMembers] = useState<Set<string>>(new Set());
   const [newGroupLeadId, setNewGroupLeadId] = useState('');
   const [creating, setCreating] = useState(false);
+  const [selectedProjectLeadId, setSelectedProjectLeadId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const leads = agents.filter((a) => a.role.id === 'lead' && !a.parentId);
+
+  // Auto-select first lead as project filter
+  useEffect(() => {
+    if (!selectedProjectLeadId && leads.length > 0) {
+      setSelectedProjectLeadId(leads[0].id);
+    }
+  }, [leads, selectedProjectLeadId]);
+
+  // Filtered groups/tabs by selected project
+  const filteredGroups = selectedProjectLeadId
+    ? groups.filter((g) => g.leadId === selectedProjectLeadId)
+    : groups;
+  const filteredTabs = selectedProjectLeadId
+    ? openTabs.filter((t) => t.leadId === selectedProjectLeadId)
+    : openTabs;
 
   /* ---- Fetch groups for every lead on mount ---- */
   useEffect(() => {
@@ -241,9 +257,9 @@ export function GroupChat(_props: { api: any; ws: any }) {
   const openCreateDialog = useCallback(() => {
     setNewGroupName('');
     setNewGroupMembers(new Set());
-    setNewGroupLeadId(leads.length > 0 ? leads[0].id : '');
+    setNewGroupLeadId(selectedProjectLeadId || (leads.length > 0 ? leads[0].id : ''));
     setShowCreate(true);
-  }, [leads]);
+  }, [leads, selectedProjectLeadId]);
 
   const toggleMember = useCallback((id: string) => {
     setNewGroupMembers((prev) => {
@@ -295,15 +311,42 @@ export function GroupChat(_props: { api: any; ws: any }) {
 
   return (
     <div className="flex flex-col h-full bg-[#1a1a2e] text-gray-200">
+      {/* ---- Project tabs ---- */}
+      {leads.length > 1 && (
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-gray-700/50 shrink-0 overflow-x-auto bg-gray-900/50">
+          {leads.map((lead) => {
+            const isActive = selectedProjectLeadId === lead.id;
+            const projectGroups = groups.filter((g) => g.leadId === lead.id);
+            return (
+              <button
+                key={lead.id}
+                onClick={() => setSelectedProjectLeadId(lead.id)}
+                className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md whitespace-nowrap transition-colors ${
+                  isActive
+                    ? 'bg-accent/20 text-accent font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                }`}
+              >
+                <Crown className="w-3 h-3" />
+                <span className="truncate max-w-[120px]">{lead.projectName || lead.id.slice(0, 8)}</span>
+                {projectGroups.length > 0 && (
+                  <span className="text-[10px] text-gray-500 ml-0.5">({projectGroups.length})</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ---- Tab bar ---- */}
       <div className="flex items-center border-b border-gray-700 shrink-0 overflow-x-auto bg-[#1a1a2e]">
-        {openTabs.length === 0 ? (
+        {filteredTabs.length === 0 ? (
           <div className="flex items-center gap-2 px-4 h-10 text-gray-500 text-sm">
             <MessageSquare className="w-4 h-4" />
-            No group chats yet
+            No group chats{selectedProjectLeadId ? ' in this project' : ' yet'}
           </div>
         ) : (
-          openTabs.map((tab) => {
+          filteredTabs.map((tab) => {
             const key = groupKey(tab.leadId, tab.name);
             const isActive =
               selectedGroup?.leadId === tab.leadId &&
@@ -348,7 +391,7 @@ export function GroupChat(_props: { api: any; ws: any }) {
         )}
 
         {/* Re-open closed tabs dropdown */}
-        {groups.length > openTabs.length && (
+        {filteredGroups.length > filteredTabs.length && (
           <div className="relative ml-auto px-2">
             <select
               className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-400 px-2 py-1 cursor-pointer"
@@ -363,7 +406,7 @@ export function GroupChat(_props: { api: any; ws: any }) {
               }}
             >
               <option value="" disabled>+ Open group…</option>
-              {groups
+              {filteredGroups
                 .filter((g) => !openTabs.some((t) => t.leadId === g.leadId && t.name === g.name))
                 .map((g) => (
                   <option key={groupKey(g.leadId, g.name)} value={`${g.leadId}:${g.name}`}>
