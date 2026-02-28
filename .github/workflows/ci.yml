@@ -26,5 +26,13 @@ jobs:
       - name: Typecheck web
         run: npx --workspace=packages/web tsc --noEmit
 
-      - name: Unit tests
-        run: npm run test --workspace=packages/server
+      - name: Unit tests with coverage
+        run: npm run test:coverage --workspace=packages/server
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: packages/server/coverage/lcov.info
+          flags: server
+          fail_ci_if_error: false
