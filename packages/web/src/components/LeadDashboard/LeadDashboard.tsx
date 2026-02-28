@@ -29,8 +29,20 @@ export function LeadDashboard({ api, ws }: Props) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<string>('comms');
+  const [sidebarTab, setSidebarTab] = useState<string>('team');
   const [sidebarTabHeight, setSidebarTabHeight] = useState(280);
+  const [decisionsPanelHeight, setDecisionsPanelHeight] = useState(180);
+  const [tabOrder, setTabOrder] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('ai-crew-sidebar-tabs');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length === 5) return parsed;
+      }
+    } catch {}
+    return ['team', 'comms', 'groups', 'dag', 'activity'];
+  });
+  const [dragOverTab, setDragOverTab] = useState<string | null>(null);
   const [showProgressDetail, setShowProgressDetail] = useState(false);
   const [expandedReport, setExpandedReport] = useState<AgentReport | null>(null);
   const [reportsExpanded, setReportsExpanded] = useState(true);
@@ -377,6 +389,65 @@ export function LeadDashboard({ api, ws }: Props) {
     document.addEventListener('mouseup', onMouseUp);
   }, [sidebarTabHeight]);
 
+  const isDecisionsResizing = useRef(false);
+  const startDecisionsResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDecisionsResizing.current = true;
+    const startY = e.clientY;
+    const startHeight = decisionsPanelHeight;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDecisionsResizing.current) return;
+      const delta = ev.clientY - startY;
+      const newHeight = Math.min(400, Math.max(80, startHeight + delta));
+      setDecisionsPanelHeight(newHeight);
+    };
+
+    const onMouseUp = () => {
+      isDecisionsResizing.current = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [decisionsPanelHeight]);
+
+  const handleTabDragStart = useCallback((e: React.DragEvent, tabId: string) => {
+    e.dataTransfer.setData('text/plain', tabId);
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleTabDragOver = useCallback((e: React.DragEvent, tabId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTab(tabId);
+  }, []);
+
+  const handleTabDrop = useCallback((e: React.DragEvent, targetTabId: string) => {
+    e.preventDefault();
+    setDragOverTab(null);
+    const sourceTabId = e.dataTransfer.getData('text/plain');
+    if (!sourceTabId || sourceTabId === targetTabId) return;
+    setTabOrder((prev) => {
+      const newOrder = [...prev];
+      const srcIdx = newOrder.indexOf(sourceTabId);
+      const tgtIdx = newOrder.indexOf(targetTabId);
+      if (srcIdx === -1 || tgtIdx === -1) return prev;
+      [newOrder[srcIdx], newOrder[tgtIdx]] = [newOrder[tgtIdx], newOrder[srcIdx]];
+      localStorage.setItem('ai-crew-sidebar-tabs', JSON.stringify(newOrder));
+      return newOrder;
+    });
+  }, []);
+
+  const handleTabDragEnd = useCallback(() => {
+    setDragOverTab(null);
+  }, []);
+
   const startLead = useCallback(async (name: string, task?: string, model?: string, cwd?: string, sessionId?: string) => {
     setStarting(true);
     try {
@@ -453,13 +524,6 @@ export function LeadDashboard({ api, ws }: Props) {
   const groupMessages = currentProject?.groupMessages ?? {};
   const dagStatus = currentProject?.dagStatus ?? null;
   const teamAgents = agents.filter((a) => a.parentId === selectedLeadId);
-
-  // Auto-switch to decisions tab when there are pending confirmations
-  useEffect(() => {
-    if (pendingConfirmations.length > 0) {
-      setSidebarTab('decisions');
-    }
-  }, [pendingConfirmations.length]);
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -1034,53 +1098,78 @@ export function LeadDashboard({ api, ws }: Props) {
                     <PanelRightClose className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                {/* Team — always visible at top */}
-                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="px-3 py-2 flex items-center gap-2 border-b border-gray-700 shrink-0">
-                    <Bot className="w-3.5 h-3.5 text-blue-400" />
-                    <span className="text-xs font-semibold">Team</span>
-                    <span className="text-[10px] text-gray-500 ml-auto">{teamAgents.length}</span>
+                {/* Decisions — always visible at top */}
+                <div className="shrink-0 flex flex-col relative" style={{ height: decisionsPanelHeight, maxHeight: '30%' }}>
+                  <div className="px-3 py-1.5 flex items-center gap-2 border-b border-gray-700 shrink-0">
+                    <Lightbulb className="w-3.5 h-3.5 text-yellow-400" />
+                    <span className="text-xs font-semibold">Decisions</span>
+                    {pendingConfirmations.length > 0 && (
+                      <span className="w-2 h-2 bg-yellow-500 rounded-full" title={`${pendingConfirmations.length} pending`} />
+                    )}
+                    <span className="text-[10px] text-gray-500 ml-auto">{decisions.length}</span>
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto">
-                    <TeamStatusContent agents={teamAgents} delegations={progress?.delegations ?? []} comms={comms} activity={activity} allAgents={agents} onOpenChat={handleOpenAgentChat} />
+                    <DecisionPanelContent decisions={decisions} onConfirm={handleConfirmDecision} onReject={handleRejectDecision} />
                   </div>
+                  {/* Resize handle for decisions panel */}
+                  <div
+                    onMouseDown={startDecisionsResize}
+                    className="h-1 cursor-row-resize hover:bg-blue-500/50 active:bg-blue-500 transition-colors shrink-0 absolute bottom-0 left-0 right-0"
+                    style={{ transform: 'translateY(2px)', zIndex: 10 }}
+                  />
                 </div>
 
                 {/* Tabbed bottom panels */}
-                <div className="border-t border-gray-700 flex flex-col relative" style={{ height: sidebarTabHeight }}>
+                <div className="flex-1 min-h-0 border-t border-gray-700 flex flex-col relative">
                   <div className="flex border-b border-gray-700 shrink-0 overflow-x-auto">
-                    {[
-                      { id: 'comms', icon: <MessageSquare className="w-3 h-3" />, label: 'Comms', badge: comms.length },
-                      { id: 'groups', icon: <Users className="w-3 h-3" />, label: 'Groups', badge: groups.length },
-                      { id: 'dag', icon: <Network className="w-3 h-3" />, label: 'DAG', badge: dagStatus?.tasks.length },
-                      { id: 'decisions', icon: <Lightbulb className="w-3 h-3" />, label: 'Decisions', badge: decisions.length },
-                      { id: 'activity', icon: <Wrench className="w-3 h-3" />, label: 'Activity', badge: activity.length },
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setSidebarTab(tab.id)}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] whitespace-nowrap border-b-2 transition-colors ${
-                          sidebarTab === tab.id
-                            ? 'border-yellow-500 text-yellow-400'
-                            : 'border-transparent text-gray-500 hover:text-gray-300'
-                        }`}
-                      >
-                        {tab.icon}
-                        {tab.label}
-                        {tab.badge !== undefined && tab.badge > 0 && (
-                          <span className="text-[9px] bg-gray-700 text-gray-400 px-1 rounded-full ml-0.5">{tab.badge}</span>
-                        )}
-                        {tab.id === 'decisions' && pendingConfirmations.length > 0 && (
-                          <span className="w-2 h-2 bg-yellow-500 rounded-full ml-0.5" title={`${pendingConfirmations.length} pending`} />
-                        )}
-                      </button>
-                    ))}
+                    {(() => {
+                      const allTabs: Record<string, { icon: React.ReactNode; label: string; badge?: number }> = {
+                        team: { icon: <Bot className="w-3 h-3" />, label: 'Team', badge: teamAgents.length },
+                        comms: { icon: <MessageSquare className="w-3 h-3" />, label: 'Comms', badge: comms.length },
+                        groups: { icon: <Users className="w-3 h-3" />, label: 'Groups', badge: groups.length },
+                        dag: { icon: <Network className="w-3 h-3" />, label: 'DAG', badge: dagStatus?.tasks.length },
+                        activity: { icon: <Wrench className="w-3 h-3" />, label: 'Activity', badge: activity.length },
+                      };
+                      const orderedIds = tabOrder.filter((id) => id in allTabs);
+                      // Append any missing tabs (safety net)
+                      for (const id of Object.keys(allTabs)) {
+                        if (!orderedIds.includes(id)) orderedIds.push(id);
+                      }
+                      return orderedIds.map((tabId) => {
+                        const tab = allTabs[tabId];
+                        return (
+                          <button
+                            key={tabId}
+                            draggable
+                            onDragStart={(e) => handleTabDragStart(e, tabId)}
+                            onDragOver={(e) => handleTabDragOver(e, tabId)}
+                            onDrop={(e) => handleTabDrop(e, tabId)}
+                            onDragEnd={handleTabDragEnd}
+                            onDragLeave={() => setDragOverTab(null)}
+                            onClick={() => setSidebarTab(tabId)}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] whitespace-nowrap border-b-2 transition-colors cursor-grab active:cursor-grabbing ${
+                              dragOverTab === tabId
+                                ? 'border-blue-400 bg-blue-500/10 text-blue-300'
+                                : sidebarTab === tabId
+                                  ? 'border-yellow-500 text-yellow-400'
+                                  : 'border-transparent text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            {tab.icon}
+                            {tab.label}
+                            {tab.badge !== undefined && tab.badge > 0 && (
+                              <span className="text-[9px] bg-gray-700 text-gray-400 px-1 rounded-full ml-0.5">{tab.badge}</span>
+                            )}
+                          </button>
+                        );
+                      });
+                    })()}
                   </div>
                   <div className="flex-1 min-h-0 overflow-hidden">
+                    {sidebarTab === 'team' && <TeamStatusContent agents={teamAgents} delegations={progress?.delegations ?? []} comms={comms} activity={activity} allAgents={agents} onOpenChat={handleOpenAgentChat} />}
                     {sidebarTab === 'comms' && <CommsPanelContent comms={comms} />}
                     {sidebarTab === 'groups' && <GroupsPanelContent groups={groups} groupMessages={groupMessages} leadId={selectedLeadId} />}
                     {sidebarTab === 'dag' && <TaskDagPanelContent dagStatus={dagStatus} />}
-                    {sidebarTab === 'decisions' && <DecisionPanelContent decisions={decisions} onConfirm={handleConfirmDecision} onReject={handleRejectDecision} />}
                     {sidebarTab === 'activity' && <ActivityFeedContent activity={activity} agents={agents} />}
                   </div>
                   {/* Resize handle for tabbed section */}
@@ -1520,7 +1609,7 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
 
   return (
     <>
-      <div className="h-full overflow-y-auto p-2 space-y-2">
+      <div className="h-full overflow-y-auto p-1.5 space-y-1">
         {agents.length === 0 ? (
           <p className="text-xs text-gray-500 text-center py-4 font-mono">No team members yet</p>
         ) : (
@@ -1530,34 +1619,44 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
             return (
               <div
                 key={agent.id}
-                className="bg-gray-800 border border-gray-700 rounded p-2 cursor-pointer hover:border-gray-500 transition-colors"
+                className="bg-gray-800 border border-gray-700 rounded p-1.5 cursor-pointer hover:border-gray-500 transition-colors"
                 onClick={() => setSelectedAgent(agent)}
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-base">{agent.role.icon}</span>
-                  <span className="text-sm font-mono font-semibold text-gray-200 truncate">{agent.role.name}</span>
-                  <span className={`text-xs font-mono ${colorClass} ml-auto`}>{agent.status}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm leading-none">{agent.role.icon}</span>
+                  <span className="text-xs font-mono font-semibold text-gray-200 truncate">{agent.role.name}</span>
+                  <span className={`text-[10px] font-mono ${colorClass} ml-auto shrink-0`}>{agent.status}</span>
+                  {onOpenChat && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onOpenChat(agent.id); }}
+                      className="text-xs leading-none text-blue-400 hover:text-blue-300 shrink-0 px-0.5"
+                      title="Open agent chat panel"
+                    >
+                      💬
+                    </button>
+                  )}
+                  <span className="text-[10px] font-mono text-gray-500 shrink-0">{agent.id.slice(0, 8)}</span>
                 </div>
                 {delegation && (
-                  <p className="text-xs font-mono text-gray-400 mt-1 truncate" title={delegation.task}>{delegation.task}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-[10px] font-mono text-gray-400 truncate flex-1 min-w-0" title={delegation.task}>{delegation.task}</p>
+                    {(agent.model || agent.role.model) && (
+                      <span className="text-[9px] font-mono text-gray-500 bg-gray-700/50 px-1 rounded shrink-0">{agent.model || agent.role.model}</span>
+                    )}
+                    {(agent.inputTokens > 0 || agent.outputTokens > 0) && (
+                      <span className="text-[9px] font-mono text-purple-400/70 shrink-0">{formatTokens(agent.inputTokens + agent.outputTokens)}</span>
+                    )}
+                  </div>
                 )}
-                <div className="flex items-center gap-2 mt-1">
-                  {(agent.model || agent.role.model) && (
-                    <span className="text-[10px] font-mono text-gray-500 bg-gray-700/50 px-1 rounded">{agent.model || agent.role.model}</span>
-                  )}
-                  {(agent.inputTokens > 0 || agent.outputTokens > 0) && (
-                    <span className="text-[10px] font-mono text-purple-400/70">{formatTokens(agent.inputTokens + agent.outputTokens)}</span>
-                  )}
-                  <span className="text-xs font-mono text-gray-400 ml-auto">{agent.id.slice(0, 8)}</span>
-                </div>
-                {onOpenChat && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onOpenChat(agent.id); }}
-                    className="text-[10px] font-mono text-blue-400 hover:text-blue-300 bg-blue-900/30 hover:bg-blue-900/50 px-1.5 py-0.5 rounded transition-colors mt-1"
-                    title="Open agent chat panel"
-                  >
-                    💬 Chat
-                  </button>
+                {!delegation && (agent.model || agent.role.model || agent.inputTokens > 0 || agent.outputTokens > 0) && (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {(agent.model || agent.role.model) && (
+                      <span className="text-[9px] font-mono text-gray-500 bg-gray-700/50 px-1 rounded shrink-0">{agent.model || agent.role.model}</span>
+                    )}
+                    {(agent.inputTokens > 0 || agent.outputTokens > 0) && (
+                      <span className="text-[9px] font-mono text-purple-400/70 shrink-0">{formatTokens(agent.inputTokens + agent.outputTokens)}</span>
+                    )}
+                  </div>
                 )}
               </div>
             );
