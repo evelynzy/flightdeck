@@ -18,7 +18,8 @@ function authHeaders(): Record<string, string> {
   return {};
 }
 
-async function fetchJSON<T>(path: string, opts?: RequestInit): Promise<T> {
+/** Standalone authenticated fetch — usable outside React hooks */
+export async function apiFetch<T = any>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...opts,
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...opts?.headers },
@@ -34,37 +35,37 @@ export function useApi() {
   const { setRoles, setConfig } = useAppStore();
 
   const loadRoles = useCallback(async () => {
-    const roles = await fetchJSON<Role[]>('/roles');
+    const roles = await apiFetch<Role[]>('/roles');
     setRoles(roles);
   }, [setRoles]);
 
   const loadConfig = useCallback(async () => {
-    const config = await fetchJSON<ServerConfig>('/config');
+    const config = await apiFetch<ServerConfig>('/config');
     setConfig(config);
   }, [setConfig]);
 
   const spawnAgent = useCallback(async (roleId: string, task?: string, autopilot?: boolean) => {
-    return fetchJSON('/agents', {
+    return apiFetch('/agents', {
       method: 'POST',
       body: JSON.stringify({ roleId, task, autopilot }),
     });
   }, []);
 
   const killAgent = useCallback(async (id: string) => {
-    return fetchJSON(`/agents/${id}`, { method: 'DELETE' });
+    return apiFetch(`/agents/${id}`, { method: 'DELETE' });
   }, []);
 
   const interruptAgent = useCallback(async (id: string) => {
-    return fetchJSON(`/agents/${id}/interrupt`, { method: 'POST' });
+    return apiFetch(`/agents/${id}/interrupt`, { method: 'POST' });
   }, []);
 
   const restartAgent = useCallback(async (id: string) => {
-    return fetchJSON(`/agents/${id}/restart`, { method: 'POST' });
+    return apiFetch(`/agents/${id}/restart`, { method: 'POST' });
   }, []);
 
   const updateConfig = useCallback(
     async (patch: Partial<ServerConfig>) => {
-      const config = await fetchJSON<ServerConfig>('/config', {
+      const config = await apiFetch<ServerConfig>('/config', {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
@@ -76,7 +77,7 @@ export function useApi() {
 
   const createRole = useCallback(
     async (role: Omit<Role, 'builtIn'>) => {
-      await fetchJSON('/roles', {
+      await apiFetch('/roles', {
         method: 'POST',
         body: JSON.stringify(role),
       });
@@ -87,7 +88,7 @@ export function useApi() {
 
   const deleteRole = useCallback(
     async (id: string) => {
-      await fetchJSON(`/roles/${id}`, { method: 'DELETE' });
+      await apiFetch(`/roles/${id}`, { method: 'DELETE' });
       await loadRoles();
     },
     [loadRoles],
@@ -102,29 +103,29 @@ export function useApi() {
   const updateAgent = useCallback(async (id: string, patch: { model?: string }) => {
     // Optimistically update local store so the dropdown reflects the change immediately
     useAppStore.getState().updateAgent(id, patch);
-    return fetchJSON(`/agents/${id}`, {
+    return apiFetch(`/agents/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });
   }, []);
 
   const resolvePermission = useCallback(async (agentId: string, approved: boolean) => {
-    return fetchJSON(`/agents/${agentId}/permission`, {
+    return apiFetch(`/agents/${agentId}/permission`, {
       method: 'POST',
       body: JSON.stringify({ approved }),
     });
   }, []);
 
   const fetchGroups = useCallback(async (leadId: string) => {
-    return fetchJSON(`/lead/${leadId}/groups`);
+    return apiFetch(`/lead/${leadId}/groups`);
   }, []);
 
   const fetchGroupMessages = useCallback(async (leadId: string, groupName: string) => {
-    return fetchJSON(`/lead/${leadId}/groups/${encodeURIComponent(groupName)}/messages`);
+    return apiFetch(`/lead/${leadId}/groups/${encodeURIComponent(groupName)}/messages`);
   }, []);
 
   const fetchDagStatus = useCallback(async (leadId: string) => {
-    return fetchJSON(`/lead/${leadId}/dag`);
+    return apiFetch(`/lead/${leadId}/dag`);
   }, []);
 
   return {

@@ -4,23 +4,7 @@ import { useLeadStore } from '../../stores/leadStore';
 import type { ProgressSnapshot } from '../../stores/leadStore';
 import type { Decision } from '../../types';
 import { AlertTriangle, Check, X, MessageSquare, Send, Clock } from 'lucide-react';
-import { getAuthToken } from '../../hooks/useApi';
-
-const API_BASE = '/api';
-
-function authHeaders(): Record<string, string> {
-  const token = getAuthToken();
-  if (token) return { Authorization: `Bearer ${token}` };
-  return {};
-}
-
-async function fetchJSON<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...opts?.headers },
-  });
-  return res.json();
-}
+import { apiFetch } from '../../hooks/useApi';
 
 interface Props {
   api: any;
@@ -312,7 +296,7 @@ export function OverviewPage({ api, ws }: Props) {
   // Fetch all decisions on mount + poll every 5s
   const loadDecisions = useCallback(async () => {
     try {
-      const data = await fetchJSON<Decision[]>('/decisions');
+      const data = await apiFetch<Decision[]>('/decisions');
       setAllDecisions(data);
     } catch {
       // ignore fetch errors during polling
@@ -334,7 +318,7 @@ export function OverviewPage({ api, ws }: Props) {
           d.id === id ? { ...d, status: 'confirmed' as const, confirmedAt: new Date().toISOString() } : d,
         ),
       );
-      await fetchJSON(`/decisions/${id}/confirm`, { method: 'POST' });
+      await apiFetch(`/decisions/${id}/confirm`, { method: 'POST' });
       loadDecisions();
     },
     [loadDecisions],
@@ -347,7 +331,7 @@ export function OverviewPage({ api, ws }: Props) {
           d.id === id ? { ...d, status: 'rejected' as const, confirmedAt: new Date().toISOString() } : d,
         ),
       );
-      await fetchJSON(`/decisions/${id}/reject`, { method: 'POST' });
+      await apiFetch(`/decisions/${id}/reject`, { method: 'POST' });
       loadDecisions();
     },
     [loadDecisions],
@@ -361,7 +345,7 @@ export function OverviewPage({ api, ws }: Props) {
           d.id === id ? { ...d, status: 'confirmed' as const, confirmedAt: new Date().toISOString() } : d,
         ),
       );
-      await fetchJSON(`/decisions/${id}/respond`, {
+      await apiFetch(`/decisions/${id}/respond`, {
         method: 'POST',
         body: JSON.stringify({ message }),
       });

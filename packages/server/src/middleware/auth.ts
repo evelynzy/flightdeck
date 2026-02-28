@@ -39,8 +39,9 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 
   // Allow localhost requests without auth (local dev with Vite proxy, etc.)
-  const ip = req.ip || req.socket.remoteAddress || '';
-  const isLocalhost = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost';
+  const ip = req.ip || req.socket?.remoteAddress || '';
+  const isLocalhost = /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1|localhost)$/.test(ip)
+    || /^::ffff:127\./.test(ip);
   if (isLocalhost && !req.headers.authorization) {
     next();
     return;
