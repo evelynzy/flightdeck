@@ -15,6 +15,13 @@
       "when": 1772247582261,
       "tag": "0001_tearful_shiva",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1772253068714,
+      "tag": "0002_omniscient_shape",
+      "breakpoints": true
     }
   ]
 }

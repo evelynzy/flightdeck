@@ -35,6 +35,7 @@ export interface AgentJSON {
   toolCalls?: ToolCallInfo[];
   sessionId?: string | null;
   projectName?: string;
+  projectId?: string;
   model?: string;
   cwd?: string;
   inputTokens: number;
@@ -60,6 +61,7 @@ export class Agent {
   public messages: string[] = [];
   public sessionId: string | null = null;
   public projectName?: string;
+  public projectId?: string;
   /** Model override for this agent (e.g. "claude-opus-4.6"). Overrides role default. */
   public model?: string;
   /** Working directory for this agent's CLI process */
@@ -614,6 +616,7 @@ CREW_UPDATE ]]]`;
       toolCalls: this.toolCalls,
       sessionId: this.sessionId,
       projectName: this.projectName,
+      projectId: this.projectId,
       model: this.model || this.role.model,
       cwd: this.cwd,
       inputTokens: this.inputTokens,

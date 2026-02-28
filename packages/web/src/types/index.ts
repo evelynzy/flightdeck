@@ -13,6 +13,30 @@ export interface DagTask {
   completedAt?: string;
 }
 
+// Persistent project (survives lead sessions)
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  cwd: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  sessions?: ProjectSession[];
+  activeLeadId?: string;
+}
+
+export interface ProjectSession {
+  id: number;
+  projectId: string;
+  leadId: string;
+  sessionId: string | null;
+  task: string | null;
+  status: string;
+  startedAt: string;
+  endedAt: string | null;
+}
+
 export interface DagStatus {
   tasks: DagTask[];
   fileLockMap: Record<string, { taskId: string; agentId?: string }>;
@@ -114,6 +138,7 @@ export interface AgentInfo {
   messages?: AcpTextChunk[];
   pendingPermission?: AcpPermissionRequest;
   projectName?: string;
+  projectId?: string;
   model?: string;
   cwd?: string;
   inputTokens?: number;

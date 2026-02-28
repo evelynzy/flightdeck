@@ -30,6 +30,7 @@ export function apiRouter(
   lockRegistry: FileLockRegistry,
   activityLedger: ActivityLedger,
   decisionLog: DecisionLog,
+  projectRegistry?: import('./projects/ProjectRegistry.js').ProjectRegistry,
 ): Router {
   const router = Router();
 
@@ -240,7 +241,7 @@ export function apiRouter(
 
   // --- Project Lead ---
   router.post('/lead/start', (req, res) => {
-    const { task, name, model, cwd, sessionId: resumeSessionId } = req.body;
+    const { task, name, model, cwd, sessionId: resumeSessionId, projectId } = req.body;
     const role = roleRegistry.get('lead');
     if (!role) return res.status(500).json({ error: 'Project Lead role not found' });
 
@@ -253,6 +254,36 @@ export function apiRouter(
         cwd: cwd || process.cwd(),
         resumeSessionId,
       });
+
+      // Project persistence — create or resume
+      if (projectRegistry) {
+        let project;
+        if (projectId) {
+          // Resume an existing project
+          project = projectRegistry.get(projectId);
+          if (!project) {
+            logger.warn('lead', `Project ${projectId} not found — creating new`);
+          }
+        }
+        if (!project) {
+          // Create a new project
+          project = projectRegistry.create(agent.projectName!, task ?? '', cwd);
+        }
+        agent.projectId = project.id;
+        projectRegistry.startSession(project.id, agent.id, task);
+
+        // If resuming, send project briefing to the lead after session starts
+        if (projectId && project) {
+          const briefing = projectRegistry.buildBriefing(project.id);
+          if (briefing && briefing.sessions.length > 1) {
+            const briefingText = projectRegistry.formatBriefing(briefing);
+            setTimeout(() => {
+              agent.sendMessage(`[System — Project Context]\n${briefingText}\n\nContinue from where the previous session left off.`);
+            }, 3000);
+          }
+        }
+      }
+
       if (task) {
         setTimeout(() => {
           logger.info('lead', `Sending initial task to ${agent.id.slice(0, 8)}: "${task.slice(0, 80)}"`);
@@ -579,6 +610,98 @@ export function apiRouter(
       .slice(0, limit);
 
     res.json({ query: q, count: combined.length, results: combined });
+  });
+
+  // --- Projects (persistent) ---
+
+  router.get('/projects', (_req, res) => {
+    if (!projectRegistry) return res.json([]);
+    const status = typeof _req.query.status === 'string' ? _req.query.status : undefined;
+    res.json(projectRegistry.list(status));
+  });
+
+  router.get('/projects/:id', (req, res) => {
+    if (!projectRegistry) return res.status(404).json({ error: 'Projects not available' });
+    const project = projectRegistry.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const sessions = projectRegistry.getSessions(project.id);
+    const activeLeadId = projectRegistry.getActiveLeadId(project.id);
+    res.json({ ...project, sessions, activeLeadId });
+  });
+
+  router.post('/projects', (req, res) => {
+    if (!projectRegistry) return res.status(500).json({ error: 'Projects not available' });
+    const { name, description, cwd } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const project = projectRegistry.create(name, description, cwd);
+    logger.info('project', `Created project "${name}" (${project.id.slice(0, 8)})`);
+    res.status(201).json(project);
+  });
+
+  router.patch('/projects/:id', (req, res) => {
+    if (!projectRegistry) return res.status(500).json({ error: 'Projects not available' });
+    const project = projectRegistry.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const { name, description, cwd, status } = req.body;
+    projectRegistry.update(req.params.id, { name, description, cwd, status });
+    logger.info('project', `Updated project "${project.name}" (${project.id.slice(0, 8)})`);
+    res.json(projectRegistry.get(req.params.id));
+  });
+
+  router.get('/projects/:id/briefing', (req, res) => {
+    if (!projectRegistry) return res.status(500).json({ error: 'Projects not available' });
+    const briefing = projectRegistry.buildBriefing(req.params.id);
+    if (!briefing) return res.status(404).json({ error: 'Project not found' });
+    res.json({ ...briefing, formatted: projectRegistry.formatBriefing(briefing) });
+  });
+
+  // Resume a project — starts a new lead session with project context
+  router.post('/projects/:id/resume', (req, res) => {
+    if (!projectRegistry) return res.status(500).json({ error: 'Projects not available' });
+    const project = projectRegistry.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const activeLeadId = projectRegistry.getActiveLeadId(project.id);
+    if (activeLeadId) {
+      const agent = agentManager.get(activeLeadId);
+      if (agent && (agent.status === 'running' || agent.status === 'idle')) {
+        return res.status(409).json({ error: 'Project already has an active lead', leadId: activeLeadId });
+      }
+    }
+
+    const role = roleRegistry.get('lead');
+    if (!role) return res.status(500).json({ error: 'Project Lead role not found' });
+
+    const { task, model } = req.body;
+    try {
+      const agent = agentManager.spawn(role, task, undefined, true, model, project.cwd ?? undefined);
+      agent.projectName = project.name;
+      agent.projectId = project.id;
+      projectRegistry.startSession(project.id, agent.id, task);
+
+      // Send project briefing
+      const briefing = projectRegistry.buildBriefing(project.id);
+      if (briefing && briefing.sessions.length > 1) {
+        const briefingText = projectRegistry.formatBriefing(briefing);
+        setTimeout(() => {
+          agent.sendMessage(`[System — Project Context]\n${briefingText}\n\nContinue from where the previous session left off.`);
+        }, 3000);
+      }
+
+      if (task) {
+        setTimeout(() => {
+          agent.sendMessage(task);
+        }, task ? 4000 : 2000);
+      }
+
+      logger.info('project', `Resumed project "${project.name}" with new lead (${agent.id.slice(0, 8)})`);
+      res.status(201).json(agent.toJSON());
+    } catch (err: any) {
+      logger.error('project', `Failed to resume project: ${err.message}`);
+      res.status(429).json({ error: err.message });
+    }
   });
 
   return router;

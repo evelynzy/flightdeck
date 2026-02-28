@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
-import { LayoutList, Network, Users, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { LayoutList, Network, Users, CheckCircle2, XCircle, Loader2, Play, Archive, Clock } from 'lucide-react';
 import { TaskDagPanelContent } from '../LeadDashboard/TaskDagPanel';
 import { DagGraph } from './DagGraph';
-import type { DagStatus, LeadProgress, AgentInfo } from '../../types';
+import type { DagStatus, LeadProgress, AgentInfo, Project } from '../../types';
 
 interface Props {
   api: any;
@@ -104,26 +104,76 @@ function SessionProgress({ progress, dagStatus }: { progress: LeadProgress | nul
 }
 
 // ---------------------------------------------------------------------------
+// Tab item — either an active lead or a persisted (inactive) project
+// ---------------------------------------------------------------------------
+type TabItem =
+  | { type: 'active'; leadId: string; agent: AgentInfo; project?: Project }
+  | { type: 'persisted'; project: Project };
+
+function tabKey(tab: TabItem): string {
+  return tab.type === 'active' ? tab.leadId : `proj-${tab.project.id}`;
+}
+
+// ---------------------------------------------------------------------------
 // Main TaskQueuePanel — tabbed by project
 // ---------------------------------------------------------------------------
 export function TaskQueuePanel({ api }: Props) {
   const { agents } = useAppStore();
-  const { projects } = useLeadStore();
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const { projects: leadProjects } = useLeadStore();
+  const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [progress, setProgress] = useState<LeadProgress | null>(null);
   const [dagView, setDagView] = useState<'graph' | 'list' | null>(null);
+  const [persistedProjects, setPersistedProjects] = useState<Project[]>([]);
+  const [resuming, setResuming] = useState<string | null>(null);
 
   const leads = agents.filter((a: AgentInfo) => a.role?.id === 'lead' && !a.parentId);
 
-  // Auto-select first lead
+  // Fetch persisted projects from API
   useEffect(() => {
-    if (!selectedLeadId && leads.length > 0) setSelectedLeadId(leads[0].id);
-    if (selectedLeadId && !leads.some((l: AgentInfo) => l.id === selectedLeadId) && leads.length > 0) {
-      setSelectedLeadId(leads[0].id);
-    }
-  }, [leads, selectedLeadId]);
+    fetch('/api/projects')
+      .then(r => r.json())
+      .then((data: Project[]) => setPersistedProjects(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [leads.length]); // re-fetch when leads change
 
-  // Fetch progress + DAG
+  // Build tabs: active leads + inactive persisted projects
+  const activeLeadProjectIds = new Set(leads.map((l: AgentInfo) => l.projectId).filter(Boolean));
+  const tabs: TabItem[] = [
+    ...leads.map((l: AgentInfo): TabItem => ({
+      type: 'active',
+      leadId: l.id,
+      agent: l,
+      project: persistedProjects.find(p => p.id === l.projectId),
+    })),
+    ...persistedProjects
+      .filter(p => !activeLeadProjectIds.has(p.id) && p.status !== 'archived')
+      .map((p): TabItem => ({ type: 'persisted', project: p })),
+  ];
+
+  // Auto-select first tab
+  useEffect(() => {
+    if (tabs.length > 0 && (!selectedTab || !tabs.some(t => tabKey(t) === selectedTab))) {
+      setSelectedTab(tabKey(tabs[0]));
+    }
+  }, [tabs.length, selectedTab]);
+
+  // Selected tab data
+  const currentTab = tabs.find(t => tabKey(t) === selectedTab);
+  const activeLeadId = currentTab?.type === 'active' ? currentTab.leadId : null;
+
+  // Fetch project details (with sessions) for persisted tabs
+  useEffect(() => {
+    if (currentTab?.type === 'persisted' && !currentTab.project.sessions) {
+      fetch(`/api/projects/${currentTab.project.id}`)
+        .then(r => r.json())
+        .then((data: Project) => {
+          setPersistedProjects(prev => prev.map(p => p.id === data.id ? data : p));
+        })
+        .catch(() => {});
+    }
+  }, [selectedTab, currentTab?.type]);
+
+  // Fetch progress + DAG for active leads
   const fetchData = useCallback(async (leadId: string) => {
     try {
       const [dagData, progressData] = await Promise.all([
@@ -136,83 +186,169 @@ export function TaskQueuePanel({ api }: Props) {
   }, [api]);
 
   useEffect(() => {
-    if (selectedLeadId) fetchData(selectedLeadId);
-  }, [selectedLeadId, fetchData]);
+    if (activeLeadId) fetchData(activeLeadId);
+  }, [activeLeadId, fetchData]);
 
-  // Re-fetch periodically while lead is active
   useEffect(() => {
-    if (!selectedLeadId) return;
-    const lead = agents.find((a: AgentInfo) => a.id === selectedLeadId);
+    if (!activeLeadId) return;
+    const lead = agents.find((a: AgentInfo) => a.id === activeLeadId);
     if (!lead || lead.status === 'completed' || lead.status === 'failed') return;
-    const interval = setInterval(() => fetchData(selectedLeadId), 5000);
+    const interval = setInterval(() => fetchData(activeLeadId), 5000);
     return () => clearInterval(interval);
-  }, [selectedLeadId, agents, fetchData]);
+  }, [activeLeadId, agents, fetchData]);
 
-  const project = selectedLeadId ? projects[selectedLeadId] : null;
-  const dagStatus: DagStatus | null = project?.dagStatus ?? null;
+  const leadProject = activeLeadId ? leadProjects[activeLeadId] : null;
+  const dagStatus: DagStatus | null = leadProject?.dagStatus ?? null;
+
+  // Resume a persisted project
+  const handleResume = async (projectId: string) => {
+    setResuming(projectId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const agent = await res.json();
+        // Switch to the new lead tab after a brief delay for state to propagate
+        setTimeout(() => setSelectedTab(agent.id), 500);
+      }
+    } catch { /* ignore */ }
+    setResuming(null);
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* ---- Project tabs ---- */}
       <div className="flex items-center border-b border-gray-700 shrink-0 overflow-x-auto bg-[#1a1a2e]">
-        {leads.length === 0 ? (
+        {tabs.length === 0 ? (
           <div className="flex items-center gap-2 px-4 h-10 text-gray-500 text-sm">
             <Network size={14} />
             No projects yet
           </div>
         ) : (
-          leads.map((l: AgentInfo) => {
-            const isActive = selectedLeadId === l.id;
-            const projState = projects[l.id];
-            const dagSummary = projState?.dagStatus?.summary;
-            const taskCount = projState?.dagStatus?.tasks.length ?? 0;
-            const doneCount = dagSummary?.done ?? 0;
+          tabs.map((tab) => {
+            const key = tabKey(tab);
+            const isSelected = selectedTab === key;
 
+            if (tab.type === 'active') {
+              const l = tab.agent;
+              const projState = leadProjects[l.id];
+              const dagSummary = projState?.dagStatus?.summary;
+              const taskCount = projState?.dagStatus?.tasks.length ?? 0;
+              const doneCount = dagSummary?.done ?? 0;
+
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSelectedTab(key)}
+                  className={`flex items-center gap-2 px-4 h-10 text-sm border-b-2 whitespace-nowrap transition-colors shrink-0 ${
+                    isSelected
+                      ? 'border-accent text-accent bg-accent/10'
+                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                  }`}
+                >
+                  <span className="font-medium max-w-[160px] truncate">
+                    {l.projectName || l.id.slice(0, 8)}
+                  </span>
+                  {taskCount > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 rounded-full min-w-[18px] text-center ${
+                      doneCount === taskCount
+                        ? 'bg-green-900/50 text-green-400'
+                        : 'bg-gray-800 text-gray-400'
+                    }`}>
+                      {doneCount}/{taskCount}
+                    </span>
+                  )}
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    l.status === 'running' ? 'bg-blue-400 animate-pulse' :
+                    l.status === 'idle' ? 'bg-green-400' :
+                    l.status === 'completed' ? 'bg-gray-500' :
+                    'bg-red-400'
+                  }`} />
+                </button>
+              );
+            }
+
+            // Persisted (inactive) project tab
+            const p = tab.project;
             return (
               <button
-                key={l.id}
-                onClick={() => setSelectedLeadId(l.id)}
+                key={key}
+                onClick={() => setSelectedTab(key)}
                 className={`flex items-center gap-2 px-4 h-10 text-sm border-b-2 whitespace-nowrap transition-colors shrink-0 ${
-                  isActive
-                    ? 'border-accent text-accent bg-accent/10'
-                    : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                  isSelected
+                    ? 'border-gray-400 text-gray-300 bg-gray-700/30'
+                    : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-700/30'
                 }`}
               >
-                <span className="font-medium max-w-[160px] truncate">
-                  {l.projectName || l.id.slice(0, 8)}
-                </span>
-                {taskCount > 0 && (
-                  <span className={`text-[10px] font-bold px-1.5 rounded-full min-w-[18px] text-center ${
-                    doneCount === taskCount
-                      ? 'bg-green-900/50 text-green-400'
-                      : 'bg-gray-800 text-gray-400'
-                  }`}>
-                    {doneCount}/{taskCount}
-                  </span>
-                )}
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  l.status === 'running' ? 'bg-blue-400 animate-pulse' :
-                  l.status === 'idle' ? 'bg-green-400' :
-                  l.status === 'completed' ? 'bg-gray-500' :
-                  'bg-red-400'
-                }`} />
+                <Archive size={12} className="opacity-50" />
+                <span className="font-medium max-w-[160px] truncate">{p.name}</span>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-gray-600" />
               </button>
             );
           })
         )}
       </div>
 
-      {/* ---- Content for selected project ---- */}
+      {/* ---- Content for selected tab ---- */}
       <div className="flex-1 overflow-auto p-4">
-        {!selectedLeadId || leads.length === 0 ? (
+        {!currentTab ? (
           <div className="flex flex-col items-center justify-center py-12 text-gray-500">
             <Network size={32} className="mb-2 opacity-50" />
             <p className="text-sm">No lead sessions active</p>
             <p className="text-xs mt-1">Start a lead agent to see project tasks here</p>
           </div>
+        ) : currentTab.type === 'persisted' ? (
+          /* Inactive project — show summary and resume button */
+          <div className="space-y-4 max-w-2xl mx-auto">
+            <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-white mb-2">{currentTab.project.name}</h3>
+              {currentTab.project.description && (
+                <p className="text-sm text-gray-400 mb-4">{currentTab.project.description}</p>
+              )}
+              <div className="flex items-center gap-4 text-xs text-gray-500 mb-6">
+                <span className="flex items-center gap-1"><Clock size={12} /> Created {new Date(currentTab.project.createdAt).toLocaleDateString()}</span>
+                <span className="flex items-center gap-1"><Clock size={12} /> Updated {new Date(currentTab.project.updatedAt).toLocaleDateString()}</span>
+                {currentTab.project.cwd && <span className="text-gray-600 truncate max-w-[200px]">📂 {currentTab.project.cwd}</span>}
+              </div>
+              {currentTab.project.sessions && currentTab.project.sessions.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">Previous Sessions</h4>
+                  <div className="space-y-1">
+                    {currentTab.project.sessions.slice(0, 5).map(s => (
+                      <div key={s.id} className="flex items-center gap-2 text-xs text-gray-500">
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          s.status === 'completed' ? 'bg-green-500' :
+                          s.status === 'crashed' ? 'bg-red-500' : 'bg-gray-500'
+                        }`} />
+                        <span>{s.task?.slice(0, 60) || 'No task'}</span>
+                        <span className="text-gray-600">— {new Date(s.startedAt).toLocaleDateString()}</span>
+                        <span className={s.status === 'crashed' ? 'text-red-400' : 'text-gray-500'}>
+                          ({s.status})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => handleResume(currentTab.project.id)}
+                disabled={resuming === currentTab.project.id}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/20 text-accent hover:bg-accent/30 transition-colors disabled:opacity-50"
+              >
+                {resuming === currentTab.project.id ? (
+                  <><Loader2 size={14} className="animate-spin" /> Resuming…</>
+                ) : (
+                  <><Play size={14} /> Resume Project</>
+                )}
+              </button>
+            </div>
+          </div>
         ) : (
+          /* Active lead — show progress and tasks */
           <div className="space-y-4">
-            {/* Progress summary */}
             <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-4">
               <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
                 <Network size={14} className="text-cyan-400" />
@@ -221,7 +357,6 @@ export function TaskQueuePanel({ api }: Props) {
               <SessionProgress progress={progress} dagStatus={dagStatus} />
             </div>
 
-            {/* DAG tasks */}
             {(() => {
               const hasDeps = dagStatus?.tasks.some((t) => t.dependsOn.length > 0) ?? false;
               const effectiveView = dagView ?? (hasDeps ? 'graph' : 'list');

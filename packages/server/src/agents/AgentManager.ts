@@ -79,6 +79,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
   private autoRestart: boolean;
   private dispatcher: CommandDispatcher;
   private heartbeat: HeartbeatMonitor;
+  private projectRegistry?: import('../projects/ProjectRegistry.js').ProjectRegistry;
 
   constructor(
     config: ServerConfig,
@@ -168,6 +169,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         logger.warn('message', `Delivery failed — target not found/running: ${msg.to.slice(0, 8)}`);
       }
     });
+  }
+
+  setProjectRegistry(registry: import('../projects/ProjectRegistry.js').ProjectRegistry): void {
+    this.projectRegistry = registry;
   }
 
   spawn(role: Role, task?: string, parentId?: string, autopilot?: boolean, model?: string, cwd?: string, resumeSessionId?: string, id?: string): Agent {
@@ -264,6 +269,11 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     agent.onSessionReady((sessionId) => {
       this.emit('agent:session_ready', { agentId: agent.id, sessionId });
 
+      // Track session ID for project persistence
+      if (agent.role.id === 'lead' && !agent.parentId && agent.projectId && this.projectRegistry) {
+        this.projectRegistry.setSessionId(agent.id, sessionId);
+      }
+
       // Also report to parent lead so it can resume this agent later
       if (agent.parentId) {
         this.agentMemory.store(agent.parentId, agent.id, 'sessionId', sessionId);
@@ -322,6 +332,13 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
 
       // Notify parent agent of child completion
       this.dispatcher.notifyParentOfCompletion(agent, code);
+
+      // Track project session end for lead agents
+      if (agent.role.id === 'lead' && !agent.parentId && agent.projectId && this.projectRegistry) {
+        const status = (code !== null && code !== 0) ? 'crashed' : 'completed';
+        this.projectRegistry.endSession(agent.id, status);
+        logger.info('project', `Session ended for project ${agent.projectId.slice(0, 8)} — ${status}`);
+      }
 
       // Clean up dedup tracking after a delay
       setTimeout(() => {

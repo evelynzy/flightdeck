@@ -17,6 +17,7 @@ import { TaskDAG } from './tasks/TaskDAG.js';
 import { ChatGroupRegistry } from './comms/ChatGroupRegistry.js';
 import { ContextRefresher } from './coordination/ContextRefresher.js';
 import { Scheduler } from './utils/Scheduler.js';
+import { ProjectRegistry } from './projects/ProjectRegistry.js';
 
 let config = getConfig();
 
@@ -49,7 +50,9 @@ const decisionLog = new DecisionLog(db);
 const agentMemory = new AgentMemory(db);
 const chatGroupRegistry = new ChatGroupRegistry(db);
 const taskDAG = new TaskDAG(db);
+const projectRegistry = new ProjectRegistry(db);
 const agentManager = new AgentManager(config, roleRegistry, lockRegistry, activityLedger, messageBus, decisionLog, agentMemory, chatGroupRegistry, taskDAG, { db });
+agentManager.setProjectRegistry(projectRegistry);
 const contextRefresher = new ContextRefresher(agentManager, lockRegistry, activityLedger);
 const wsServer = new WebSocketServer(httpServer, agentManager, lockRegistry, activityLedger, decisionLog, chatGroupRegistry);
 
@@ -78,7 +81,7 @@ app.get('/health', (_req, res) => {
 app.use('/api', authMiddleware);
 
 // Wire up API routes
-app.use('/api', apiRouter(agentManager, roleRegistry, config, db, lockRegistry, activityLedger, decisionLog));
+app.use('/api', apiRouter(agentManager, roleRegistry, config, db, lockRegistry, activityLedger, decisionLog, projectRegistry));
 
 httpServer.listen(config.port, config.host, () => {
   console.log(`🚀 AI Crew server running on http://${config.host}:${config.port}`);

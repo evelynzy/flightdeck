@@ -164,3 +164,31 @@ export const agentPlans = sqliteTable('agent_plans', {
   planJson: text('plan_json').notNull().default('[]'),
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
 });
+
+// ── Projects (persistent, survive lead sessions) ────────────────────
+
+export const projects = sqliteTable('projects', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').default(''),
+  cwd: text('cwd'),
+  status: text('status').default('active'),       // active | archived | completed
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').default(sql`(datetime('now'))`),
+}, (table) => [
+  index('idx_projects_status').on(table.status),
+]);
+
+export const projectSessions = sqliteTable('project_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  projectId: text('project_id').notNull().references(() => projects.id),
+  leadId: text('lead_id').notNull(),
+  sessionId: text('session_id'),
+  task: text('task'),
+  status: text('status').default('active'),        // active | completed | crashed
+  startedAt: text('started_at').default(sql`(datetime('now'))`),
+  endedAt: text('ended_at'),
+}, (table) => [
+  index('idx_project_sessions_project').on(table.projectId),
+  index('idx_project_sessions_lead').on(table.leadId),
+]);
