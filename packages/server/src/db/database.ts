@@ -138,6 +138,10 @@ export class Database {
     this.db = new BetterSqlite3(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
+    this.db.pragma('synchronous = NORMAL');
+    this.db.pragma('busy_timeout = 5000');
+    this.db.pragma('cache_size = -64000');
+    this.db.pragma('wal_checkpoint(PASSIVE)');
     this.db.exec(SCHEMA);
     this.migrate();
   }
