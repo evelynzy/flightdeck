@@ -10,6 +10,7 @@ import { classifyMessage, tierPassesFilter, TIER_CONFIG, type TierFilter, type F
 import { TaskDagPanelContent } from './TaskDagPanel';
 import { TokenEconomics } from '../TokenEconomics/TokenEconomics';
 import { CostBreakdown } from '../TokenEconomics/CostBreakdown';
+import { TimerDisplay } from '../TimerDisplay/TimerDisplay';
 import { FolderPicker } from '../FolderPicker/FolderPicker';
 
 interface RoleInfo { id: string; name: string; icon: string; description: string; model: string; }
@@ -1643,6 +1644,7 @@ export function LeadDashboard({ api, ws }: Props) {
                         dag: { icon: <Network className="w-3 h-3" />, label: 'DAG', badge: dagStatus?.tasks.length },
                         tokens: { icon: <BarChart3 className="w-3 h-3" />, label: 'Tokens' },
                         costs: { icon: <BarChart3 className="w-3 h-3" />, label: 'Costs' },
+                        timers: { icon: <Clock className="w-3 h-3" />, label: 'Timers' },
                       };
                       const orderedIds = tabOrder.filter((id) => id in allTabs);
                       // Append any missing tabs (safety net)
@@ -1686,6 +1688,7 @@ export function LeadDashboard({ api, ws }: Props) {
                     {sidebarTab === 'dag' && <TaskDagPanelContent dagStatus={dagStatus} />}
                     {sidebarTab === 'tokens' && <TokenEconomics />}
                     {sidebarTab === 'costs' && <CostBreakdown />}
+                    {sidebarTab === 'timers' && <TimerDisplay />}
                   </div>
                   {/* Resize handle for tabbed section */}
                   <div

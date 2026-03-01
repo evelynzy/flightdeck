@@ -7,6 +7,8 @@ import { AgentFleet } from './AgentFleet';
 import { DagMinimap } from './DagMinimap';
 import { ActivityFeed } from './ActivityFeed';
 import { TokenEconomics } from '../TokenEconomics/TokenEconomics';
+import { CostBreakdown } from '../TokenEconomics/CostBreakdown';
+import { TimerDisplay } from '../TimerDisplay/TimerDisplay';
 import { AlertsPanel } from './AlertsPanel';
 import { CommHeatmap } from '../FleetOverview/CommHeatmap';
 import { useDashboardLayout } from '../../hooks/useDashboardLayout';
@@ -22,6 +24,10 @@ function PanelSlot({ panel, leadId, agents }: { panel: PanelConfig; leadId: stri
       return <HealthSummary leadId={leadId} />;
     case 'tokens':
       return <TokenEconomics />;
+    case 'costs':
+      return <CostBreakdown />;
+    case 'timers':
+      return <TimerDisplay />;
     case 'fleet':
       return <AgentFleet leadId={leadId} />;
     case 'dag':

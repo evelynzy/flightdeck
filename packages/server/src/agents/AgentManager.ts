@@ -781,6 +781,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     return this.costTracker;
   }
 
+  getTimerRegistry(): TimerRegistry {
+    return this.timerRegistry;
+  }
+
   /** Persist a human message to the agent's conversation history */
   persistHumanMessage(agentId: string, text: string): void {
     this.flushAgentMessage(agentId); // flush any buffered agent text first

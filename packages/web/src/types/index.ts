@@ -229,6 +229,19 @@ export interface LeadProgress {
 
 // ── Cost Tracking ─────────────────────────────────────────────────
 
+export interface TimerInfo {
+  id: string;
+  agentId: string;
+  label: string;
+  message: string;
+  fireAt: number;
+  createdAt: string;
+  fired: boolean;
+  repeat: boolean;
+  intervalSeconds: number;
+  remainingMs: number;
+}
+
 export interface AgentCostSummary {
   agentId: string;
   totalInputTokens: number;

@@ -19,7 +19,9 @@ export const DEFAULT_PANELS: PanelConfig[] = [
   { id: 'activity',   label: 'Activity Feed',    visible: true,  order: 4 },
   { id: 'dag',        label: 'DAG Minimap',      visible: true,  order: 5 },
   { id: 'heatmap',    label: 'Comm Heatmap',     visible: false, order: 6 },
-  { id: 'scorecards', label: 'Performance',      visible: false, order: 7 },
+  { id: 'costs',      label: 'Cost Breakdown',   visible: false, order: 7 },
+  { id: 'timers',     label: 'Agent Timers',     visible: false, order: 8 },
+  { id: 'scorecards', label: 'Performance',      visible: false, order: 9 },
 ];
 
 const STORAGE_KEY = 'dashboard-layout';
