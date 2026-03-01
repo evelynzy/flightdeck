@@ -20,8 +20,8 @@ fonts:
 
 <br/>
 
-<div class="text-2xl text-gray-400">We gave one AI a to-do list.</div>
-<div class="text-2xl text-gray-400">It hired 12 specialists and managed them all.</div>
+<div class="text-xl text-gray-400">We gave one AI a to-do list.</div>
+<div class="text-xl text-gray-400">It hired 12 specialists and managed them all.</div>
 
 <br/>
 
@@ -30,7 +30,7 @@ fonts:
 </div>
 
 <style>
-h1 { font-size: 2.4em !important; line-height: 1.3 !important; }
+h1 { font-size: 2.0em !important; line-height: 1.3 !important; }
 </style>
 
 <!--
@@ -86,27 +86,27 @@ not hypothetical. That's what happened.
 <div class="space-y-4">
 
 <div class="flex items-start gap-3">
-<div class="text-2xl">📋</div>
+<div class="text-lg">📋</div>
 <div><strong class="text-blue-400">The Lead read the issue</strong> — 10 work items across 3 priority levels</div>
 </div>
 
 <div class="flex items-start gap-3">
-<div class="text-2xl">🧠</div>
+<div class="text-lg">🧠</div>
 <div><strong class="text-blue-400">It made a plan</strong> — broke the work into 19 tasks with dependencies</div>
 </div>
 
 <div class="flex items-start gap-3">
-<div class="text-2xl">👥</div>
+<div class="text-lg">👥</div>
 <div><strong class="text-blue-400">It hired a team</strong> — 7 developers, 1 architect, 2 code reviewers, 2 security reviewers, 1 secretary</div>
 </div>
 
 <div class="flex items-start gap-3">
-<div class="text-2xl">⚡</div>
+<div class="text-lg">⚡</div>
 <div><strong class="text-blue-400">They all started at once</strong> — each with their own terminal, their own files, their own job</div>
 </div>
 
 <div class="flex items-start gap-3">
-<div class="text-2xl">🔄</div>
+<div class="text-lg">🔄</div>
 <div><strong class="text-blue-400">They coordinated in real-time</strong> — messaging each other, reviewing each other's work, flagging problems</div>
 </div>
 
@@ -709,22 +709,22 @@ layout: center
 
 <div class="grid grid-cols-2 gap-6 mt-4 max-w-2xl mx-auto">
 <div class="text-right space-y-3">
-<div class="text-4xl font-bold text-blue-400">13</div>
-<div class="text-4xl font-bold text-green-400">10</div>
-<div class="text-4xl font-bold text-yellow-400">52</div>
-<div class="text-4xl font-bold text-purple-400">6,155</div>
-<div class="text-4xl font-bold text-red-400">3</div>
-<div class="text-4xl font-bold text-orange-400">1</div>
-<div class="text-4xl font-bold text-blue-300">1,752</div>
+<div class="text-3xl font-bold text-blue-400">13</div>
+<div class="text-3xl font-bold text-green-400">10</div>
+<div class="text-3xl font-bold text-yellow-400">52</div>
+<div class="text-3xl font-bold text-purple-400">6,155</div>
+<div class="text-3xl font-bold text-red-400">3</div>
+<div class="text-3xl font-bold text-orange-400">1</div>
+<div class="text-3xl font-bold text-blue-300">1,752</div>
 </div>
 <div class="text-left space-y-3">
-<div class="text-xl text-gray-300 leading-10">AI agents working in parallel</div>
-<div class="text-xl text-gray-300 leading-10">features shipped</div>
-<div class="text-xl text-gray-300 leading-10">files changed</div>
-<div class="text-xl text-gray-300 leading-10">lines of code</div>
-<div class="text-xl text-gray-300 leading-10">bugs caught in code review</div>
-<div class="text-xl text-gray-300 leading-10">security vulnerability fixed</div>
-<div class="text-xl text-gray-300 leading-10">tests passing</div>
+<div class="text-base text-gray-300 leading-10">AI agents working in parallel</div>
+<div class="text-base text-gray-300 leading-10">features shipped</div>
+<div class="text-base text-gray-300 leading-10">files changed</div>
+<div class="text-base text-gray-300 leading-10">lines of code</div>
+<div class="text-base text-gray-300 leading-10">bugs caught in code review</div>
+<div class="text-base text-gray-300 leading-10">security vulnerability fixed</div>
+<div class="text-base text-gray-300 leading-10">tests passing</div>
 </div>
 </div>
 
@@ -737,6 +737,31 @@ discovered and patched. All in 30 minutes. One human typed one sentence.
 [Pause.] And it didn't just write code — it caught bugs in its own
 infrastructure, improved its own processes, and debugged its own
 coordination system. That's the power of a team.
+-->
+
+---
+layout: center
+---
+
+<div class="text-center">
+
+<div class="text-lg text-gray-400 mt-4">Oh, and one more thing.</div>
+
+<br/>
+
+<div class="text-xl text-gray-300">This presentation was built by the agents you just heard about.</div>
+
+<div class="text-sm text-gray-500 mt-4">Written, reviewed, expanded, and rewritten — by the system we're describing.</div>
+<div class="text-sm text-gray-500">You've been looking at their work product for the last 30 minutes.</div>
+
+</div>
+
+<!--
+PAUSE. Let this land. Count to three in your head before speaking.
+The silence IS the presentation. Then say: "Every slide, every speaker
+note, every story — agents wrote it, a tech writer polished it, and a
+radical thinker challenged the framing. You've been watching their work
+product this entire time." This is the mic drop moment.
 -->
 
 ---
@@ -784,45 +809,48 @@ That's the whole model. If they get this slide, they get the system.
 
 ---
 
-# This isn't replacing you. It's upgrading you.
+# Every engineer gets a crew
 
-<div class="bg-gray-800 rounded-lg p-4 border border-blue-500 mb-3">
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500 mb-3">
 
-**You're still the decision maker.** You set the goal. You review the output. You choose what ships. The AI handles the 80% that's execution — the coding, testing, reviewing, coordinating. You handle the 20% that's judgment.
+**This becomes your personal engineering team.** You set the direction. You make the creative calls — architecture, design, priorities. Your AI crew handles the rest at machine speed.
 
 </div>
 
-<div class="grid grid-cols-2 gap-4">
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
 
 ### One Copilot agent
+<div class="text-sm">
 
-- Works on one thing at a time
-- Context window fills up on big tasks
+- One thing at a time
+- Context fills up on big tasks
 - No one checks its work
-- You manage everything manually
+- You manage everything
 
 </div>
-<div class="bg-gray-800 rounded-lg p-4 border border-green-500">
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
 
-### An AI Crew
+### Your AI Crew
+<div class="text-sm">
 
-- 13 agents working simultaneously
-- Each agent has fresh, focused context
+- 13 agents in parallel
+- Fresh, focused context per agent
 - Built-in code review on every change
 - The Lead manages the team for you
 
 </div>
 </div>
+</div>
 
 <!--
-Let me be clear about what this is. This doesn't replace developers — it
-gives developers superpowers. You're still the one setting direction,
-making judgment calls, deciding what ships. The AI handles execution — the
-80% that's writing code, running tests, checking for bugs. A single
-Copilot is a freelancer. An AI Crew is your personal engineering team.
-The difference is like going from typing your own letters to having an
-executive assistant who manages a department.
+This is what it means for YOU. Every engineer in this room gets a crew.
+You set the direction — architecture, product decisions, design choices.
+Your AI crew handles the execution: coding, testing, reviewing,
+coordinating. A single Copilot is a contractor. An AI Crew is your
+personal engineering team. You go from writing every line yourself to
+directing a team that handles the rest.
 -->
 
 ---
@@ -847,9 +875,6 @@ executive assistant who manages a department.
 📢 <strong>The lead adapted to problems</strong> — when commits went wrong, it didn't just fix the one case. It broadcast a new rule to ALL agents and assigned someone to harden the system.
 </div>
 
-<div class="bg-gray-800 rounded-lg p-3 border border-blue-500">
-🎤 <strong>Oh, and one more thing</strong> — the presentation you're watching right now? It was written, expanded, and rewritten by the agents we're describing. You're looking at their work product.
-</div>
 
 </div>
 
@@ -861,8 +886,8 @@ its own that the commit problem was systemic and needed a team-wide fix.
 Agents debated design choices through messages — and reached a resolution
 without human intervention. This is emergent behavior. Give specialized
 agents the ability to communicate and act independently, and team dynamics
-just... appear. That last bullet is the mic drop — this very presentation
-was written by the system you're hearing about. Let that land.
+just... appear. The next slide is the mic drop — let these behaviors
+sink in before advancing.
 -->
 
 ---
@@ -975,79 +1000,96 @@ layout: center
 <!--
 Shift energy again. Say: "We've shown you what works today. Now let me
 show you where this is going. These aren't science fiction — they're
-logical next steps. And honestly? Some of them keep us up at night."
+logical next steps. And honestly? They're closer than you think."
 This is the INSPIRATION part of the emotional arc. The audience should
 feel excited about the future, not anxious.
 -->
 
 ---
 
-# Future Vision
+# Where this goes next
 
 <div class="grid grid-cols-2 gap-3 mt-1">
 <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-3 border border-blue-500">
 
 ### 🧠 Institutional Memory
-Agents get **smarter across sessions**. "Last time we refactored api.ts, splitting by route worked best." Knowledge compounds.
+<div class="text-sm">
 
+Imagine an agent that's reviewed **500 PRs** in YOUR codebase. It knows your patterns, your conventions, your common mistakes. Every session, it gets smarter.
+
+</div>
 </div>
 <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-3 border border-yellow-500">
 
 ### ⚡ Smart Model Routing
-GPT-5 for architecture decisions. Haiku for formatting fixes. **10x cost reduction** — the system picks the right brain for each task.
+<div class="text-sm">
 
+Opus writes the architecture. Haiku writes the unit tests. **Your bill drops 80%.** The system picks the right brain for each task, automatically.
+
+</div>
 </div>
 <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-3 border border-purple-500">
 
 ### 🌙 Overnight Autonomy
-Push a backlog before bed. Wake up to PRs, test results, and a summary. Self-healing teams that **restart failed agents** and route around problems.
+<div class="text-sm">
 
+Describe Monday's sprint on Friday evening. **Monday morning: done.** Reviewed, tested, documented, waiting for your approval.
+
+</div>
 </div>
 <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-3 border border-green-500">
 
-### 🤝 Human-AI Mixed Teams
-AI handles 80% of implementation. Humans review, make judgment calls, and ship. **Your team becomes 10x larger overnight.**
+### 🤝 Your AI Engineering Crew
+<div class="text-sm">
 
+Your own AI engineering crew. You make the creative calls — architecture, design, priorities. **They handle the rest at machine speed.**
+
+</div>
 </div>
 </div>
 
 <!--
-Walk through each quadrant briefly. Institutional memory: imagine your AI
-team remembering what worked last time — like a senior engineer with years
-of project context. Smart model routing: why hire a surgeon to put on a
-bandaid? Use the expensive model for architecture, the fast model for
-formatting. Overnight autonomy: push your backlog before bed, wake up to
-PRs. Human-AI mixed teams: your 5-person team operates like 50. Don't
-linger on any one — let the audience imagine the implications.
+Every one of these is a world you can picture yourself in. Institutional
+memory: an agent that's reviewed 500 PRs in YOUR codebase — it knows your
+patterns better than a new hire ever could. Smart model routing: Opus
+handles architecture, Haiku handles boilerplate — your bill drops 80%.
+Overnight autonomy: describe the sprint Friday evening, wake up Monday to
+reviewed, tested, documented code. Your own AI crew: you make the creative
+calls, they execute at machine speed. Don't linger — let the audience
+picture themselves in each scenario.
 -->
 
 ---
 
-# Future Vision
+# Where this goes next
 
 <div class="grid grid-cols-3 gap-3 mt-2">
-<div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-4 border border-cyan-500">
+<div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-3 border border-cyan-500">
 
 ### 🔮 Predictive Planning
+<div class="text-sm">
 
-*"This feature will take 3 agents, ~45 minutes, and cost $2.40"*
-
-Accurate estimates **before writing a single line of code.**
+Before writing a single line: *"3 agents, 45 minutes, $2.40."* Planning sprints with **machine-precision estimates.**
 
 </div>
-<div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-4 border border-orange-500">
+</div>
+<div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-3 border border-orange-500">
 
 ### 🧬 Emergent Specialization
+<div class="text-sm">
 
-Agents that worked well together get **paired again**. Teams evolve their own working relationships — like a real company.
+After 20 sessions, the system knows: reviewer X catches **3x more bugs** when paired with developer Y. It pairs them automatically.
 
 </div>
-<div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-4 border border-pink-500">
+</div>
+<div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-3 border border-pink-500">
 
 ### 🌐 Cross-Project Intelligence
+<div class="text-sm">
 
-Knowledge flows between projects. A pattern discovered in Project A **automatically improves** Project B. Organizational learning at machine speed.
+A caching pattern discovered in your payments service **automatically improves** your notifications service. Organizational learning at machine speed.
 
+</div>
 </div>
 </div>
 
@@ -1055,21 +1097,19 @@ Knowledge flows between projects. A pattern discovered in Project A **automatica
 
 <div class="text-center">
 
-<div class="text-2xl text-gray-300">The question isn't whether AI teams will build software.</div>
-<div class="text-2xl text-blue-400 font-bold mt-1">It's whether you'll be the one directing them.</div>
+<div class="text-xl text-gray-300">The question isn't whether AI crews will build software.</div>
+<div class="text-xl text-blue-400 font-bold mt-1">It's whether you'll be the one directing them.</div>
 
 </div>
 
 <!--
-These three are the bigger leaps. Predictive planning: "before you write
-a line of code, the system tells you it'll take 3 agents, 45 minutes,
-and $2.40." That changes how you plan sprints. Emergent specialization
-is fascinating — agents that collaborate well get paired again, like a
-sports team building chemistry. Cross-project intelligence is the real
-game-changer: a pattern discovered in one project automatically improves
-every other project. That's organizational learning at machine speed.
-End with the closing line — let it land. It's meant to make them think
-about their own role in this future.
+These scenarios are closer than you think. Predictive planning: before a
+single line of code, "3 agents, 45 minutes, $2.40." That changes how you
+plan sprints. Emergent specialization: after 20 sessions, the system knows
+which reviewer pairs best with which developer — 3x more bugs caught. It
+optimizes its own team composition. Cross-project intelligence: a caching
+pattern from payments automatically improves notifications. Organizational
+learning at machine speed. End with the closing line — let it land.
 -->
 
 ---
@@ -1118,13 +1158,16 @@ layout: center
 
 <div class="text-center">
 
-# <span class="text-blue-400">The goal isn't to replace developers.</span>
+# <span class="text-blue-400">Every engineer gets a crew.</span>
 
 <br/>
 
-<div class="text-2xl text-gray-300">It's to give every developer a team of AI specialists</div>
-<div class="text-2xl text-gray-300">that work in parallel, review each other's code,</div>
-<div class="text-2xl text-gray-300">and coordinate automatically.</div>
+<div class="text-xl text-gray-300">AI specialists that work in parallel, review each other's code,</div>
+<div class="text-xl text-gray-300">and coordinate automatically — directed by you.</div>
+
+<br/>
+
+<div class="text-base text-gray-500">This will be available to you. It becomes your personal engineering team.</div>
 
 <br/>
 
@@ -1137,16 +1180,12 @@ layout: center
 </div>
 
 <!--
-Let the closing statement breathe. Read it slowly. Then say: "That's the
-story. Not a system that replaces you — a system that multiplies you.
-Specialists that work in parallel, catch each other's bugs, and manage
-themselves. You set the direction, they handle the execution." Pause.
-"I'm happy to take questions about anything — the architecture, the
-coordination challenges, cost, how to set this up for your own team, or
-anything you're curious about." Expect questions about: cost, reliability,
-how to handle mistakes, whether this works for non-coding tasks, and
-whether this threatens developer jobs. For that last one: "This makes
-developers more valuable, not less. You're the one directing the team."
+Let this breathe. Read it slowly. "Every engineer gets a crew. AI
+specialists that work in parallel, catch each other's bugs, and manage
+themselves — directed by you." Pause. "This will be available to you.
+It becomes your personal engineering team." Then: "I'm happy to take
+questions — architecture, coordination, cost, how to set this up,
+anything you're curious about."
 -->
 
 ---
