@@ -547,17 +547,63 @@ system enabling autonomous coordination.
 -->
 
 ---
+
 layout: center
 ---
 
 <div class="text-center text-xl text-gray-400">
 
-That's how agents talk to the system.
+That commit system was born from **pain**.
 
-Now let's see how the lead **keeps it all running**.
+Here's the incident that created it.
+
+</div>
+---
+
+# Story 2: The Commit Catastrophe
+
+<div class="bg-gray-800 rounded-lg p-4 border border-yellow-500 mt-2">
+
+All 7 developers are editing files in the same codebase, at the same time.
+
+Developer A finishes and commits. But the commit includes Developer B's half-finished changes.
+
+<div class="bg-gray-900 rounded p-3 mt-2 text-sm">
+
+🔀 <span class="text-yellow-400">"5 files were never committed. 1 commit included another agent's code. The git history is a mess."</span>
 
 </div>
 
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
+
+### How the system responded
+
+1. **Code reviewer** caught the missing files immediately
+2. **Lead** broadcast a warning to all agents: *"Never use git add -A"*
+3. **Architect** audited the commit system and found 4 gaps
+4. **Developer** hardened the commit command — now only stages files you've locked
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-2 border border-green-500 mt-2">
+
+🔒 **The fix: file locking.** Multiple developers, 15+ files, zero conflicts. Each agent claims files before editing — no merge conflicts, no overwrites.
+
+</div>
+
+<!--
+This is the messy reality of multiple agents sharing one repo. Developer A
+commits and accidentally grabs Developer B's uncommitted changes. The code
+reviewer caught it. The lead broadcast a warning. The architect audited
+the system. They built file locking — each developer claims files like
+checking out a library book. Multiple developers, 15+ files, zero conflicts.
+-->
+
+
+---
+layout: center
 ---
 
 # Parallel workstreams, one lead
@@ -653,6 +699,60 @@ but they can't control siblings — only the lead has authority. This
 prevents cascading chaos. The lead can also INTERRUPT an agent to
 redirect their work immediately.
 -->
+
+---
+
+layout: center
+---
+
+<div class="text-center text-xl text-gray-400">
+
+That organizational structure sounds nice in theory.
+
+Here's what it looks like when a **real vulnerability** hits.
+
+</div>
+---
+
+# Story 1: The Security Bug
+
+<div class="bg-gray-800 rounded-lg p-4 border border-red-500 mt-2">
+
+A developer built a feature called COMPLETE_TASK — it lets agents mark their work as done.
+
+The security reviewer read every line and found this:
+
+<div class="bg-gray-900 rounded p-3 mt-2 text-sm">
+
+⚠️ <span class="text-red-400">"Any agent can complete any other agent's task. Agent A could mark Agent B's task as done without doing the work."</span>
+
+</div>
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
+
+### What happened next
+
+1. Security reviewer sent a detailed report to the developer
+2. Developer added authentication — agents can only complete *their own* tasks
+3. Added input length limits to prevent abuse
+4. Reviewer verified the fix
+
+<span class="text-green-400">Time from discovery to fix: ~4 minutes</span>
+
+</div>
+
+<!--
+The developer built COMPLETE_TASK — a command that lets agents mark their
+work as done. Seems straightforward. But the security reviewer — whose
+only job is finding vulnerabilities — read every line and realized: there's
+no authentication. Any agent could complete any other agent's task. In a
+multi-agent system, that's like giving every employee the ability to sign
+off on anyone else's work. The developer fixed it in minutes. This is why
+you want specialists — a generalist might have missed this.
+-->
+
 
 ---
 
@@ -941,90 +1041,16 @@ and progress at a glance.
 
 ---
 
-# Story 1: The Security Bug
-
-<div class="bg-gray-800 rounded-lg p-4 border border-red-500 mt-2">
-
-A developer built a feature called COMPLETE_TASK — it lets agents mark their work as done.
-
-The security reviewer read every line and found this:
-
-<div class="bg-gray-900 rounded p-3 mt-2 text-sm">
-
-⚠️ <span class="text-red-400">"Any agent can complete any other agent's task. Agent A could mark Agent B's task as done without doing the work."</span>
-
-</div>
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-
-### What happened next
-
-1. Security reviewer sent a detailed report to the developer
-2. Developer added authentication — agents can only complete *their own* tasks
-3. Added input length limits to prevent abuse
-4. Reviewer verified the fix
-
-<span class="text-green-400">Time from discovery to fix: ~4 minutes</span>
-
-</div>
-
-<!--
-The developer built COMPLETE_TASK — a command that lets agents mark their
-work as done. Seems straightforward. But the security reviewer — whose
-only job is finding vulnerabilities — read every line and realized: there's
-no authentication. Any agent could complete any other agent's task. In a
-multi-agent system, that's like giving every employee the ability to sign
-off on anyone else's work. The developer fixed it in minutes. This is why
-you want specialists — a generalist might have missed this.
--->
-
-
+layout: center
 ---
 
-# Story 2: The Commit Catastrophe
+<div class="text-center text-xl text-gray-400">
 
-<div class="bg-gray-800 rounded-lg p-4 border border-yellow-500 mt-2">
+That's the infrastructure. Now watch it handle a **real problem** —
 
-All 7 developers are editing files in the same codebase, at the same time.
-
-Developer A finishes and commits. But the commit includes Developer B's half-finished changes.
-
-<div class="bg-gray-900 rounded p-3 mt-2 text-sm">
-
-🔀 <span class="text-yellow-400">"5 files were never committed. 1 commit included another agent's code. The git history is a mess."</span>
+a task that flowed through the DAG from delegation to review to fix.
 
 </div>
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-
-### How the system responded
-
-1. **Code reviewer** caught the missing files immediately
-2. **Lead** broadcast a warning to all agents: *"Never use git add -A"*
-3. **Architect** audited the commit system and found 4 gaps
-4. **Developer** hardened the commit command — now only stages files you've locked
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-2 border border-green-500 mt-2">
-
-🔒 **The fix: file locking.** Multiple developers, 15+ files, zero conflicts. Each agent claims files before editing — no merge conflicts, no overwrites.
-
-</div>
-
-<!--
-This is the messy reality of multiple agents sharing one repo. Developer A
-commits and accidentally grabs Developer B's uncommitted changes. The code
-reviewer caught it. The lead broadcast a warning. The architect audited
-the system. They built file locking — each developer claims files like
-checking out a library book. Multiple developers, 15+ files, zero conflicts.
--->
-
-
 ---
 
 # The Review Chain: From Code to Bulletproof
@@ -1168,6 +1194,97 @@ system doesn't just build software — it builds a better version of itself.
 -->
 
 
+---
+
+# Bottlenecks we've hit (and how we're solving them)
+
+<div class="grid grid-cols-2 gap-3 mt-2 text-sm">
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
+
+### ✅ Context window limits
+Each agent has finite context. Long tasks degrade quality.
+
+**Solved:** Content-hashed status updates (40-60% token savings), session checkpointing, smart context pruning.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
+
+### ✅ Git conflicts with parallel work
+Multiple agents editing the same codebase causes merge conflicts.
+
+**Solved:** File locking (pessimistic locks), scoped commits (only stage locked files). Zero conflicts this session.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
+
+### ✅ Stuck or hallucinating agents
+Agents can get stuck in loops or produce incorrect work.
+
+**Solved:** Heartbeat monitoring, mandatory code reviews, INTERRUPT command to redirect agents mid-task.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
+
+### ⚠️ Agent context loss on termination
+When you terminate an agent, their accumulated context is gone.
+
+**Partial:** Session resume implemented — agents can checkpoint and resume. Full persistent memory is future work.
+
+</div>
+</div>
+
+<!--
+Be honest about challenges. Context limits are solved by content hashing
+and checkpointing. Git conflicts solved by file locking. Stuck agents
+solved by reviews and interrupt. Context loss is partially solved —
+session resume works but isn't seamless yet.
+-->
+---
+
+# Open challenges
+
+<div class="grid grid-cols-2 gap-3 mt-2 text-sm">
+<div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
+
+### ⚠️ Sequential lead bottleneck
+The lead processes one message at a time. If multiple agents report simultaneously, there's a queue.
+
+**Proposal:** Hierarchical leads — sub-leads for independent workstreams. Or parallel message processing.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
+
+### ⚠️ Model cost vs quality tradeoff
+Opus for architecture, Sonnet for code, Haiku for simple tasks. Choosing the right model matters.
+
+**Proposal:** Smart model routing based on task complexity. Auto-detect when a task needs a more capable model.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
+
+### ⚠️ Coordination overhead
+More agents = more communication = more tokens on coordination vs actual work.
+
+**Partial:** DAG-based auto-scheduling reduces manual coordination. Chat groups reduce broadcast noise. But the ratio isn't optimized yet.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+
+### 💡 The meta-lesson
+Multi-agent systems have the **same problems** as human teams — communication overhead, context loss, coordination bottlenecks. The solutions are similar too: structure, tooling, and clear ownership.
+
+</div>
+</div>
+
+<!--
+The open challenges are real. The lead is a sequential bottleneck — it
+can only process one message at a time. Model routing is manual today.
+Coordination overhead grows with team size. But the meta-lesson is
+important: these are the SAME problems human engineering teams face.
+The solutions look similar too — better structure, better tooling,
+clear ownership. This isn't a unique AI problem, it's an organizational
+design problem.
+-->
 ---
 layout: center
 ---
