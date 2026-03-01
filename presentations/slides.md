@@ -1,9 +1,8 @@
 ---
 theme: default
-title: "AI Crew — Multi-Agent Copilot CLI Orchestrator"
+title: "AI Crew — What Happens When 13 AI Agents Work Together"
 info: |
-  A presentation introducing AI Crew to the team.
-  Parallel AI agents that collaborate like a real engineering team.
+  A story about giving one AI a task and watching it hire a team.
 highlighter: shiki
 drawings:
   persist: false
@@ -15,148 +14,807 @@ fonts:
   mono: Fira Code
 ---
 
-# 🤖 AI Crew
+<div class="text-center">
 
-## Multi-Agent Copilot CLI Orchestrator
+# <span class="text-blue-400">13 AI agents.</span> <span class="text-green-400">10 features.</span> <span class="text-yellow-400">30 minutes.</span>
 
 <br/>
 
-Parallel AI agents that collaborate like a real engineering team
+<div class="text-2xl text-gray-400">We gave one AI a to-do list.</div>
+<div class="text-2xl text-gray-400">It hired 12 specialists and managed them all.</div>
+
+<br/>
+
+<div class="text-lg text-gray-500">This is the story of that session.</div>
+
+</div>
 
 <style>
-h1 { color: #58a6ff; font-size: 3em !important; }
-h2 { color: #8b949e !important; font-size: 1.4em !important; }
+h1 { font-size: 2.4em !important; line-height: 1.3 !important; }
 </style>
 
 <!--
-Welcome everyone. Today I'll introduce AI Crew — a system that orchestrates
-multiple Copilot CLI agents working in parallel, each with a specialized role.
-Think of it as having an entire engineering team of AI agents that communicate,
-coordinate, and build software together. Let's dive in.
+Don't start with slides. Start with this: "Yesterday, I gave an AI a to-do list
+with 10 items. Within two minutes, it had hired 12 other AIs — developers,
+reviewers, an architect, a secretary — and started coordinating all of them.
+30 minutes later, 10 features were shipped, 3 bugs were caught in code review,
+and one agent found a security vulnerability in another agent's code. I want
+to tell you the story of what happened."
+-->
+
+---
+layout: center
+---
+
+<div class="text-center">
+
+# What if you could do this?
+
+<br/>
+
+<div class="bg-gray-800 rounded-lg p-6 border border-gray-700 text-left max-w-lg mx-auto">
+
+<span class="text-gray-500">You:</span> <span class="text-green-400">"Here are 10 things from our retrospective. Fix them all."</span>
+
+<br/><br/>
+
+<span class="text-gray-500">30 minutes later:</span>
+
+- ✅ 10 features implemented
+- ✅ Every feature code-reviewed
+- ✅ Security vulnerability caught and fixed
+- ✅ 1,752 tests passing
+- ✅ Documentation updated
+
+</div>
+
+</div>
+
+<!--
+Imagine this scenario. You paste a GitHub issue into a chat — a retro with
+10 things to fix. You type one sentence: "Fix these." Half an hour later,
+everything is done. Not just coded — reviewed, tested, documented. That's
+not hypothetical. That's what happened.
 -->
 
 ---
 
-# The Problem
+# Here's what actually happened
 
-<div class="grid grid-cols-1 gap-4">
+<br/>
+
+<div class="space-y-4">
+
+<div class="flex items-start gap-3">
+<div class="text-2xl">📋</div>
+<div><strong class="text-blue-400">The Lead read the issue</strong> — 10 work items across 3 priority levels</div>
+</div>
+
+<div class="flex items-start gap-3">
+<div class="text-2xl">🧠</div>
+<div><strong class="text-blue-400">It made a plan</strong> — broke the work into 19 tasks with dependencies</div>
+</div>
+
+<div class="flex items-start gap-3">
+<div class="text-2xl">👥</div>
+<div><strong class="text-blue-400">It hired a team</strong> — 7 developers, 1 architect, 2 code reviewers, 2 security reviewers, 1 secretary</div>
+</div>
+
+<div class="flex items-start gap-3">
+<div class="text-2xl">⚡</div>
+<div><strong class="text-blue-400">They all started at once</strong> — each with their own terminal, their own files, their own job</div>
+</div>
+
+<div class="flex items-start gap-3">
+<div class="text-2xl">🔄</div>
+<div><strong class="text-blue-400">They coordinated in real-time</strong> — messaging each other, reviewing each other's work, flagging problems</div>
+</div>
+
+</div>
+
+<!--
+Here's the sequence. The lead AI read the GitHub issue. Analyzed 10 items.
+Built a dependency graph — which tasks block which. Then it started spawning
+specialists. Not random agents — specific roles chosen for specific tasks.
+A developer for each feature. Reviewers who'd check the work. A secretary
+to track progress. Within 2 minutes, 13 agents were running simultaneously.
+Each one has its own terminal session with full access to the codebase.
+-->
+
+---
+
+# Meet the crew
+
+<div class="grid grid-cols-3 gap-3 mt-2">
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500">
+
+### 🎯 The Lead
+Reads your goal, makes the plan, hires the team, manages everything
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
+
+### 👷 The Developers
+Write the actual code. Each one owns specific files. They write their own tests — quality is their job.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
+
+### 🔍 The Reviewers
+Read every line of code the developers write. Only flag real bugs — no style nits.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-red-500">
+
+### 🛡️ The Security Reviewer
+Looks for vulnerabilities, edge cases, and failure modes. Found a real one this session.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-purple-500">
+
+### 🏗️ The Architect
+Designs the system structure. Plans how to split large files so agents don't block each other.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-500">
+
+### 📝 The Secretary
+Tracks every task. Flagged when the progress dashboard said 86% but reality was 40%.
+
+</div>
+</div>
+
+<p class="text-sm text-gray-500 mt-2">Each agent is a real Copilot CLI session — same as what you use every day. Full terminal, file editing, search, everything.</p>
+
+<!--
+These aren't toy agents with limited capabilities. Each one is a full
+Copilot CLI session — the same tool you use. Terminal access, file editing,
+web search, everything. The Lead is like a tech lead — it doesn't code,
+it manages. Developers do the work. Reviewers check it. The secretary
+caught a major bug this session — we'll get to that. The key insight:
+specialization makes each agent better at its job.
+-->
+
+---
+layout: center
+---
+
+<div class="text-center">
+
+# Now let's watch them work
+
+<div class="text-xl text-gray-400 mt-4">Five stories from a single 30-minute session</div>
+
+</div>
+
+<!--
+I want to show you five specific moments from this session. Not
+architecture diagrams — actual things that happened. Behaviors that
+surprised us. Things that went wrong and how the agents handled them.
+-->
+
+---
+
+# Story 1: The Security Bug
+
+<div class="bg-gray-800 rounded-lg p-4 border border-red-500 mt-2">
+
+A developer built a feature called COMPLETE_TASK — it lets agents mark their work as done.
+
+The security reviewer read every line and found this:
+
+<div class="bg-gray-900 rounded p-3 mt-2 text-sm">
+
+⚠️ <span class="text-red-400">"Any agent can complete any other agent's task. Agent A could mark Agent B's task as done without doing the work."</span>
+
+</div>
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
+
+### What happened next
+
+1. Security reviewer sent a detailed report to the developer
+2. Developer added authentication — agents can only complete *their own* tasks
+3. Added input length limits to prevent abuse
+4. Reviewer verified the fix
+
+<span class="text-green-400">Time from discovery to fix: ~4 minutes</span>
+
+</div>
+
+<!--
+The developer built COMPLETE_TASK — a command that lets agents mark their
+work as done. Seems straightforward. But the security reviewer — whose
+only job is finding vulnerabilities — read every line and realized: there's
+no authentication. Any agent could complete any other agent's task. In a
+multi-agent system, that's like giving every employee the ability to sign
+off on anyone else's work. The developer fixed it in minutes. This is why
+you want specialists — a generalist might have missed this.
+-->
+
+---
+
+# Story 2: The Mystery of 86%
+
+<div class="bg-gray-800 rounded-lg p-4 border border-yellow-500 mt-2">
+
+The secretary was tracking progress. Something didn't add up.
+
+<div class="bg-gray-900 rounded p-3 mt-2 text-sm">
+
+📊 <span class="text-yellow-400">"The dashboard shows 86% of tasks complete. But I count only 4 of 10 features actually working. Something is wrong with the task tracking."</span>
+
+</div>
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
+
+### The detective work
+
+- Secretary flagged the anomaly to the Lead
+- Architect investigated the matching system
+- Found the bug: when 7 tasks all have the role "developer," the system guessed which one was done — and guessed wrong **7 times**
+- Fix: when uncertain, **say "I don't know"** instead of guessing
+
+</div>
+
+<p class="text-sm text-gray-500 mt-2">The agents debugged their own coordination system — while running on it.</p>
+
+<!--
+This is my favorite story. The secretary — whose job is just tracking
+progress — noticed the numbers didn't add up. 86% complete, but only
+4 features working? It flagged this to the lead. The architect
+investigated and found a subtle bug: when multiple tasks share the same
+role, the system was guessing which task was done — and guessing wrong.
+Seven false completions. The fix was simple but profound: when you're not
+sure, say "I don't know" instead of guessing. The agents literally
+debugged the system that was coordinating them. Meta-debugging.
+-->
+
+---
+
+# Story 3: The Commit Catastrophe
+
+<div class="bg-gray-800 rounded-lg p-4 border border-yellow-500 mt-2">
+
+All 7 developers are editing files in the same codebase, at the same time.
+
+Developer A finishes and commits. But the commit includes Developer B's half-finished changes.
+
+<div class="bg-gray-900 rounded p-3 mt-2 text-sm">
+
+🔀 <span class="text-yellow-400">"5 files were never committed. 1 commit included another agent's code. The git history is a mess."</span>
+
+</div>
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
+
+### How the system responded
+
+1. **Code reviewer** caught the missing files immediately
+2. **Lead** broadcast a warning to all 13 agents: *"Never use git add -A"*
+3. **Architect** audited the commit system and found 4 gaps
+4. **Developer** hardened the commit command — it now only stages files you've explicitly claimed
+
+</div>
+
+<!--
+This is the messy reality of multiple agents sharing one repo. Developer A
+commits and accidentally grabs Developer B's uncommitted changes. Five
+files from another feature never get committed because the agent only locked
+one of six files. The code reviewer caught it immediately. The lead
+broadcast a process warning to all 13 agents simultaneously. The architect
+audited the whole commit system and found gaps. By the end of the session,
+they'd built a hardened commit system. This is what I mean by agents
+behaving like a real team — they don't just code, they improve their own
+processes.
+-->
+
+---
+
+# Story 4: The File Contention Problem
+
+<div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mt-2">
+
+Three agents all needed the same file: <code>api.ts</code> — **1,945 lines**.
+
+<div class="mt-3 space-y-1">
+<div class="flex items-center gap-2">
+<span class="w-4 h-4 rounded bg-red-500 inline-block"></span>
+<span>Developer A needs to add an SSE endpoint</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-4 h-4 rounded bg-red-500 inline-block"></span>
+<span>Developer B needs to add a new API route</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-4 h-4 rounded bg-red-500 inline-block"></span>
+<span>Developer C needs to fix the WebSocket handler</span>
+</div>
+</div>
+
+Only one can lock the file at a time. Two developers are **blocked**.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500 mt-3">
+
+### The architect's solution
+Split `api.ts` into **12 focused modules**. Now agents lock only the routes they need. Zero contention.
+
+<span class="text-sm text-gray-500">Same pattern: 767-line Agent.ts → 3 modules. 662-line AgentCommands.ts → 2 modules.</span>
+
+</div>
+
+<!--
+Here's a problem nobody predicted. Three agents need the same file.
+But only one can lock it at a time. Two are stuck waiting. The architect
+realized this was a systemic problem — monolithic files create bottlenecks
+for parallel work. So the architect designed a decomposition plan, and
+developers split the biggest files into focused modules. api.ts went from
+one 1,945-line file to twelve small route modules. Now agents only lock what
+they need. The system evolved its own codebase to be more parallelizable.
+That's emergent behavior from a multi-agent system.
+-->
+
+---
+
+# Story 5: The Lead Managing 12 Workers
+
+<div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mt-2">
+
+<div class="text-sm space-y-2">
+
+<div class="flex items-start gap-2">
+<span class="text-blue-400 font-mono text-xs w-14 shrink-0">17:16:16</span>
+<span>Lead delegates presentation review to Code Reviewer</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="text-blue-400 font-mono text-xs w-14 shrink-0">17:18:06</span>
+<span>Code Reviewer reports findings → Lead processes</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="text-blue-400 font-mono text-xs w-14 shrink-0">17:18:53</span>
+<span>Developer reports UI bug fix → Lead assigns follow-up review</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="text-blue-400 font-mono text-xs w-14 shrink-0">17:21:57</span>
+<span><span class="text-yellow-400">Lead broadcasts process warning to ALL 13 agents</span></span>
+</div>
+<div class="flex items-start gap-2">
+<span class="text-blue-400 font-mono text-xs w-14 shrink-0">17:22:46</span>
+<span>Developer asks about DAG bug → Lead redirects to Architect</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="text-blue-400 font-mono text-xs w-14 shrink-0">17:23:14</span>
+<span>Lead delegates commit audit to Architect + safety tests to Developer</span>
+</div>
+
+</div>
+
+</div>
+
+<p class="text-sm text-gray-500 mt-2">In a 7-minute window: 6 decisions, 4 delegations, 1 broadcast, 1 redirect. This is what orchestration looks like.</p>
+
+<!--
+Let me zoom into a 7-minute window of the lead's activity. It's receiving
+completion reports, delegating follow-up work, broadcasting warnings,
+redirecting questions to the right expert. It delegated two tasks
+simultaneously — a commit system audit to the architect and safety tests
+to a developer. It noticed uncommitted files and assigned cleanup. This is
+what managing a team looks like — and it's happening autonomously. The lead
+made 6 decisions in 7 minutes, keeping 12 other agents productive.
+-->
+
+---
+layout: center
+---
+
+# The final tally
+
+<div class="grid grid-cols-2 gap-6 mt-4 max-w-2xl mx-auto">
+<div class="text-right space-y-3">
+<div class="text-4xl font-bold text-blue-400">13</div>
+<div class="text-4xl font-bold text-green-400">10</div>
+<div class="text-4xl font-bold text-yellow-400">52</div>
+<div class="text-4xl font-bold text-purple-400">6,155</div>
+<div class="text-4xl font-bold text-red-400">3</div>
+<div class="text-4xl font-bold text-orange-400">1</div>
+<div class="text-4xl font-bold text-blue-300">1,752</div>
+</div>
+<div class="text-left space-y-3">
+<div class="text-xl text-gray-300 leading-10">AI agents working in parallel</div>
+<div class="text-xl text-gray-300 leading-10">features shipped</div>
+<div class="text-xl text-gray-300 leading-10">files changed</div>
+<div class="text-xl text-gray-300 leading-10">lines of code</div>
+<div class="text-xl text-gray-300 leading-10">bugs caught in code review</div>
+<div class="text-xl text-gray-300 leading-10">security vulnerability fixed</div>
+<div class="text-xl text-gray-300 leading-10">tests passing</div>
+</div>
+</div>
+
+<div class="text-center text-gray-500 mt-4">~30 minutes of wall clock time. One human. One command.</div>
+
+<!--
+Let this sink in. 13 agents. 10 features. 52 files changed. Over 6,000
+lines of code. Three bugs caught by code review. A security vulnerability
+discovered and patched. 1,752 tests passing. All in about 30 minutes.
+One human typed one sentence. The system did the rest. And it didn't just
+write code — it caught bugs in its own infrastructure, improved its own
+processes, and built a presentation about itself.
+-->
+
+---
+
+# "OK, but how does it actually work?"
+
+<div class="mt-2">
+
+Think of it like a company:
+
+</div>
+
+<br/>
+
+```mermaid
+graph LR
+    You["👤 You<br/>(the CEO)"] --> Lead["🎯 Lead<br/>(tech lead)"]
+    Lead --> Plan["📋 Work Plan<br/>(task graph)"]
+    Plan --> D1["👷 Dev 1"] & D2["👷 Dev 2"] & D3["👷 Dev 3"]
+    Plan --> Rev["🔍 Reviewer"]
+    Plan --> Sec["📝 Secretary"]
+    D1 & D2 & D3 --> Rev
+    Rev --> Lead
+```
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3 text-sm">
+
+- **You** describe the goal — that's it
+- **The Lead** plans the work and hires specialists
+- **Developers** code in parallel, each with their own files
+- **Reviewers** check everything before it ships
+- Everyone communicates through structured messages — no chaos
+
+</div>
+
+<!--
+If someone asks "how does it work" — here's the simplest explanation.
+You're the CEO. You give a goal to a tech lead. The tech lead builds a
+plan — which tasks need to happen, in what order, and who should do each one.
+Then it hires specialists. Developers work in parallel, each with their own
+files — like desks in an office. Reviewers check the work. A secretary tracks
+progress. They communicate through structured channels. You can watch
+everything happen in real time through a dashboard. That's it. That's the
+whole model.
+-->
+
+---
+
+# What makes this different from just "using Copilot"?
+
+<div class="grid grid-cols-2 gap-4 mt-2">
 <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
 
-### ⏳ Single-agent AI coding is **sequential**
+### One Copilot agent
 
-- → One agent does everything: design → code → test → review
-- → Context window fills up fast on large tasks
-- → No checks and balances — one perspective
-- → Long tasks block progress on other fronts
-- → No specialization — jack of all trades, master of none
+- Works on one thing at a time
+- Context window fills up on big tasks
+- No one checks its work
+- You manage everything manually
+- One perspective on every problem
+
+</div>
+<div class="bg-gray-800 rounded-lg p-4 border border-green-500">
+
+### An AI Crew
+
+- 13 agents working simultaneously
+- Each agent has fresh, focused context
+- Built-in code review on every change
+- The Lead manages the team for you
+- Specialist perspectives catch more bugs
 
 </div>
 </div>
 
 <br/>
 
-<p class="text-sm text-gray-500">Real engineering teams don't work this way. Why should AI?</p>
+<div class="text-center text-gray-400">
+
+It's the difference between a freelancer and a team.
+
+</div>
 
 <!--
-The core problem is that current AI coding assistants work sequentially.
-One agent has to do everything — and its context window is a hard ceiling.
-Real engineering teams parallelize work: an architect designs while developers
-code, reviewers check work, and a project lead coordinates. AI Crew brings
-that same structure to AI-assisted development.
+If you're thinking "I already use Copilot" — yes, and this uses the same
+Copilot. Each agent IS a Copilot CLI session. The difference is between
+one freelancer doing everything sequentially, versus a team where specialists
+work in parallel. The freelancer's context window fills up. The team has
+fresh context per agent. Nobody reviews the freelancer's work. The team has
+built-in code review. You manage the freelancer. The team manages itself.
 -->
 
 ---
 
-# The Solution: AI Crew
+# The behaviors that surprised us
 
-<div class="grid grid-cols-3 gap-4 mt-4">
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+<div class="space-y-3 mt-2">
 
-### <span class="text-green-400">Parallel Agents</span>
-
-Multiple Copilot CLI agents running simultaneously, each focused on what they do best
-
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+🤯 <strong>Agents debated design decisions</strong> — the architect and developer disagreed on how to split a file. They worked it out via messages.
 </div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
 
-### <span class="text-green-400">Specialized Roles</span>
-
-13 purpose-built roles: lead, architect, developer, reviewer, tester, designer, and more
-
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+🔍 <strong>The secretary became a QA system</strong> — it wasn't told to find bugs, but it noticed the progress numbers were wrong and flagged it.
 </div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
 
-### <span class="text-green-400">Structured Coordination</span>
-
-Task DAGs, file locking, messaging, and real-time monitoring keep the team in sync
-
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+🔄 <strong>The system improved itself</strong> — agents identified bottlenecks in their own coordination layer and fixed them, during the session.
 </div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+📢 <strong>The lead adapted to problems</strong> — when commits went wrong, it didn't just fix the one case. It broadcast a new rule to ALL agents and assigned someone to harden the system.
+</div>
+
 </div>
 
 <!--
-AI Crew solves this with three key ideas. First, parallel agents — up to 20
-Copilot CLI sessions running at once. Second, specialized roles — each agent
-has a distinct system prompt optimized for its job. Third, structured
-coordination — a task DAG ensures work happens in the right order, file locks
-prevent conflicts, and messaging keeps everyone informed.
+These behaviors weren't programmed. The secretary wasn't told to find bugs
+— its job is tracking progress. But it noticed the numbers didn't add up
+and spoke up. The lead wasn't told to broadcast process changes — it
+decided that the commit problem was systemic and needed a team-wide fix.
+Agents debated design choices through messages. This is emergent behavior
+from giving specialized agents the ability to communicate and act
+independently.
 -->
 
 ---
 
-# How It Works
+# What it looks like while it's running
 
-```mermaid
-graph LR
-    You[👤 You] --> Lead[🎯 Project Lead]
-    Lead --> DAG[📋 Task DAG]
-    DAG --> Dev1[👷 Developer 1]
-    DAG --> Dev2[👷 Developer 2]
-    DAG --> Arch[🏗️ Architect]
-    DAG --> Rev[🔍 Reviewer]
-    DAG --> Sec[📝 Secretary]
+<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+
+### Mission Control — real-time dashboard
+
+<div class="grid grid-cols-4 gap-2 mt-3 text-center text-xs">
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Health</div>
+<div class="text-gray-500">Completion %, active agents</div>
+</div>
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Agent Fleet</div>
+<div class="text-gray-500">Who's doing what, live</div>
+</div>
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Activity Feed</div>
+<div class="text-gray-500">Every action, streamed</div>
+</div>
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Task Graph</div>
+<div class="text-gray-500">Dependencies, progress</div>
+</div>
+</div>
+
+<div class="grid grid-cols-4 gap-2 mt-2 text-center text-xs">
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Timeline</div>
+<div class="text-gray-500">Swim lanes per agent</div>
+</div>
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Comm Heatmap</div>
+<div class="text-gray-500">Who's talking to whom</div>
+</div>
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Token Costs</div>
+<div class="text-gray-500">Per-agent spending</div>
+</div>
+<div class="bg-gray-900 rounded p-2 border border-gray-600">
+<div class="text-blue-400 font-bold">Alerts</div>
+<div class="text-gray-500">Problems, warnings</div>
+</div>
+</div>
+
+</div>
+
+<p class="text-sm text-gray-500 mt-2">Everything updates in real time. You can message any agent, pause the whole system, or just watch.</p>
+
+<!--
+You're not flying blind. There's a full dashboard — mission control style.
+Eight panels showing: health metrics, who's doing what, a live activity
+feed, the task dependency graph, swim-lane timelines, a communication
+heatmap showing who's talking to whom, token costs per agent, and alerts
+for problems. Everything streams in real time. You can click on any agent
+and message them directly. Or hit pause and freeze the entire system to
+review state. You're always in control.
+-->
+
+---
+
+# Why this matters
+
+<div class="space-y-4 mt-2">
+
+<div class="bg-gray-800 rounded-lg p-4 border border-blue-500">
+
+### 🚀 For productivity
+10 tasks that would take a day of back-and-forth with a single agent? Done in 30 minutes with parallel specialists.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-4 border border-green-500">
+
+### 🛡️ For quality
+Every change gets reviewed. Security gets checked. Edge cases get tested. Not because you remembered to ask — because it's built into the workflow.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-4 border border-purple-500">
+
+### 🧠 For complex work
+Large refactors, multi-file changes, cross-cutting concerns — the things that are hardest for a single agent are where a team shines.
+
+</div>
+
+</div>
+
+<!--
+Why does this matter? Three reasons. Productivity — parallel work is
+genuinely faster. Quality — every change is reviewed, not because you
+remembered to ask, but because the system forces it. And complexity — the
+hardest tasks for a single agent are exactly where a team excels. A
+single agent struggles with a 50-file refactor. A team of 7 developers
+with an architect splitting it up? That's Tuesday.
+-->
+
+---
+
+# Where this is going
+
+<div class="space-y-3 mt-2">
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+
+### 🔜 Next
+Each agent gets its own git branch — no more file locking needed. Plus persistent memory across sessions — agents remember what they learned.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+
+### 🔮 Soon
+Agents that span multiple repos. Automatic CI/CD verification. Cost optimization — the system picks the right model for each task.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+
+### 🚀 Eventually
+Self-improving teams. Agents that learn from experience and teach each other. Multiple AI Crews coordinating across an organization.
+
+</div>
+
+</div>
+
+<!--
+Where is this going? Near term: git worktree isolation means each agent
+gets its own branch — no more file locking contention at all. Plus
+persistent memory — agents remember patterns from previous sessions. Soon:
+multi-repo support, CI integration, automatic cost optimization. Long term:
+self-improving teams where agents learn skills from experience, teach each
+other, and multiple crews coordinate across an org. We're building toward
+a world where you describe what you want and a team makes it happen.
+-->
+
+---
+
+# Let me show you
+
+<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+
+### Live Demo (~7 minutes)
+
+<div class="space-y-2 mt-2">
+
+1. **Start** — Give the lead a task: *"Add a /health endpoint with uptime and agent count"*
+2. **Watch the plan** — Lead creates a task graph and picks roles
+3. **Watch them work** — Multiple agents coding simultaneously, in real time
+4. **See the communication** — Agents messaging each other, reporting progress
+5. **See the review** — Code reviewer reads the developer's work
+6. **See the dashboard** — Timeline, heatmap, and task graph update live
+
+</div>
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
+
+```bash
+# To run it yourself:
+git clone https://github.com/justinchuby/ai-crew.git
+cd ai-crew && npm install && npm run dev
 ```
 
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mt-4">
+</div>
 
-1. You describe your goal to the Project Lead
-2. Lead creates a task DAG with dependencies
-3. Lead spawns agents and delegates tasks
-4. Agents work in parallel, communicate, and report back
-5. You monitor progress and intervene when needed
+<!--
+Let's see it live. I'll give the lead a small task and we'll watch the
+whole cycle: planning, delegation, parallel work, communication, review.
+If anything goes wrong during the demo — that's fine, I can hit System
+Pause, which freezes everything. That's actually a feature demo too.
+-->
+
+---
+layout: center
+---
+
+<div class="text-center">
+
+# <span class="text-blue-400">The goal isn't to replace developers.</span>
+
+<br/>
+
+<div class="text-2xl text-gray-300">It's to give every developer a team of AI specialists</div>
+<div class="text-2xl text-gray-300">that work in parallel, review each other's code,</div>
+<div class="text-2xl text-gray-300">and coordinate automatically.</div>
+
+<br/>
+
+<div class="text-lg text-gray-500">github.com/justinchuby/ai-crew</div>
+
+<br/>
+
+# Questions?
 
 </div>
 
 <!--
-Here's the flow. You give a high-level goal to the Project Lead agent.
-The lead breaks it into a task DAG — a directed acyclic graph of dependent
-tasks. Then it spawns specialized agents: developers to code, an architect
-for design, reviewers for quality, testers for verification. Each agent
-works independently within its own Copilot CLI session. You can watch
-everything happen in real time through the web UI.
+That's the story. Not a system that replaces you — a system that gives
+you a team. Specialists that work in parallel, catch each other's bugs,
+and manage themselves. You set the direction, they do the work. I'm happy
+to answer questions about anything — the architecture, the coordination
+challenges, cost, how to adapt it, or anything else you're curious about.
+-->
+
+---
+layout: center
+---
+
+# Appendix: Deep Dive
+
+<div class="text-gray-500">Reference slides for technical questions</div>
+
+<!--
+The following slides are reference material for technical deep-dive
+questions. Skip these during the main presentation.
 -->
 
 ---
 
-# Architecture
+# Appendix: Architecture
 
-<div class="grid grid-cols-2 gap-4">
+<div class="grid grid-cols-2 gap-3 text-sm">
 <div>
 
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-2">
 
-### 🖥️ Web UI <span class="text-gray-500 text-sm">React + Vite</span>
-Real-time dashboard, timeline, org chart, DAG visualization, token economics
+### 🖥️ Web UI <span class="text-gray-500 text-xs">React + Vite</span>
+Real-time dashboard, timeline, org chart, DAG, token economics
 
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-2">
 
-### ⚡ Server <span class="text-gray-500 text-sm">Express + WebSocket + SSE</span>
+### ⚡ Server <span class="text-gray-500 text-xs">Express + WebSocket + SSE</span>
 Agent lifecycle, command dispatch, coordination, file locks, persistence
 
 </div>
 <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
 
-### 🔌 ACP Bridge <span class="text-gray-500 text-sm">Agent Communication Protocol</span>
+### 🔌 ACP Bridge <span class="text-gray-500 text-xs">Agent Communication Protocol</span>
 Bidirectional connection to each Copilot CLI session
 
 </div>
@@ -164,9 +822,9 @@ Bidirectional connection to each Copilot CLI session
 </div>
 <div>
 
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-2">
 
-### 📦 Packages
+### 📦 Monorepo
 - `packages/server` — Node.js backend
 - `packages/web` — React frontend
 - `packages/docs` — Documentation
@@ -185,913 +843,116 @@ Bidirectional connection to each Copilot CLI session
 </div>
 
 <!--
-The architecture is a monorepo with three packages. The web UI is React
-with Vite — it gives you real-time visibility into everything. The server
-is Express with WebSocket and SSE for streaming updates. Under the hood,
-each agent is a Copilot CLI session connected via the Agent Communication
-Protocol. State is persisted in SQLite via Drizzle ORM, with hot data
-kept in memory for speed.
+Architecture reference. Monorepo with three packages. React frontend,
+Express backend, SQLite for persistence, WebSocket and SSE for streaming.
+Each agent connects via ACP — the Agent Communication Protocol.
 -->
 
 ---
 
-# 13 Specialized Agent Roles
+# Appendix: Task DAG & Coordination
 
-<div class="grid grid-cols-2 gap-4">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-- 🎯 **Project Lead** — Orchestrates team
-- 🏗️ **Architect** — System design
-- 👷 **Developer** — Writes code + tests
-- 🔍 **Code Reviewer** — Quality gates
-- 🛡️ **Critical Reviewer** — Security & edge cases
-- 🧪 **QA Tester** — End-to-end verification
-- 📝 **Secretary** — Tracks progress
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-- 🎨 **Designer** — UX/UI patterns
-- 📚 **Tech Writer** — Documentation
-- 💡 **Radical Thinker** — First-principles
-- 📦 **Product Manager** — Requirements
-- 🔧 **Generalist** — Cross-domain tasks
-- 🤖 **Agent** — General purpose
-
-<p class="text-sm text-gray-500 mt-4">Each role has a purpose-built system prompt with role-specific instructions, model preferences, and behavioral guidelines.</p>
-
-</div>
-</div>
-
-<!--
-There are 13 built-in roles, each with a tailored system prompt. The Project
-Lead is the orchestrator — it breaks down work, spawns agents, and manages
-the team. Developers write code AND tests — quality is their responsibility.
-Code Reviewers only surface issues that truly matter — no style nits. Critical
-Reviewers focus on security, performance, and failure modes. The Secretary
-tracks progress and provides status reports. You can also define custom roles.
--->
-
----
-
-# Task DAG — Declarative Work Planning
+<div class="text-sm">
 
 ```ts
 DECLARE_TASKS {"tasks": [
   {"id": "design",    "role": "architect",   "description": "Design API schema"},
   {"id": "implement", "role": "developer",   "description": "Build endpoints",   "depends_on": ["design"]},
   {"id": "test",      "role": "qa-tester",   "description": "Write E2E tests",   "depends_on": ["implement"]},
-  {"id": "review",    "role": "code-review", "description": "Review changes",    "depends_on": ["implement"]},
-  {"id": "docs",      "role": "tech-writer", "description": "Update API docs",   "depends_on": ["review", "test"]}
+  {"id": "review",    "role": "code-review", "description": "Review changes",    "depends_on": ["implement"]}
 ]}
 ```
 
-<div class="grid grid-cols-3 gap-3 mt-4">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+</div>
 
-### Auto-Linking
-Tasks auto-link to agents when delegated — no manual tracking
+<div class="grid grid-cols-3 gap-2 mt-2 text-sm">
+<div class="bg-gray-800 rounded-lg p-2 border border-gray-700">
+
+**Task States:** pending → ready → running → done (+ failed, blocked, paused, skipped)
 
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+<div class="bg-gray-800 rounded-lg p-2 border border-gray-700">
 
-### Dependency Resolution
-Blocked tasks auto-promote to "ready" when deps complete
+**File Locking:** pessimistic locks with TTL, glob patterns. Scoped COMMIT only stages locked files.
 
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+<div class="bg-gray-800 rounded-lg p-2 border border-gray-700">
 
-### Task States
-<span class="text-green-400">pending → ready → running → done</span><br/>
-<span class="text-sm text-gray-500">Also: failed, blocked, paused, skipped</span>
+**Communication:** direct messages, broadcasts, group chats, CREW_UPDATE (content-hashed, deduplicated)
 
 </div>
 </div>
 
 <!--
-The task DAG is the brain of work coordination. The lead declares tasks with
-dependencies — like a build system for work items. Tasks auto-link to agents
-when delegated, and blocked tasks automatically become ready when their
-dependencies complete. The system supports 9 task states with validated
-transitions. This eliminates the need for manual progress tracking — the
-DAG IS the source of truth.
+DAG reference. Tasks have dependencies. States auto-promote when deps
+complete. File locking prevents concurrent edits. COMMIT is scoped to
+locked files. Communication is structured: direct, broadcast, group, and
+periodic CREW_UPDATEs that are content-hashed to skip duplicates.
 -->
 
 ---
 
-# Agent Communication
+# Appendix: Token Economics
 
-<div class="grid grid-cols-2 gap-4">
-<div>
+<div class="grid grid-cols-2 gap-3 text-sm">
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
 
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### 💬 Direct Messages
-`AGENT_MESSAGE` — Point-to-point communication between agents by ID
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### 📢 Broadcasts
-`BROADCAST` — Send to all active agents at once (learnings, warnings)
+### Cost Profile
+- 10 agents × 200K context = ~2M tokens/session
+- Per-agent token tracking and cost attribution
+- Context pressure bars: 80% yellow, 90% red
 
 </div>
 <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
 
-### 👥 Group Chat
-`CREATE_GROUP` — Topic-based channels, auto-created when 3+ agents share a feature
-
-</div>
-
-</div>
-<div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### 📊 CREW_UPDATE
-Periodic context refresh with agent status, recent activity, and budget info. Content-hashed to skip duplicates.
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 🧑 Human-in-the-Loop
-Message any agent directly. @mention to route messages. Queued messages show as pending bubbles.
-
-</div>
-
-</div>
-</div>
-
-<!--
-Communication is structured, not ad-hoc. Agents send direct messages by ID,
-broadcast learnings to the whole team, or create group chats for feature
-coordination. CREW_UPDATE is a periodic context refresh that keeps everyone
-informed — it's content-hashed so duplicates are suppressed, saving tokens.
-And you're always in the loop — you can message any agent, @mention them,
-or pause the entire system to review progress.
--->
-
----
-
-# Coordination & Safety
-
-<div class="grid grid-cols-2 gap-4">
-<div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### 🔒 File Locking
-Pessimistic locks with TTL and glob patterns prevent concurrent edits
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 📌 Scoped Commits
-`COMMIT` only stages files the agent has locked — prevents cross-contamination
-
-</div>
-
-</div>
-<div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### ⏸️ System Pause/Resume
-Halt all message delivery system-wide. Agents hold; messages queue until resumed.
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 🛡️ Input Validation
-Zod schemas validate every command. Clear error messages — no silent failures.
-
-</div>
-
-</div>
-</div>
-
-<p class="text-sm text-gray-500 mt-2">Security: auto-generated auth tokens, CORS lockdown, rate limiting, path traversal protection</p>
-
-<!--
-Coordination and safety are critical when multiple agents edit the same
-codebase. File locking prevents concurrent edits — agents must lock files
-before editing. The COMMIT command only stages locked files, preventing
-the classic "git add -A picks up other agents' work" problem. System pause
-lets you freeze everything to review state. And every command is validated
-with Zod schemas — bad input gets a clear error, not silent corruption.
--->
-
----
-
-# Mission Control Dashboard
-
-<div class="grid grid-cols-3 gap-4 text-center mt-4">
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-<div class="text-4xl font-bold text-blue-400">8</div>
-<div class="text-sm text-gray-500">Configurable Panels</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-<div class="text-4xl">⚡</div>
-<div class="text-sm text-gray-500">Real-time Updates</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-<div class="text-4xl">🎛️</div>
-<div class="text-sm text-gray-500">Drag & Drop Layout</div>
-</div>
-</div>
-
-<div class="grid grid-cols-2 gap-4 mt-4">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-- Health summary with completion %
-- Agent fleet status overview
-- Token economics per agent
-- Alert feed (context pressure, idle agents)
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-- Live activity feed
-- DAG progress minimap
-- Communication heatmap (real-time SSE)
-- Performance scorecards
-
-</div>
-</div>
-
-<!--
-Mission Control is the single-screen overview. Eight configurable panels:
-health summary, agent fleet, token economics, alerts, activity feed, DAG
-minimap, communication heatmap, and performance scorecards. Everything
-updates in real time via WebSocket and SSE. You can drag and drop panels
-to customize your layout. The comm heatmap shows who's talking to whom —
-it updates live via Server-Sent Events.
--->
-
----
-
-# Timeline & Visualization
-
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### 📊 Swim-Lane Timeline
-
-Each agent gets a lane showing activity over time. Filter by role, status, or comm type.
-
-<div class="mt-2 space-y-1">
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-16">Lead</span><div class="h-2 rounded bg-blue-500" style="width: 40%"></div><div class="h-2 rounded bg-yellow-500" style="width: 10%"></div><div class="h-2 rounded bg-blue-500" style="width: 30%"></div></div>
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-16">Dev 1</span><div class="h-2 rounded bg-transparent" style="width: 15%"></div><div class="h-2 rounded bg-green-500" style="width: 55%"></div><div class="h-2 rounded bg-gray-600" style="width: 10%"></div></div>
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-16">Reviewer</span><div class="h-2 rounded bg-transparent" style="width: 45%"></div><div class="h-2 rounded bg-yellow-500" style="width: 35%"></div></div>
-</div>
-
-<p class="text-sm text-gray-500 mt-2">Features: brush time selector, keyboard nav, auto-scroll, idle hatch patterns, hover tooltips</p>
-
-</div>
-
-<div class="grid grid-cols-2 gap-3 mt-3">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 🏗️ Org Chart
-Hierarchical team view with project tabs
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 📈 Gantt Chart
-Scrollable/zoomable DAG with critical path highlighting
-</div>
-</div>
-
-<!--
-The timeline gives you a swim-lane view of all agent activity over time.
-Each agent gets a row — blue for running, green for completed work, gray
-for idle periods. You can filter by role, zoom with a brush selector, and
-hover for details. The org chart shows team hierarchy. The Gantt chart
-visualizes the task DAG with critical path highlighting and elapsed time
-tracking.
--->
-
----
-
-# Token Economics & Cost Tracking
-
-<div class="grid grid-cols-2 gap-4">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 📊 Per-Agent Breakdown
-- Input/output token counts per agent
-- Context window pressure bars
-- 80% yellow / 90% red thresholds
-- Cost attribution per DAG task
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 🧠 Smart Optimizations
-- Content-hashed CREW_UPDATEs skip duplicates
+### Optimizations Built In
+- Content-hashed CREW_UPDATEs save 40-60% of update tokens
 - Debounced status notifications reduce churn
-- Sliding window caps (500 comms, 200 tool calls)
-- Context compaction detection and recovery
+- Sliding window caps: 500 comms, 200 tool calls
+- Context compaction detection + auto re-injection
 
 </div>
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-
-💡 **Why it matters:** 10 agents × 200K context = 2M tokens/session. Every optimization reduces cost and improves quality by keeping agents focused on relevant context.
-
 </div>
 
 <!--
-With up to 20 agents, token management is crucial. The Token Economics panel
-shows per-agent usage with context pressure indicators. We've built several
-optimizations: content hashing skips duplicate context updates, saving 40-60%
-of CREW_UPDATE tokens. Status notifications are debounced. Communication and
-tool call arrays have sliding window caps. And when context compaction happens,
-the system automatically re-injects crew context so agents don't lose their
-bearings.
--->
-
----
-layout: center
----
-
-# Case Study: This Session
-
-### Using AI Crew to improve AI Crew 🔄
-
-<!--
-Let me show you a real case study — this actual session. We started with
-GitHub Issue 49, a retrospective listing 10 work items from the previous
-session. The user gave a single instruction to the Project Lead. What
-happened next demonstrates everything AI Crew can do.
+Token cost reference. A 10-agent session uses roughly 2M tokens. Built-in
+optimizations: content hashing saves 40-60% on context updates, debounced
+notifications, sliding window caps, and automatic context re-injection
+after compaction.
 -->
 
 ---
 
-# Case Study: The Task
+# Appendix: All 13 Roles
 
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+<div class="grid grid-cols-2 gap-2 text-sm">
+<div class="bg-gray-800 rounded-lg p-2 border border-gray-700">
 
-**Input:** GitHub Issue #49 — retrospective with 10 work items
-
-- <span class="text-red-400">P0</span> Auto-link accuracy fix + COMPLETE_TASK from agents
-- <span class="text-yellow-400">P1</span> Smarter status updates + agent session resume
-- <span class="text-green-400">P2</span> Real-time heatmap, DAG viz, input validation, cost tracking
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-<p class="text-sm text-gray-500">One human user. One command: "Validate that issues are fixed, and act on the proposed work." The system did the rest.</p>
-</div>
-
-<!--
-We started with GitHub Issue 49, a retrospective listing 10 work items across
-three priority levels. The user gave a single instruction to the Project Lead.
-From there, the lead analyzed the issue, created a task DAG, and started
-spawning specialists.
--->
-
----
-
-# Case Study: DAG Declaration
-
-```
-DECLARE_TASKS: 19 tasks across 4 priority levels
-├── validate-fixes (architect)
-├── p0-2-autolink (developer)       ──┐
-├── p0-3-complete-task (developer)   ──┤── code-review ──┐
-├── p1-4-status-updates (developer)  ──┤                 ├── critical-review
-├── p1-5-session-resume (developer)  ──┤── code-review ──┘
-├── p2-7-heatmap-realtime (developer)
-├── p2-8-dag-viz (developer)         [blocked on P0 tasks]
-├── p2-9-input-validation (developer)
-└── p2-10-cost-tracking (developer)
-```
-
-<div class="grid grid-cols-3 gap-3 mt-3 text-center">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-<div class="text-3xl font-bold text-blue-400">19</div>
-<div class="text-sm text-gray-500">Tasks Declared</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-<div class="text-3xl font-bold text-blue-400">13</div>
-<div class="text-sm text-gray-500">Agents Spawned</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-<div class="text-3xl font-bold text-blue-400">< 2 min</div>
-<div class="text-sm text-gray-500">To Full Parallelism</div>
-</div>
-</div>
-
-<!--
-Within seconds, the lead analyzed all 10 items and created a 19-task DAG.
-Implementation tasks, code reviews, and critical reviews — all with proper
-dependencies. Within 2 minutes, 13 agents were running in parallel: 7
-developers, an architect, a secretary, 2 code reviewers, and 2 critical
-reviewers. All working simultaneously on different aspects of the project.
--->
-
----
-
-# Case Study: Parallel Execution
-
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### Simultaneous Work Streams
-
-<div class="mt-2 space-y-2">
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-20">Dev 0b85de</span><div class="h-2 rounded bg-green-500" style="width: 60%"></div><span class="text-xs text-gray-400">P0-2: Auto-link fix</span></div>
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-20">Dev 2cf55f</span><div class="h-2 rounded bg-green-500" style="width: 55%"></div><span class="text-xs text-gray-400">P0-3: COMPLETE_TASK</span></div>
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-20">Dev f026d3</span><div class="h-2 rounded bg-blue-500" style="width: 50%"></div><span class="text-xs text-gray-400">P1-4: Status updates</span></div>
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-20">Dev bf1ec2</span><div class="h-2 rounded bg-blue-500" style="width: 45%"></div><span class="text-xs text-gray-400">P2-7: Real-time heatmap</span></div>
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-20">Reviewer</span><div class="h-2 rounded bg-transparent" style="width: 20%"></div><div class="h-2 rounded bg-yellow-500" style="width: 40%"></div><span class="text-xs text-gray-400">Reviewing P0-2, P0-3</span></div>
-<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-20">Critical Rev</span><div class="h-2 rounded bg-transparent" style="width: 30%"></div><div class="h-2 rounded bg-red-400" style="width: 35%"></div><span class="text-xs text-gray-400">Security review</span></div>
-</div>
+- 🎯 **Project Lead** — Orchestrates the team
+- 🏗️ **Architect** — System design & decomposition
+- 👷 **Developer** — Code + tests (quality is their job)
+- 🔍 **Code Reviewer** — Only real bugs, no style nits
+- 🛡️ **Critical Reviewer** — Security & edge cases
+- 🧪 **QA Tester** — End-to-end verification
+- 📝 **Secretary** — Progress tracking & anomaly detection
 
 </div>
+<div class="bg-gray-800 rounded-lg p-2 border border-gray-700">
 
-<p class="text-sm text-gray-500 mt-2">Each developer locked specific files, worked independently, and committed their own changes.</p>
+- 🎨 **Designer** — UX/UI patterns
+- 📚 **Tech Writer** — Documentation
+- 💡 **Radical Thinker** — First-principles challenges
+- 📦 **Product Manager** — Requirements & user needs
+- 🔧 **Generalist** — Cross-domain tasks
+- 🤖 **Agent** — General purpose
 
-<!--
-Here's what parallel execution looked like. Six work streams running
-simultaneously — each developer editing different files, locked to prevent
-conflicts. Reviewers started as soon as implementations were committed.
-The critical reviewer found a security issue in COMPLETE_TASK — any agent
-could complete any other agent's task. That was fixed within minutes.
--->
-
----
-
-# Case Study: When Things Go Wrong
-
-<div class="bg-gray-800 rounded-lg p-4 border border-red-500">
-
-### <span class="text-red-400">Bug: 7 False Task Completions</span>
-
-The auto-linker matched wrong tasks when multiple tasks shared the same role. DAG showed 86% complete when actual progress was ~40%.
-
-</div>
-
-<div class="grid grid-cols-2 gap-3 mt-3">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### Root Cause
-Fuzzy matching returned the *first* candidate instead of `null` when scores were ambiguous
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### Fix
-Return null when score gap < 0.15 between candidates. Force explicit `dagTaskId` when ambiguous.
-
-</div>
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-<p class="text-sm"><span class="text-green-400">Discovered by:</span> Secretary flagged anomaly → Architect investigated → Developer fixed → 107 tests pass</p>
-</div>
-
-<!--
-Not everything went smoothly. The auto-linking system had a subtle bug:
-when 7 developer tasks all had the same role, fuzzy matching returned the
-first candidate instead of null when it was uncertain. This caused 7 false
-task completions — the DAG looked 86% done when it was really 40%. The
-secretary flagged the anomaly, the architect analyzed it, the developer
-fixed it, and 107 tests confirmed the fix. The agents debugged their own
-orchestration system — while running on it.
--->
-
----
-
-# Case Study: Cross-Contamination
-
-<div class="bg-gray-800 rounded-lg p-4 border border-yellow-500">
-
-### <span class="text-yellow-400">Challenge: Agents Committing Each Other's Code</span>
-
-When one agent ran `git add -A`, it picked up uncommitted changes from other agents working in the same repo.
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-
-### Real Example
-- Agent A's commit included Agent B's `api.ts` changes
-- Agent C's `CommEventExtractor.ts` was never committed (only `FleetOverview.tsx` was locked)
-- 5 files from P2-7 needed a second commit to be properly tracked
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-
-### <span class="text-green-400">Solution: Defense in Depth</span>
-- Scoped `COMMIT` only stages locked files
-- Code reviewer caught untracked files immediately
-- Lead broadcast a process warning to all 13 agents
-
-</div>
-
-<!--
-Cross-contamination was our biggest coordination challenge. When one agent
-committed, it accidentally included another agent's uncommitted changes.
-We solved this with scoped commits that only stage locked files, plus
-code reviewers who caught untracked files immediately. The lead even
-broadcast a process warning to all 13 agents. This is a distributed
-systems problem — and we're solving it with distributed systems patterns.
--->
-
----
-
-# Case Study: Eliminating Bottlenecks
-
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### Problem: Monolithic Files Block Parallel Work
-
-<div class="grid grid-cols-3 gap-3 mt-2">
-<div>
-
-`api.ts` — **1,945 lines**
-<span class="text-xs text-gray-500">3 agents needed it simultaneously</span>
-
-</div>
-<div>
-
-`Agent.ts` — **767 lines**
-<span class="text-xs text-gray-500">2 agents editing different concerns</span>
-
-</div>
-<div>
-
-`AgentCommands.ts` — **662 lines**
-<span class="text-xs text-gray-500">P0-2 and P0-3 blocked each other</span>
-
-</div>
-</div>
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-
-### <span class="text-green-400">Solution: Architect-Planned Decomposition</span>
-- `api.ts` → 12 Express sub-router modules
-- `Agent.ts` → Agent (core) + AgentAcpBridge + AgentEvents
-- `AgentCommands.ts` → AgentLifecycle + CompletionTracking
-
-<p class="text-sm text-gray-500 mt-1">Thin re-export wrappers preserved all existing imports. Zero breaking changes.</p>
-
-</div>
-
-<!--
-Three monolithic files caused lock contention — multiple agents needed the
-same file at the same time. The architect designed a decomposition plan,
-and developers split each file into focused modules. api.ts went from
-1,945 lines to 12 route modules. Agent.ts split into core, ACP bridge,
-and event emitter. All existing imports kept working through re-export
-wrappers. This eliminated the bottleneck for future sessions.
--->
-
----
-layout: center
----
-
-# Case Study: Results
-
-<div class="grid grid-cols-4 gap-4 text-center mt-4">
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-<div class="text-4xl font-bold text-blue-400">13</div>
-<div class="text-sm text-gray-500">Parallel Agents</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-<div class="text-4xl font-bold text-blue-400">10</div>
-<div class="text-sm text-gray-500">Features Shipped</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-<div class="text-4xl font-bold text-blue-400">1,752</div>
-<div class="text-sm text-gray-500">Tests Passing</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-<div class="text-4xl font-bold text-blue-400">~40min</div>
-<div class="text-sm text-gray-500">Wall Clock Time</div>
-</div>
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-4 text-left">
-
-Plus: 6 code reviews, 6 critical reviews, 1 security fix, 3 file decompositions, docs consolidation, and this presentation.
-
-<p class="text-sm text-gray-500 mt-1">The agents improved the system they were running on — fixing bugs in their own orchestration layer while it coordinated them.</p>
-
-</div>
-
-<!--
-The final tally: 13 agents, 10 features, 1,752 tests, in about 40 minutes.
-That includes code reviews and critical reviews for every feature. The
-system discovered and fixed bugs in its own orchestration layer —
-including the false-completion bug and a security vulnerability in
-COMPLETE_TASK. Meta-debugging: agents debugging the system that coordinates
-them.
--->
-
----
-
-# What Makes AI Crew Different
-
-<div class="grid grid-cols-2 gap-4">
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### 🔄 vs. Single Agent
-- 10x parallelism on large tasks
-- Built-in peer review catches bugs
-- Each agent has focused context
-- Human stays in control
-
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### 🔄 vs. Other Multi-Agent
-- Real Copilot CLI sessions (full tool access)
-- Persistent state across sessions
-- Production-grade coordination (DAG, locks, validation)
-- Rich real-time observability
+<p class="text-xs text-gray-500 mt-2">Each has a tailored system prompt. Custom roles can also be defined.</p>
 
 </div>
 </div>
 
 <!--
-Compared to single-agent approaches, AI Crew offers real parallelism
-with built-in quality gates. Compared to other multi-agent frameworks,
-the key difference is that each agent is a real Copilot CLI session with
-full tool access — file editing, terminal commands, web search, everything.
-The coordination layer is production-grade with dependency resolution,
-file locking, input validation, and rich observability.
--->
-
----
-
-# Design Philosophy
-
-<div class="bg-gray-800 rounded-lg p-4 border border-blue-500 mb-4">
-
-### <span class="text-blue-400">"Fail-safe over clever"</span>
-
-In multi-agent systems, a wrong answer is far worse than no answer.
-
-</div>
-
-<div class="grid grid-cols-3 gap-3">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### Explicit > Implicit
-- Auto-linking returns null when ambiguous
-- Agents must use `dagTaskId` for certainty
-- Zod validates every command input
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### Observe Everything
-- Every action logged to ActivityLedger
-- SSE streams all events to the UI
-- Comm heatmap shows agent interactions
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### Specialize & Separate
-- Roles have distinct system prompts
-- Reviewers don't code; devs don't review
-- Small focused files over monoliths
-
-</div>
-</div>
-
-<!--
-Our design philosophy boils down to three principles. First, fail-safe
-over clever — when auto-linking is uncertain, return null instead of
-guessing. Second, observe everything — every action, message, and state
-change is logged and streamed to the UI. Third, specialize and separate —
-each role has distinct capabilities, and code is structured in small
-focused files. In multi-agent systems, 80% of bugs are coordination bugs,
-not coding bugs.
--->
-
----
-
-# Lessons Learned
-
-<div class="grid grid-cols-2 gap-4">
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### <span class="text-yellow-400">Challenges</span>
-- Cross-contamination when agents commit each other's changes
-- File lock contention on monolithic files
-- Token cost scales with agent count
-- Context loss during compaction
-- False task completions from ambiguous matching
-
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### <span class="text-green-400">Solutions</span>
-- Scoped COMMIT only stages locked files
-- File decomposition eliminates contention
-- Content hashing reduces token waste 40-60%
-- Auto re-injection after compaction
-- Fail-safe: return null when uncertain
-
-</div>
-</div>
-
-<p class="text-sm text-gray-500 mt-2"><strong>Key insight:</strong> Multi-agent coordination is a distributed systems problem. Apply distributed systems patterns: idempotency, explicit acknowledgment, pessimistic locking, observability.</p>
-
-<!--
-The biggest lesson: multi-agent coordination is a distributed systems
-problem. Every challenge we faced has a parallel in distributed computing:
-cross-contamination is like a dirty read, file lock contention is like
-database lock contention, and false completions are like phantom reads.
-The solutions are the same too: scoped transactions, decomposition,
-deduplication, and fail-safe defaults.
--->
-
----
-
-# Roadmap
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### 🔜 Near Term
-- Git worktree isolation — each agent gets its own branch, eliminating cross-contamination
-- Smarter context management with priority-based trimming
-- Agent skill system — persistent reusable knowledge across sessions
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### 🔮 Medium Term
-- Multi-repo support — agents spanning codebases
-- CI/CD integration — automatic test verification after commits
-- Agent memory — learned patterns and preferences persist
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### 🚀 Long Term
-- Self-improving teams — agents create skills from experience
-- Cross-team coordination — multiple AI crews on the same project
-- Cost optimization — automatic model selection per task complexity
-
-</div>
-
-<!--
-The roadmap focuses on three horizons. Near term: git worktree isolation
-to eliminate file contention entirely, smarter context management, and
-persistent skills. Medium term: multi-repo support and CI/CD integration.
-Long term: self-improving teams where agents learn from experience and
-automatically create reusable skills.
--->
-
----
-
-# Live Demo
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-### Setup
-```bash
-npm install && npm run dev
-# Server: http://localhost:3001  |  Web UI: http://localhost:5173
-```
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### Demo Script (~7 minutes)
-
-1. Show the empty dashboard — Mission Control, DAG view, agent panel
-2. Give the lead a task: *"Add a /health endpoint that returns uptime and agent count"*
-3. Watch the lead create a DAG and spawn agents
-4. Show file locking, real-time agent output, and CREW_UPDATE injection
-5. Demonstrate human-in-the-loop: message an agent mid-task
-6. Show the communication heatmap and timeline after completion
-
-</div>
-
-<p class="text-sm text-gray-500 mt-2">💡 Backup: If demo issues arise, use System Pause — it's a feature, not a bug!</p>
-
-<!--
-Time for a live demo. I'll walk through the full cycle: giving a task,
-watching the lead plan and delegate, seeing agents work in parallel, and
-monitoring the results. If anything goes wrong, System Pause freezes
-everything — which is itself a demo of the safety features.
--->
-
----
-
-# What to Watch For
-
-<div class="grid grid-cols-2 gap-4">
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### 🎯 Lead Planning
-Watch the lead analyze the task, create a DAG, and choose which roles to spawn
-
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### 🔒 File Locking
-See agents lock specific files — lock status updates across the dashboard
-
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### 💬 Agent Communication
-Watch agents message each other with status reports, questions, and coordination
-
-</div>
-<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-
-### 📊 Real-Time Observability
-Timeline, heatmap, and DAG all update live as agents work
-
-</div>
-</div>
-
-<!--
-Four things to watch during the demo. First, how the lead plans — it
-doesn't just start coding, it creates a structured DAG. Second, file
-locking — you'll see agents claim files and the dashboard update in real
-time. Third, agent communication — agents send status reports and
-coordinate through messages. Fourth, observability — everything updates
-live.
--->
-
----
-
-# Getting Started
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mb-3">
-
-```bash
-# Clone and install
-git clone https://github.com/justinchuby/ai-crew.git
-cd ai-crew && npm install
-
-# Development mode (hot reload)
-npm run dev
-
-# Production
-npm run build && npm start
-```
-
-</div>
-
-<div class="grid grid-cols-2 gap-3">
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### Requirements
-- Node.js 18+
-- GitHub Copilot CLI access
-- Copilot subscription
-
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-
-### Resources
-- README.md — Full feature list
-- packages/docs/ — Guides
-- .github/skills/ — Reusable patterns
-
-</div>
-</div>
-
-<!--
-Getting started is straightforward — clone, install, and run. You need
-Node.js 18+ and Copilot CLI access. The dev mode gives you hot reload
-for the web UI.
--->
-
----
-layout: center
----
-
-# Questions?
-
-<br/>
-
-🤖 AI Crew — <span class="text-blue-400">Parallel AI agents that collaborate like a real engineering team</span>
-
-<br/>
-
-*"The goal isn't to replace developers — it's to give every developer a team of specialized AI agents."*
-
-<br/>
-
-<span class="text-sm text-gray-500">github.com/justinchuby/ai-crew</span>
-
-<!--
-That's the full overview — architecture, features, a real case study,
-and a live demo. I'm happy to take questions about anything: the
-architecture, coordination challenges, cost considerations, how to
-adapt this for your projects, or anything else.
+All 13 roles reference. Each has a purpose-built system prompt with
+specific instructions, behavioral guidelines, and model preferences.
+Custom roles can be defined for specialized needs.
 -->
