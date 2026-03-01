@@ -119,6 +119,15 @@ export const commitSchema = z.object({
   files: z.array(z.string()).max(MAX_ARRAY_LENGTH, `"files" too many (max ${MAX_ARRAY_LENGTH})`).optional(),
 });
 
+export const progressSchema = z.object({
+  summary: z.string().max(MAX_CONTENT_LENGTH, `"summary" too long (max ${MAX_CONTENT_LENGTH})`).optional(),
+  percent: z.union([z.number(), z.string()]).transform((val) => {
+    const num = typeof val === 'string' ? parseFloat(val) : val;
+    return num;
+  }).pipe(z.number().min(0, 'Percent must be at least 0').max(100, 'Percent must be at most 100')).optional(),
+  status: z.string().max(MAX_NAME_LENGTH).optional(),
+});
+
 // ── System Commands ──────────────────────────────────────────────────
 
 export const requestLimitChangeSchema = z.object({
@@ -131,12 +140,25 @@ export const requestLimitChangeSchema = z.object({
 
 // ── Timer Commands ───────────────────────────────────────────────────
 
+/** Parse a duration value to seconds. Accepts: number, numeric string, or human-readable (e.g. '30s', '5m', '2h', '1d'). */
+function parseDuration(val: number | string): number {
+  if (typeof val === 'number') return val;
+  const str = val.trim().toLowerCase();
+  const match = str.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?)?$/);
+  if (!match) return NaN;
+  const num = parseFloat(match[1]);
+  const unit = match[2] ?? 's';
+  if (unit.startsWith('d')) return num * 86400;
+  if (unit.startsWith('h')) return num * 3600;
+  if (unit.startsWith('m')) return num * 60;
+  return num; // seconds
+}
+
 export const setTimerSchema = z.object({
   label: z.string({ message: 'Missing required field "label"' }).min(1, 'Missing required field "label"').max(MAX_NAME_LENGTH, `"label" too long (max ${MAX_NAME_LENGTH})`),
   delay: z.union([z.number(), z.string()]).transform((val) => {
-    const num = typeof val === 'string' ? parseFloat(val) : val;
-    return num;
-  }).pipe(z.number().min(5, 'Delay must be at least 5 seconds').max(86400, 'Delay must be at most 86400 seconds (24 hours)')),
+    return parseDuration(val);
+  }).pipe(z.number({ message: 'Invalid delay format. Use seconds (300), or durations like "5m", "2h", "1d"' }).min(5, 'Delay must be at least 5 seconds').max(86400, 'Delay must be at most 86400 seconds (24 hours)')),
   message: z.string({ message: 'Missing required field "message"' }).min(1, 'Missing required field "message"').max(MAX_CONTENT_LENGTH, `"message" too long (max ${MAX_CONTENT_LENGTH})`),
   repeat: z.boolean().optional(),
 });
@@ -163,6 +185,10 @@ export const resolveDeferredSchema = z.object({
   dismiss: z.boolean().optional(),
 });
 
+export const queryDeferredSchema = z.object({
+  status: z.enum(['open', 'resolved', 'dismissed'], { message: '"status" must be one of: open, resolved, dismissed' }).optional(),
+});
+
 // ── Capability Commands ──────────────────────────────────────────────
 
 export const acquireCapabilitySchema = z.object({
@@ -170,11 +196,23 @@ export const acquireCapabilitySchema = z.object({
   reason: z.string().max(MAX_CONTENT_LENGTH).optional(),
 });
 
+export const releaseCapabilitySchema = z.object({
+  capability: z.string({ message: 'Missing required field "capability"' }).min(1, 'Missing required field "capability"').max(MAX_NAME_LENGTH, `"capability" too long (max ${MAX_NAME_LENGTH})`),
+});
+
 // ── Direct Message Commands ──────────────────────────────────────────
 
 export const directMessageSchema = z.object({
   to: z.string({ message: 'Missing required field "to" (agent ID)' }).min(1, 'Missing required field "to" (agent ID)').max(MAX_ID_LENGTH),
   content: z.string({ message: 'Missing required field "content"' }).min(1, 'Missing required field "content"').max(MAX_CONTENT_LENGTH, `"content" too long (max ${MAX_CONTENT_LENGTH})`),
+});
+
+// ── Reaction Commands ────────────────────────────────────────────────
+
+export const reactSchema = z.object({
+  group: z.string({ message: 'Missing required field "group"' }).min(1, 'Missing required field "group"').max(MAX_NAME_LENGTH, `"group" too long (max ${MAX_NAME_LENGTH})`),
+  emoji: z.string({ message: 'Missing required field "emoji"' }).min(1, 'Missing required field "emoji"').max(8, '"emoji" too long (max 8 chars)'),
+  messageId: z.string().max(MAX_ID_LENGTH).optional(),
 });
 
 // ── Template Commands ────────────────────────────────────────────────

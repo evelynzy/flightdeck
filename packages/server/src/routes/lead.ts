@@ -203,6 +203,21 @@ export function leadRoutes(ctx: AppContext): Router {
     res.status(201).json(message);
   });
 
+  // --- Reactions ---
+  router.post('/lead/:id/groups/:name/messages/:messageId/reactions', (req, res) => {
+    const { emoji } = req.body;
+    if (!emoji || typeof emoji !== 'string' || emoji.length > 8) return res.status(400).json({ error: 'emoji required (max 8 chars)' });
+    const chatGroups = agentManager.getChatGroupRegistry();
+    const success = chatGroups.addReaction(req.params.messageId, 'human', emoji);
+    res.json({ success });
+  });
+
+  router.delete('/lead/:id/groups/:name/messages/:messageId/reactions/:emoji', (req, res) => {
+    const chatGroups = agentManager.getChatGroupRegistry();
+    const success = chatGroups.removeReaction(req.params.messageId, 'human', decodeURIComponent(req.params.emoji));
+    res.json({ success });
+  });
+
   router.get('/lead/:id/delegations', (req, res) => {
     res.json(agentManager.getDelegations(req.params.id));
   });
@@ -241,16 +256,31 @@ export function leadRoutes(ctx: AppContext): Router {
     const timers = registry.getAllTimers().map(t => ({
       id: t.id,
       agentId: t.agentId,
+      agentRole: t.agentRole,
       label: t.label,
       message: t.message,
       fireAt: t.fireAt,
       createdAt: t.createdAt,
-      fired: t.fired,
+      status: t.status,
       repeat: t.repeat,
-      intervalSeconds: t.intervalSeconds,
-      remainingMs: t.fired ? 0 : Math.max(0, t.fireAt - Date.now()),
+      delaySeconds: t.delaySeconds,
+      remainingMs: t.status === 'pending' ? Math.max(0, t.fireAt - Date.now()) : 0,
     }));
     res.json(timers);
+  });
+
+  router.delete('/timers/:timerId', (req, res) => {
+    const registry = agentManager.getTimerRegistry();
+    if (!registry) return res.status(404).json({ error: 'Timer system not available' });
+
+    const timer = registry.getAllTimers().find(t => t.id === req.params.timerId);
+    if (!timer) return res.status(404).json({ error: 'Timer not found' });
+    if (timer.status !== 'pending') return res.status(409).json({ error: `Timer already ${timer.status}` });
+
+    // Web user (operator) can cancel any timer — use the timer's own agentId
+    const ok = registry.cancel(timer.id, timer.agentId);
+    if (!ok) return res.status(500).json({ error: 'Cancel failed' });
+    res.json({ success: true });
   });
 
   router.get('/lead/:id/progress', (req, res) => {

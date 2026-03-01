@@ -7,13 +7,13 @@
  */
 import type { Agent } from '../Agent.js';
 import type { CommandHandlerContext, CommandEntry } from './types.js';
-import { parseCommandPayload, acquireCapabilitySchema } from './commandSchemas.js';
+import { parseCommandPayload, acquireCapabilitySchema, releaseCapabilitySchema } from './commandSchemas.js';
 
 // ── Regex patterns ────────────────────────────────────────────────────
 
-const ACQUIRE_REGEX = /⟦\s*ACQUIRE_CAPABILITY\s*(\{.*?\})\s*⟧/s;
-const LIST_REGEX = /⟦\s*LIST_CAPABILITIES\s*⟧/s;
-const RELEASE_REGEX = /⟦\s*RELEASE_CAPABILITY\s*(\{.*?\})\s*⟧/s;
+const ACQUIRE_REGEX = /⟦⟦\s*ACQUIRE_CAPABILITY\s*(\{.*?\})\s*⟧⟧/s;
+const LIST_REGEX = /⟦⟦\s*LIST_CAPABILITIES\s*⟧⟧/s;
+const RELEASE_REGEX = /⟦⟦\s*RELEASE_CAPABILITY\s*(\{.*?\})\s*⟧⟧/s;
 
 // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -62,7 +62,11 @@ function handleList(ctx: CommandHandlerContext, agent: Agent): void {
   agent.sendMessage(`[System]\n${msg}`);
 }
 
-function handleRelease(ctx: CommandHandlerContext, agent: Agent, _data: string): void {
+function handleRelease(ctx: CommandHandlerContext, agent: Agent, data: string): void {
+  const match = data.match(RELEASE_REGEX);
+  if (!match) return;
+  const parsed = parseCommandPayload(agent, match[1], releaseCapabilitySchema, 'RELEASE_CAPABILITY');
+  if (!parsed) return;
   // Not critical for v1 — just acknowledge
   agent.sendMessage(
     '[System] Capabilities are retained for the session. They will be cleared on termination.',

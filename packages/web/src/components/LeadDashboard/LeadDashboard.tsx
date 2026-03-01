@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Crown, Send, Users, CheckCircle, AlertCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Pencil, Hand, Square, Filter, Download } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useLeadStore } from '../../stores/leadStore';
+import { useTimerStore, selectActiveTimerCount } from '../../stores/timerStore';
 import type { ActivityEvent, AgentComm, ProgressSnapshot, AgentReport } from '../../stores/leadStore';
 import type { AcpTextChunk, ChatGroup, GroupMessage, DagStatus, Project } from '../../types';
 import { useAppStore } from '../../stores/appStore';
@@ -13,6 +14,9 @@ import { TokenEconomics } from '../TokenEconomics/TokenEconomics';
 import { CostBreakdown } from '../TokenEconomics/CostBreakdown';
 import { TimerDisplay } from '../TimerDisplay/TimerDisplay';
 import { FolderPicker } from '../FolderPicker/FolderPicker';
+import { agentStatusText } from '../../utils/statusColors';
+import { apiFetch } from '../../hooks/useApi';
+import { useToastStore } from '../Toast';
 
 interface RoleInfo { id: string; name: string; icon: string; description: string; model: string; }
 
@@ -26,6 +30,7 @@ export function LeadDashboard({ api, ws }: Props) {
     useShallow((s) => ({ projects: s.projects, selectedLeadId: s.selectedLeadId, drafts: s.drafts }))
   );
   const agents = useAppStore((s) => s.agents);
+  const activeTimerCount = useTimerStore(selectActiveTimerCount);
   const input = selectedLeadId ? (drafts[selectedLeadId] ?? '') : '';
   const setInput = useCallback((text: string) => {
     if (selectedLeadId) useLeadStore.getState().setDraft(selectedLeadId, text);
@@ -1282,15 +1287,15 @@ export function LeadDashboard({ api, ws }: Props) {
 
             {/* Agent Reports — separate from lead output */}
             {agentReports.length > 0 && (
-              <div className="border-b border-indigo-700/40 bg-indigo-950/20">
+              <div className="border-b border-th-border bg-amber-500/5 dark:bg-amber-500/10">
                 <button
-                  className="w-full flex items-center gap-2 px-4 py-1.5 text-xs text-indigo-400 hover:bg-indigo-900/20 transition-colors"
+                  className="w-full flex items-center gap-2 px-4 py-1.5 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
                   onClick={() => setReportsExpanded(!reportsExpanded)}
                 >
                   {reportsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                   <MessageSquare className="w-3 h-3" />
                   <span className="font-mono font-medium">Agent Reports</span>
-                  <span className="bg-indigo-500/20 px-1.5 rounded text-[10px]">{agentReports.length}</span>
+                  <span className="bg-amber-500/20 px-1.5 rounded text-[10px]">{agentReports.length}</span>
                 </button>
                 {reportsExpanded && (
                   <div className="max-h-48 overflow-y-auto px-3 pb-2 space-y-1">
@@ -1299,12 +1304,12 @@ export function LeadDashboard({ api, ws }: Props) {
                       return (
                         <div
                           key={r.id}
-                          className="flex items-start gap-2 px-2 py-1.5 rounded bg-blue-500/[0.06] border border-blue-400/20 border-l-2 border-l-blue-400/30 cursor-pointer hover:bg-blue-500/[0.10] transition-colors"
+                          className="flex items-start gap-2 px-2 py-1.5 rounded bg-amber-500/[0.06] border border-amber-400/20 border-l-2 border-l-amber-500/30 cursor-pointer hover:bg-amber-500/[0.10] transition-colors"
                           onClick={() => setExpandedReport(r)}
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="text-xs font-mono font-semibold text-indigo-400">{r.fromRole}</span>
+                              <span className="text-xs font-mono font-semibold text-amber-600 dark:text-amber-400">{r.fromRole}</span>
                               <span className="text-[10px] text-th-text-muted ml-auto">{time}</span>
                             </div>
                             <AgentReportBlock content={r.content} compact />
@@ -1377,9 +1382,9 @@ export function LeadDashboard({ api, ws }: Props) {
 
                 if (msg.sender === 'external') {
                   return (
-                    <div key={i} className="flex items-start gap-2 py-1 bg-blue-500/[0.06] rounded-md border-l-2 border-blue-400/30 pl-2">
-                      <div className="max-w-[85%] rounded-lg px-3 py-2 bg-indigo-900/40 border border-indigo-700/50 font-mono text-sm whitespace-pre-wrap text-th-text-alt">
-                        <div className="flex items-center gap-1.5 mb-1 text-indigo-400 text-xs font-medium">
+                    <div key={i} className="flex items-start gap-2 py-1 bg-amber-500/[0.06] rounded-md border-l-2 border-amber-500/30 pl-2">
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 bg-amber-500/10 dark:bg-amber-900/30 border border-amber-400/20 dark:border-amber-600/30 font-mono text-sm whitespace-pre-wrap text-th-text-alt">
+                        <div className="flex items-center gap-1.5 mb-1 text-amber-600 dark:text-amber-400 text-xs font-medium">
                           <MessageSquare className="w-3 h-3" />
                           {msg.fromRole || 'Agent'}
                         </div>
@@ -1477,7 +1482,7 @@ export function LeadDashboard({ api, ws }: Props) {
                       {catchUpSummary.tasksCompleted > 0 && <span className="text-emerald-400">{catchUpSummary.tasksCompleted} task{catchUpSummary.tasksCompleted !== 1 ? 's' : ''} completed</span>}
                       {catchUpSummary.pendingDecisions > 0 && <span className="text-amber-400">⚠ {catchUpSummary.pendingDecisions} decision{catchUpSummary.pendingDecisions !== 1 ? 's' : ''} pending</span>}
                       {catchUpSummary.newMessages > 0 && <span className="text-blue-400">{catchUpSummary.newMessages} new message{catchUpSummary.newMessages !== 1 ? 's' : ''}</span>}
-                      {catchUpSummary.newReports > 0 && <span className="text-indigo-400">{catchUpSummary.newReports} report{catchUpSummary.newReports !== 1 ? 's' : ''}</span>}
+                      {catchUpSummary.newReports > 0 && <span className="text-amber-600 dark:text-amber-400">{catchUpSummary.newReports} report{catchUpSummary.newReports !== 1 ? 's' : ''}</span>}
                     </div>
                     <div className="flex gap-2 mt-2.5">
                       <button onClick={() => setCatchUpSummary(null)} className="text-[11px] px-2.5 py-1 rounded-md bg-th-bg-alt border border-th-border text-th-text-alt hover:bg-th-bg-muted transition-colors">Dismiss</button>
@@ -1642,7 +1647,7 @@ export function LeadDashboard({ api, ws }: Props) {
                         dag: { icon: <Network className="w-3 h-3" />, label: 'DAG', badge: dagStatus?.tasks.length },
                         tokens: { icon: <BarChart3 className="w-3 h-3" />, label: 'Tokens' },
                         costs: { icon: <BarChart3 className="w-3 h-3" />, label: 'Costs' },
-                        timers: { icon: <Clock className="w-3 h-3" />, label: 'Timers' },
+                        timers: { icon: <Clock className="w-3 h-3" />, label: 'Timers', badge: activeTimerCount || undefined },
                       };
                       const orderedIds = tabOrder.filter((id) => id in allTabs);
                       // Append any missing tabs (safety net)
@@ -1866,8 +1871,8 @@ export function LeadDashboard({ api, ws }: Props) {
           <div className="bg-th-bg-alt border border-th-border rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-th-border">
               <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-indigo-400" />
-                <span className="text-sm font-semibold text-indigo-400">{expandedReport.fromRole}</span>
+                <MessageSquare className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">{expandedReport.fromRole}</span>
                 <span className="text-xs text-th-text-muted">→ Project Lead</span>
               </div>
               <div className="flex items-center gap-3">
@@ -1921,9 +1926,9 @@ function parseAgentReport(content: string): { header: string; task: string; outp
   const sessionMatch = content.match(/\nSession ID:\s*(.*?)(?:\n|$)/);
   const outputMatch = content.match(/\nOutput summary:\s*([\s\S]*)$/);
 
-  // Clean output: strip ⟦ ... ⟧ fragments and normalize whitespace
+  // Clean output: strip ⟦⟦ ... ⟧⟧ fragments and normalize whitespace
   let output = outputMatch ? outputMatch[1].trim() : '';
-  output = output.replace(/⟦[\s\S]*?⟧/g, '').replace(/⟦[\s\S]*$/g, '').replace(/^[\s\S]*?⟧/g, '').trim();
+  output = output.replace(/⟦⟦[\s\S]*?⟧⟧/g, '').replace(/⟦⟦[\s\S]*$/g, '').replace(/^[\s\S]*?⟧⟧/g, '').trim();
   output = output.replace(/\n\s(?=\S)/g, ' ');
 
   return {
@@ -1947,8 +1952,8 @@ function AgentReportBlock({ content, compact }: { content: string; compact?: boo
   if (parsed.isAck) {
     return (
       <div className="text-xs font-mono flex items-center gap-1.5">
-        <Check className="w-3 h-3 text-blue-400 shrink-0" />
-        <span className="text-blue-600 dark:text-blue-300">{parsed.header}</span>
+        <Check className="w-3 h-3 text-amber-500 shrink-0" />
+        <span className="text-amber-600 dark:text-amber-400">{parsed.header}</span>
         {parsed.task && <span className="text-th-text-muted"> — {compact && parsed.task.length > 60 ? parsed.task.slice(0, 60) + '…' : parsed.task}</span>}
       </div>
     );
@@ -2158,12 +2163,10 @@ function DecisionPanelContent({ decisions, onConfirm, onReject }: { decisions: a
 }
 
 function TeamStatusContent({ agents, delegations, comms, activity, allAgents, onOpenChat }: { agents: any[]; delegations: any[]; comms?: AgentComm[]; activity?: ActivityEvent[]; allAgents?: any[]; onOpenChat?: (agentId: string) => void }) {
-  const STATUS_COLOR: Record<string, string> = {
-    creating: 'text-th-text-muted', running: 'text-blue-400', idle: 'text-yellow-600 dark:text-yellow-400',
-    completed: 'text-green-400', failed: 'text-red-400',
-  };
   const [selectedAgent, setSelectedAgent] = useState<any | null>(null);
   const [selectedComm, setSelectedComm] = useState<AgentComm | null>(null);
+  const [agentMsg, setAgentMsg] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   const selectedDelegation = selectedAgent ? [...delegations].reverse().find((d: any) => d.toAgentId === selectedAgent.id) : null;
   const agentComms = selectedAgent ? (comms ?? []).filter((c) => c.fromId === selectedAgent.id || c.toId === selectedAgent.id) : [];
@@ -2177,12 +2180,12 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
         ) : (
           agents.map((agent: any) => {
             const delegation = [...delegations].reverse().find((d: any) => d.toAgentId === agent.id);
-            const colorClass = STATUS_COLOR[agent.status] || 'text-th-text-muted';
+            const colorClass = agentStatusText(agent.status);
             return (
               <div
                 key={agent.id}
                 className="bg-th-bg-alt border border-th-border rounded p-1.5 cursor-pointer hover:border-th-border-hover transition-colors"
-                onClick={() => setSelectedAgent(agent)}
+                onClick={() => { setSelectedAgent(agent); setAgentMsg(''); setSendingMsg(false); }}
               >
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm leading-none">{agent.role.icon}</span>
@@ -2191,10 +2194,10 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
                   {onOpenChat && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onOpenChat(agent.id); }}
-                      className="text-xs leading-none text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 shrink-0 px-0.5"
+                      className="flex items-center gap-0.5 text-[10px] font-mono leading-none px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 transition-colors shrink-0"
                       title="Open agent chat panel"
                     >
-                      💬
+                      <MessageSquare size={10} /> Chat
                     </button>
                   )}
                   <span className="text-[10px] font-mono text-th-text-muted shrink-0">{agent.id.slice(0, 8)}</span>
@@ -2252,7 +2255,7 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-semibold text-th-text">{selectedAgent.role.name}</span>
-                  <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${STATUS_COLOR[selectedAgent.status] || 'text-th-text-muted'} bg-th-bg-muted`}>
+                  <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${agentStatusText(selectedAgent.status)} bg-th-bg-muted`}>
                     {selectedAgent.status}
                   </span>
                 </div>
@@ -2416,6 +2419,61 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
                 </div>
               )}
             </div>
+
+            {/* Message Input */}
+            <div className="px-4 py-3 border-t border-th-border">
+              <h4 className="text-[10px] text-th-text-muted uppercase tracking-wider font-medium mb-1.5">Send Message</h4>
+              <div className="flex gap-2">
+                <textarea
+                  value={agentMsg}
+                  onChange={(e) => setAgentMsg(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (agentMsg.trim() && !sendingMsg) {
+                        setSendingMsg(true);
+                        apiFetch(`/agents/${selectedAgent.id}/message`, {
+                          method: 'POST',
+                          body: JSON.stringify({ text: agentMsg.trim(), mode: 'queue' }),
+                        }).then(() => {
+                          setAgentMsg('');
+                          useToastStore.getState().add('success', `Message sent to ${selectedAgent.role.name}`);
+                        }).catch((err: Error) => {
+                          useToastStore.getState().add('error', `Failed to send: ${err.message}`);
+                        }).finally(() => setSendingMsg(false));
+                      }
+                    }
+                  }}
+                  placeholder={`Message ${selectedAgent.role.name}...`}
+                  className="flex-1 bg-th-bg border border-th-border rounded px-2.5 py-1.5 text-xs font-mono text-th-text resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                  rows={2}
+                  disabled={sendingMsg}
+                />
+                <button
+                  onClick={() => {
+                    if (agentMsg.trim() && !sendingMsg) {
+                      setSendingMsg(true);
+                      apiFetch(`/agents/${selectedAgent.id}/message`, {
+                        method: 'POST',
+                        body: JSON.stringify({ text: agentMsg.trim(), mode: 'queue' }),
+                      }).then(() => {
+                        setAgentMsg('');
+                        useToastStore.getState().add('success', `Message sent to ${selectedAgent.role.name}`);
+                      }).catch((err: Error) => {
+                        useToastStore.getState().add('error', `Failed to send: ${err.message}`);
+                      }).finally(() => setSendingMsg(false));
+                    }
+                  }}
+                  disabled={!agentMsg.trim() || sendingMsg}
+                  className="self-end px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium flex items-center gap-1 transition-colors"
+                  title="Send message (Enter)"
+                >
+                  <Send size={12} /> {sendingMsg ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+              <p className="text-[10px] text-th-text-muted mt-1">Enter to send · Shift+Enter for newline · Message is queued for the agent</p>
+            </div>
+
           </div>
         </div>
       )}
@@ -3035,7 +3093,7 @@ function InlineMarkdown({ text }: { text: string }) {
   );
 }
 
-/** Renders agent text, separating ⟦ command ⟧ blocks from normal markdown */
+/** Renders agent text, separating ⟦⟦ command ⟧⟧ blocks from normal markdown */
 function RichContentBlock({ msg }: { msg: AcpTextChunk }) {
   if (msg.contentType === 'image' && msg.data) {
     return (
@@ -3108,10 +3166,10 @@ function CollapsibleReasoningBlock({ text, timestamp }: { text: string; timestam
   );
 }
 
-/** Collapsed-by-default ⟦ command ⟧ block with click to expand */
+/** Collapsed-by-default ⟦⟦ command ⟧⟧ block with click to expand */
 function CollapsibleCommandBlock({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
-  const nameMatch = text.match(/⟦\s*(\w+)/);
+  const nameMatch = text.match(/⟦⟦\s*(\w+)/);
   const label = nameMatch ? nameMatch[1] : 'command';
   // Extract a preview from the JSON payload
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -3143,27 +3201,27 @@ function CollapsibleCommandBlock({ text }: { text: string }) {
   );
 }
 
-/** Check if a ⟦ ... ⟧ block looks like a real command (ALL_CAPS name after ⟦) */
+/** Check if a ⟦⟦ ... ⟧⟧ block looks like a real command (ALL_CAPS name after ⟦⟦) */
 function isRealCommandBlock(text: string): boolean {
-  return /^⟦\s*[A-Z][A-Z_]{2,}/.test(text);
+  return /^⟦⟦\s*[A-Z][A-Z_]{2,}/.test(text);
 }
 
 function AgentTextBlock({ text }: { text: string }) {
-  // Split on ⟦ ... ⟧ blocks (complete) and also detect unclosed ⟦ blocks
-  const segments = text.split(/(⟦[\s\S]*?⟧)/g);
+  // Split on ⟦⟦ ... ⟧⟧ blocks (complete) and also detect unclosed ⟦⟦ blocks
+  const segments = text.split(/(⟦⟦[\s\S]*?⟧⟧)/g);
   return (
     <>
       {segments.map((seg, i) => {
-        // Complete ⟦ ⟧ block — only collapse if it looks like a real command
-        if (seg.startsWith('⟦') && seg.endsWith('⟧')) {
+        // Complete ⟦⟦ ⟧⟧ block — only collapse if it looks like a real command
+        if (seg.startsWith('⟦⟦') && seg.endsWith('⟧⟧')) {
           if (isRealCommandBlock(seg)) {
             return <CollapsibleCommandBlock key={i} text={seg} />;
           }
           return <MarkdownWithTables key={i} text={seg} />;
         }
-        // Unclosed ⟦ block (still streaming or split across messages)
-        if (seg.includes('⟦') && !seg.includes('⟧')) {
-          const idx = seg.indexOf('⟦');
+        // Unclosed ⟦⟦ block (still streaming or split across messages)
+        if (seg.includes('⟦⟦') && !seg.includes('⟧⟧')) {
+          const idx = seg.indexOf('⟦⟦');
           const before = seg.slice(0, idx);
           const cmdBlock = seg.slice(idx);
           if (isRealCommandBlock(cmdBlock)) {
@@ -3176,9 +3234,9 @@ function AgentTextBlock({ text }: { text: string }) {
           }
           return <MarkdownWithTables key={i} text={seg} />;
         }
-        // Dangling ⟧ from a block that started in a previous message
-        if (seg.includes('⟧') && !seg.includes('⟦')) {
-          const idx = seg.indexOf('⟧') + 1;
+        // Dangling ⟧⟧ from a block that started in a previous message
+        if (seg.includes('⟧⟧') && !seg.includes('⟦⟦')) {
+          const idx = seg.indexOf('⟧⟧') + 2;
           const cmdBlock = seg.slice(0, idx);
           const after = seg.slice(idx);
           return (

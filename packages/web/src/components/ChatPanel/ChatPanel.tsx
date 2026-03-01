@@ -1,6 +1,8 @@
 import { useRef, useState, useMemo } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { resolveShortId } from '../../utils/resolveShortId';
+import { apiFetch } from '../../hooks/useApi';
+import { useToastStore } from '../Toast';
 import { X, Send, Maximize2, Minimize2, Megaphone } from 'lucide-react';
 import { AcpOutput } from './AcpOutput';
 import { AgentIdBadge } from '../../utils/markdown';
@@ -67,7 +69,16 @@ export function ChatPanel({ agentId, ws, api }: Props) {
 
   const runningAgents = agents.filter((a) => a.status === 'running');
 
-  const handleSend = () => {
+  const sendToAgent = (targetId: string, text: string, mode: 'queue' | 'interrupt' = 'queue') => {
+    apiFetch(`/agents/${targetId}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ text, mode }),
+    }).catch((err: Error) => {
+      useToastStore.getState().add('error', `Failed to send: ${err.message}`);
+    });
+  };
+
+  const handleSend = (mode: 'queue' | 'interrupt' = 'queue') => {
     if (!inputText.trim()) return;
 
     // Record user message in store so it appears in chat
@@ -75,15 +86,15 @@ export function ChatPanel({ agentId, ws, api }: Props) {
     const existing = state.agents.find((a) => a.id === agentId);
     const isAgentBusy = existing?.status === 'running';
     const msgs = [...(existing?.messages ?? [])];
-    msgs.push({ type: 'text', text: inputText, sender: 'user', timestamp: Date.now(), ...(isAgentBusy ? { queued: true } : {}) });
+    msgs.push({ type: 'text', text: inputText, sender: 'user', timestamp: Date.now(), ...(isAgentBusy && mode === 'queue' ? { queued: true } : {}) });
     useAppStore.getState().updateAgent(agentId, { messages: msgs });
 
     if (broadcast) {
       const allAgents = useAppStore.getState().agents;
       const running = allAgents.filter((a) => a.status === 'running');
-      running.forEach((a) => ws.sendInput(a.id, inputText + '\n'));
+      running.forEach((a) => sendToAgent(a.id, inputText, mode));
     } else {
-      ws.sendInput(agentId, inputText + '\n');
+      sendToAgent(agentId, inputText, mode);
     }
     // Send to @mentioned agents
     const mentionPattern = /@([a-f0-9]{4,8})\b/g;
@@ -91,7 +102,7 @@ export function ChatPanel({ agentId, ws, api }: Props) {
     while ((m = mentionPattern.exec(inputText)) !== null) {
       const fullId = useAppStore.getState().agents.find((a) => a.id.startsWith(m![1]))?.id;
       if (fullId && fullId !== agentId) {
-        ws.sendInput(fullId, inputText + '\n');
+        sendToAgent(fullId, inputText, mode);
       }
     }
     setInputText('');
@@ -185,9 +196,10 @@ export function ChatPanel({ agentId, ws, api }: Props) {
               } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 if (inputText.trim()) {
-                  handleSend();
+                  handleSend('interrupt');
+                } else {
+                  api.interruptAgent(agentId);
                 }
-                api.interruptAgent(agentId);
               }
             }}
             onInput={(e) => {
@@ -208,7 +220,7 @@ export function ChatPanel({ agentId, ws, api }: Props) {
             <Megaphone size={14} />
           </button>
           <button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             className="p-2 bg-accent text-black rounded-lg hover:bg-accent-muted transition-colors"
           >
             <Send size={14} />

@@ -1,9 +1,11 @@
 import express from 'express';
+import helmet from 'helmet';
 import { createServer } from 'http';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getConfig, updateConfig } from './config.js';
+import { originValidation } from './middleware/originValidation.js';
 import { WebSocketServer } from './comms/WebSocketServer.js';
 import { MessageBus } from './comms/MessageBus.js';
 import { AgentManager } from './agents/AgentManager.js';
@@ -59,14 +61,11 @@ app.use(cors({
   credentials: true,
 }));
 
-// Security headers
-app.use((_req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('X-XSS-Protection', '0'); // modern browsers use CSP instead
-  next();
-});
+// Security headers (helmet sets X-Frame-Options, CSP, HSTS, etc.)
+app.use(helmet());
+
+// CSRF protection — reject requests from non-localhost origins
+app.use(originValidation);
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -171,7 +170,7 @@ eagerScheduler.start();
 
 // Timer system — agents can set named timers with custom messages
 import { TimerRegistry } from './coordination/TimerRegistry.js';
-const timerRegistry = new TimerRegistry();
+const timerRegistry = new TimerRegistry(db.drizzle);
 timerRegistry.start();
 
 // Dynamic Role Morphing — agents acquire capabilities on demand
@@ -225,14 +224,19 @@ lockRegistry.on('lock:acquired', ({ agentId, agentRole, filePath }: { agentId: s
 import { AgentMatcher } from './coordination/AgentMatcher.js';
 const agentMatcher = new AgentMatcher(agentManager, capabilityRegistry, activityLedger);
 
-// Wire timer:fired events — inject reminder messages into agents
-// Wrap in [System Timer] prefix to prevent ACP command injection
+// Wire timer events — inject reminder messages into agents + broadcast to UI
 timerRegistry.on('timer:fired', (timer: { agentId: string; label: string; message: string }) => {
   const agent = agentManager.get(timer.agentId);
   if (agent && agent.status === 'running') {
-    const safeMsg = timer.message.replace(/\[\[\[/g, '(((').replace(/\]\]\]/g, ')))');
-    agent.sendMessage(`[System Timer "${timer.label}"] ${safeMsg}`);
+    agent.sendMessage(`[System Timer "${timer.label}"] ${timer.message}`);
   }
+  wsServer.broadcastEvent({ type: 'timer:fired', timer });
+});
+timerRegistry.on('timer:created', (timer: { id: string; agentId: string; label: string }) => {
+  wsServer.broadcastEvent({ type: 'timer:created', timer });
+});
+timerRegistry.on('timer:cancelled', (timer: { id: string; agentId: string; label: string }) => {
+  wsServer.broadcastEvent({ type: 'timer:cancelled', timer });
 });
 
 // Wire dag:updated → eager scheduler re-evaluates immediately on any DAG change
@@ -320,14 +324,14 @@ if (fs.existsSync(webDistPath)) {
   app.get('/{*path}', (_req, res) => {
     const secret = getAuthSecret();
     if (secret) {
-      const injected = indexHtml.replace(
-        '</head>',
-        `<script>window.__AI_CREW_TOKEN__=${JSON.stringify(secret)}</script></head>`,
-      );
-      res.type('html').send(injected);
-    } else {
-      res.type('html').send(indexHtml);
+      // Deliver token via HttpOnly cookie — never embed secrets in HTML
+      res.cookie('ai-crew-token', secret, {
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+      });
     }
+    res.type('html').send(indexHtml);
   });
 }
 
@@ -355,6 +359,7 @@ function gracefulShutdown(signal: string) {
   eagerScheduler.stop();
   retryManager.stop();
   escalationManager.stop();
+  wsServer.close();
   agentManager.shutdownAll();
   activityLedger.stop();
   timerRegistry.stop();
@@ -371,3 +376,7 @@ function gracefulShutdown(signal: string) {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('Unhandled promise rejection:', reason);
+  gracefulShutdown('unhandledRejection');
+});

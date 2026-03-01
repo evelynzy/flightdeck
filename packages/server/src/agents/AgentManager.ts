@@ -739,6 +739,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     this._systemPaused = false;
     for (const agent of this.agents.values()) {
       agent.systemPaused = false;
+      // Notify running/idle agents that the system has resumed
+      if (agent.status === 'running' || agent.status === 'idle') {
+        agent.queueMessage('[System] ▶️ The system has been resumed. You may continue your work.');
+      }
     }
     this.emit('system:paused', { paused: false });
     logger.info('system', 'System resumed by user');
@@ -912,7 +916,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         if (group.roles.some((r) => r.toLowerCase() === agent.role.id.toLowerCase())) {
           const added = this.chatGroupRegistry.addMembers(leadId, group.name, [agent.id]);
           if (added.length > 0) {
-            agent.queueMessage(`[System] You've been auto-added to group "${group.name}" (matches your role "${agent.role.id}"). Send messages: ⟦ GROUP_MESSAGE {"group": "${group.name}", "content": "your message"} ⟧`);
+            agent.queueMessage(`[System] You've been auto-added to group "${group.name}" (matches your role "${agent.role.id}"). Send messages: ⟦⟦ GROUP_MESSAGE {"group": "${group.name}", "content": "your message"} ⟧⟧`);
             logger.info('groups', `Auto-added ${agent.role.name} (${agent.id.slice(0, 8)}) to group "${group.name}" via role criteria`);
           }
         }

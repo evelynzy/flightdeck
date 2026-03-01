@@ -5,8 +5,7 @@
  * time-range. Dependency edges are drawn as SVG cubic-bezier curves.
  * The critical path (longest-duration dependency chain) is highlighted.
  */
-import { useMemo, useState, useCallback, useRef } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { useMemo, useState, useRef } from 'react';
 import { computeCriticalPath, type CriticalPathTask } from './dagCriticalPath';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -28,23 +27,12 @@ export interface DagGanttProps {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
-  done:    'bg-green-500 dark:bg-green-600',
-  running: 'bg-blue-500 dark:bg-blue-600 animate-pulse',
-  pending: 'bg-yellow-500 dark:bg-yellow-600',
-  blocked: 'bg-th-bg-muted',
-  failed:  'bg-red-500 dark:bg-red-600',
-  skipped: 'bg-th-text-muted/30',
-};
+import { dagStatusBar } from '../../utils/statusColors';
 
 const ROW_H   = 28; // bar height in px
 const ROW_GAP = 6;  // vertical gap between rows
 const LABEL_W = 176; // fixed label column width
 const VB_W    = 1000; // SVG viewBox virtual width
-
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 5;
-const ZOOM_STEP = 0.5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -65,12 +53,7 @@ function fmtDuration(ms: number): string {
 export function DagGantt({ tasks }: DagGanttProps) {
   const now = Date.now();
 
-  const [zoom, setZoom] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const handleZoomIn = useCallback(() => setZoom(z => Math.min(z + ZOOM_STEP, MAX_ZOOM)), []);
-  const handleZoomOut = useCallback(() => setZoom(z => Math.max(z - ZOOM_STEP, MIN_ZOOM)), []);
-  const handleZoomReset = useCallback(() => setZoom(1), []);
 
   const [tooltip, setTooltip] = useState<{
     task: GanttTask;
@@ -115,38 +98,8 @@ export function DagGantt({ tasks }: DagGanttProps) {
 
   return (
     <div className="relative select-none text-th-text">
-      {/* ── Zoom controls ── */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5" role="toolbar" aria-label="Gantt chart zoom controls">
-          <button
-            onClick={handleZoomOut}
-            disabled={zoom <= MIN_ZOOM}
-            aria-label="Zoom out"
-            className="p-1 rounded text-th-text-muted hover:text-th-text hover:bg-th-bg-muted/50 disabled:opacity-30 transition-colors"
-          >
-            <ZoomOut size={14} />
-          </button>
-          <span className="text-[10px] text-th-text-muted min-w-[3ch] text-center">{zoom === 1 ? '1×' : `${zoom}×`}</span>
-          <button
-            onClick={handleZoomIn}
-            disabled={zoom >= MAX_ZOOM}
-            aria-label="Zoom in"
-            className="p-1 rounded text-th-text-muted hover:text-th-text hover:bg-th-bg-muted/50 disabled:opacity-30 transition-colors"
-          >
-            <ZoomIn size={14} />
-          </button>
-          {zoom !== 1 && (
-            <button
-              onClick={handleZoomReset}
-              aria-label="Reset zoom"
-              className="p-1 rounded text-th-text-muted hover:text-th-text hover:bg-th-bg-muted/50 transition-colors"
-            >
-              <RotateCcw size={12} />
-            </button>
-          )}
-        </div>
-
-        {/* ── Time axis header ── */}
+      {/* ── Time axis header ── */}
+      <div className="flex items-center justify-end mb-2">
         <div className="text-[10px] text-th-text-muted flex gap-4">
           <span>{fmtTime(minTime)}</span>
           <span>—</span>
@@ -162,7 +115,7 @@ export function DagGantt({ tasks }: DagGanttProps) {
         aria-label="Gantt chart scrollable area"
         tabIndex={0}
       >
-        <div className="flex" style={{ height: totalH, minWidth: `${100 * zoom}%` }}>
+        <div className="flex" style={{ height: totalH }}>
           {/* Label column */}
           <div className="shrink-0 relative sticky left-0 z-10 bg-th-bg" style={{ width: LABEL_W }}>
             {tasks.map((task, i) => (
@@ -222,7 +175,8 @@ export function DagGantt({ tasks }: DagGanttProps) {
                 <div
                   key={task.id}
                   className={`absolute rounded flex items-center px-1.5 overflow-hidden cursor-default
-                    ${STATUS_COLORS[task.status] ?? 'bg-gray-500'}
+                    ${dagStatusBar(task.status)}
+                    ${task.status === 'running' ? 'animate-pulse' : ''}
                     ${onCrit ? 'ring-1 ring-orange-400/80' : ''}
                   `}
                   style={{
@@ -298,7 +252,7 @@ export function DagGantt({ tasks }: DagGanttProps) {
       <div className="flex flex-wrap items-center gap-3 mt-3 text-[10px] text-th-text-muted">
         {(['done','running','pending','blocked','failed','skipped'] as const).map(s => (
           <span key={s} className="flex items-center gap-1">
-            <span className={`inline-block w-3 h-2 rounded-sm ${STATUS_COLORS[s]}`} />
+            <span className={`inline-block w-3 h-2 rounded-sm ${dagStatusBar(s)}`} />
             <span className="capitalize">{s}</span>
           </span>
         ))}

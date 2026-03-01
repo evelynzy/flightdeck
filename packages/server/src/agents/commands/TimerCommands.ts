@@ -14,9 +14,9 @@ import {
 
 // ── Regex patterns ────────────────────────────────────────────────────
 
-const SET_TIMER_REGEX = /⟦\s*SET_TIMER\s*(\{.*?\})\s*⟧/s;
-const CANCEL_TIMER_REGEX = /⟦\s*CANCEL_TIMER\s*(\{.*?\})\s*⟧/s;
-const LIST_TIMERS_REGEX = /⟦\s*LIST_TIMERS\s*(?:\{.*?\})?\s*⟧/s;
+const SET_TIMER_REGEX = /⟦⟦\s*SET_TIMER\s*(\{.*?\})\s*⟧⟧/s;
+const CANCEL_TIMER_REGEX = /⟦⟦\s*CANCEL_TIMER\s*(\{.*?\})\s*⟧⟧/s;
+const LIST_TIMERS_REGEX = /⟦⟦\s*LIST_TIMERS\s*(?:\{.*?\})?\s*⟧⟧/s;
 
 // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ function handleSetTimer(ctx: CommandHandlerContext, agent: Agent, data: string):
       message: req.message,
       delaySeconds: delay,
       repeat: req.repeat === true,
-    });
+    }, agent.role.id, agent.parentId ?? null);
 
     if (!timer) {
       agent.sendMessage('[System] Timer limit reached (max 20 per agent). Cancel some timers first with CANCEL_TIMER.');

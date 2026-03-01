@@ -5,13 +5,14 @@ import {
   parseCommandPayload,
   deferIssueSchema,
   resolveDeferredSchema,
+  queryDeferredSchema,
 } from './commandSchemas.js';
 
 // ── Regex patterns ──────────────────────────────────────────────────
 
-const DEFER_ISSUE_REGEX = /⟦\s*DEFER_ISSUE\s*(\{.*?\})\s*⟧/s;
-const QUERY_DEFERRED_REGEX = /⟦\s*QUERY_DEFERRED\s*(\{.*?\})?\s*⟧/s;
-const RESOLVE_DEFERRED_REGEX = /⟦\s*RESOLVE_DEFERRED\s*(\{.*?\})\s*⟧/s;
+const DEFER_ISSUE_REGEX = /⟦⟦\s*DEFER_ISSUE\s*(\{.*?\})\s*⟧⟧/s;
+const QUERY_DEFERRED_REGEX = /⟦⟦\s*QUERY_DEFERRED\s*(\{.*?\})?\s*⟧⟧/s;
+const RESOLVE_DEFERRED_REGEX = /⟦⟦\s*RESOLVE_DEFERRED\s*(\{.*?\})\s*⟧⟧/s;
 
 // ── Exported: command entry list ─────────────────────────────────────
 
@@ -61,12 +62,11 @@ function handleQueryDeferred(ctx: CommandHandlerContext, agent: Agent, data: str
   let statusFilter: 'open' | 'resolved' | 'dismissed' | undefined;
   const match = data.match(QUERY_DEFERRED_REGEX);
   if (match?.[1]) {
-    try {
-      const req = JSON.parse(match[1]);
-      if (req.status && ['open', 'resolved', 'dismissed'].includes(req.status)) {
-        statusFilter = req.status;
-      }
-    } catch { /* no filter, show all */ }
+    // Note: invalid status values now return an error instead of silently showing all issues.
+    // This is intentional — agents should use valid values: "open", "resolved", "dismissed".
+    const req = parseCommandPayload(agent, match[1], queryDeferredSchema, 'QUERY_DEFERRED');
+    if (!req) return;
+    statusFilter = req.status;
   }
   const issues = ctx.deferredIssueRegistry.list(leadId, statusFilter);
   if (issues.length === 0) {

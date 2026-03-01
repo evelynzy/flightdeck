@@ -4,6 +4,7 @@ import { isTerminalStatus } from '../agents/Agent.js';
 import type { FileLockRegistry } from './FileLockRegistry.js';
 import type { ActivityLedger } from './ActivityLedger.js';
 import { SynthesisEngine } from './SynthesisEngine.js';
+import { SmartActivityFilter } from './SmartActivityFilter.js';
 
 /** Interval for periodic status updates to roles with receivesStatusUpdates (ms) */
 const PERIODIC_UPDATE_INTERVAL_MS = 60_000;
@@ -13,8 +14,11 @@ export class ContextRefresher {
   private lockRegistry: FileLockRegistry;
   private activityLedger: ActivityLedger;
   private synthesisEngine: SynthesisEngine;
+  private activityFilter: SmartActivityFilter;
   private debounceHandle: ReturnType<typeof setTimeout> | null = null;
   private periodicHandle: ReturnType<typeof setInterval> | null = null;
+  private boundRefresh: () => void;
+  private boundCompacted: (data: { agentId: string }) => void;
 
   constructor(
     agentManager: AgentManager,
@@ -25,19 +29,21 @@ export class ContextRefresher {
     this.lockRegistry = lockRegistry;
     this.activityLedger = activityLedger;
     this.synthesisEngine = new SynthesisEngine(activityLedger, agentManager);
+    this.activityFilter = new SmartActivityFilter();
+
+    // Store bound references so we can remove them in stop()
+    this.boundRefresh = () => this.scheduleRefresh();
+    this.boundCompacted = (data) => this.refreshOne(data.agentId);
 
     // Listen to significant events with debounce
-    const debouncedRefresh = () => this.scheduleRefresh();
-    this.agentManager.on('agent:spawned', debouncedRefresh);
-    this.agentManager.on('agent:terminated', debouncedRefresh);
-    this.agentManager.on('agent:exit', debouncedRefresh);
-    this.lockRegistry.on('lock:acquired', debouncedRefresh);
-    this.lockRegistry.on('lock:released', debouncedRefresh);
+    this.agentManager.on('agent:spawned', this.boundRefresh);
+    this.agentManager.on('agent:terminated', this.boundRefresh);
+    this.agentManager.on('agent:exit', this.boundRefresh);
+    this.lockRegistry.on('lock:acquired', this.boundRefresh);
+    this.lockRegistry.on('lock:released', this.boundRefresh);
 
     // Re-inject crew context immediately after Copilot CLI compacts an agent's context
-    this.agentManager.on('agent:context_compacted', (data: { agentId: string }) => {
-      this.refreshOne(data.agentId);
-    });
+    this.agentManager.on('agent:context_compacted', this.boundCompacted);
   }
 
   start(): void {
@@ -51,6 +57,14 @@ export class ContextRefresher {
   }
 
   stop(): void {
+    // Remove event listeners to prevent leaks
+    this.agentManager.off('agent:spawned', this.boundRefresh);
+    this.agentManager.off('agent:terminated', this.boundRefresh);
+    this.agentManager.off('agent:exit', this.boundRefresh);
+    this.lockRegistry.off('lock:acquired', this.boundRefresh);
+    this.lockRegistry.off('lock:released', this.boundRefresh);
+    this.agentManager.off('agent:context_compacted', this.boundCompacted);
+
     if (this.debounceHandle) {
       clearTimeout(this.debounceHandle);
       this.debounceHandle = null;
@@ -124,8 +138,18 @@ export class ContextRefresher {
   }
 
   buildRecentActivity(limit: number = 20): string[] {
-    const entries = this.activityLedger.getRecent(limit);
-    return entries.map((entry) => {
+    // Fetch extra entries so the smart filter has enough high/medium priority events.
+    // If the first pass is exhausted by low-value churn, widen the window adaptively.
+    const initialFetch = limit * 5;
+    let rawEntries = this.activityLedger.getRecent(initialFetch);
+    let filtered = this.activityFilter.filter(rawEntries, limit);
+
+    if (filtered.length < limit && rawEntries.length >= initialFetch) {
+      rawEntries = this.activityLedger.getRecent(initialFetch * 3);
+      filtered = this.activityFilter.filter(rawEntries, limit);
+    }
+
+    return filtered.map((entry) => {
       const shortId = entry.agentId.slice(0, 8);
       return `[${entry.timestamp}] Agent ${shortId} (${entry.agentRole}): ${entry.actionType} — ${entry.summary}`;
     });

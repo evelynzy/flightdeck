@@ -18,17 +18,17 @@ import {
 
 // ── Regex patterns ────────────────────────────────────────────────────
 
-const DECLARE_TASKS_REGEX = /⟦\s*DECLARE_TASKS\s*(\{.*?\})\s*⟧/s;
-const TASK_STATUS_REGEX = /⟦\s*TASK_STATUS\s*⟧/s;
-const QUERY_TASKS_REGEX = /⟦\s*QUERY_TASKS\s*⟧/s;
-const PAUSE_TASK_REGEX = /⟦\s*PAUSE_TASK\s*(\{.*?\})\s*⟧/s;
-const RETRY_TASK_REGEX = /⟦\s*RETRY_TASK\s*(\{.*?\})\s*⟧/s;
-const SKIP_TASK_REGEX = /⟦\s*SKIP_TASK\s*(\{.*?\})\s*⟧/s;
-const ADD_TASK_REGEX = /⟦\s*ADD_TASK\s*(\{.*?\})\s*⟧/s;
-const CANCEL_TASK_REGEX = /⟦\s*CANCEL_TASK\s*(\{.*?\})\s*⟧/s;
-const COMPLETE_TASK_REGEX = /⟦\s*COMPLETE_TASK\s*(\{.*?\})\s*⟧/s;
-const RESET_DAG_REGEX = /⟦\s*RESET_DAG\s*⟧/s;
-const ADD_DEPENDENCY_REGEX = /⟦\s*ADD_DEPENDENCY\s*(\{.*?\})\s*⟧/s;
+const DECLARE_TASKS_REGEX = /⟦⟦\s*DECLARE_TASKS\s*(\{.*?\})\s*⟧⟧/s;
+const TASK_STATUS_REGEX = /⟦⟦\s*TASK_STATUS\s*⟧⟧/s;
+const QUERY_TASKS_REGEX = /⟦⟦\s*QUERY_TASKS\s*⟧⟧/s;
+const PAUSE_TASK_REGEX = /⟦⟦\s*PAUSE_TASK\s*(\{.*?\})\s*⟧⟧/s;
+const RETRY_TASK_REGEX = /⟦⟦\s*RETRY_TASK\s*(\{.*?\})\s*⟧⟧/s;
+const SKIP_TASK_REGEX = /⟦⟦\s*SKIP_TASK\s*(\{.*?\})\s*⟧⟧/s;
+const ADD_TASK_REGEX = /⟦⟦\s*ADD_TASK\s*(\{.*?\})\s*⟧⟧/s;
+const CANCEL_TASK_REGEX = /⟦⟦\s*CANCEL_TASK\s*(\{.*?\})\s*⟧⟧/s;
+const COMPLETE_TASK_REGEX = /⟦⟦\s*COMPLETE_TASK\s*(\{.*?\})\s*⟧⟧/s;
+const RESET_DAG_REGEX = /⟦⟦\s*RESET_DAG\s*⟧⟧/s;
+const ADD_DEPENDENCY_REGEX = /⟦⟦\s*ADD_DEPENDENCY\s*(\{.*?\})\s*⟧⟧/s;
 
 // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -209,12 +209,20 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
 
       // Relay to parent's DAG if we have a task ID
       if (taskId) {
-        // Security: verify calling agent is assigned to this task (or it's their dagTaskId)
+        // Security: verify calling agent owns this task
         if (req.id && req.id !== agent.dagTaskId) {
           const task = ctx.taskDAG.getTask(agent.parentId, taskId);
-          if (task && task.assignedAgentId && task.assignedAgentId !== agent.id) {
-            agent.sendMessage(`[System] COMPLETE_TASK denied: task "${taskId}" is assigned to another agent.`);
-            return;
+          if (task) {
+            // Deny if task is assigned to a different agent
+            if (task.assignedAgentId && task.assignedAgentId !== agent.id) {
+              agent.sendMessage(`[System] COMPLETE_TASK denied: task "${taskId}" is assigned to another agent.`);
+              return;
+            }
+            // Deny if task is unassigned — non-leads can only complete their own tasks
+            if (!task.assignedAgentId) {
+              agent.sendMessage(`[System] COMPLETE_TASK denied: task "${taskId}" is not assigned to you. Only the lead can complete unassigned tasks.`);
+              return;
+            }
           }
         }
 
@@ -298,6 +306,15 @@ function handleAddDependency(ctx: CommandHandlerContext, agent: Agent, data: str
     if (!leadId) {
       agent.sendMessage('[System] ADD_DEPENDENCY error: cannot determine lead. Only agents with a parent lead can add dependencies.');
       return;
+    }
+
+    // Authorization: non-lead agents can only add dependencies to tasks assigned to them
+    if (agent.role.id !== 'lead' && agent.role.id !== 'secretary') {
+      const task = ctx.taskDAG.getTask(leadId, req.taskId);
+      if (!task || task.assignedAgentId !== agent.id) {
+        agent.sendMessage(`[System] ADD_DEPENDENCY denied: you can only add dependencies to tasks assigned to you.`);
+        return;
+      }
     }
 
     const results: string[] = [];

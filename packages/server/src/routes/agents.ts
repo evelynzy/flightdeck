@@ -3,7 +3,7 @@ import { agentPlans } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { logger } from '../utils/logger.js';
 import { validateBody, spawnAgentSchema, sendMessageSchema, agentInputSchema } from '../validation/schemas.js';
-import { spawnLimiter } from './context.js';
+import { spawnLimiter, messageLimiter } from './context.js';
 import type { AppContext } from './context.js';
 
 export function agentsRoutes(ctx: AppContext): Router {
@@ -89,9 +89,9 @@ export function agentsRoutes(ctx: AppContext): Router {
   });
 
   // Send a message to an agent: mode "queue" (default) waits for idle, "interrupt" cancels current work first
-  router.post('/agents/:id/message', validateBody(sendMessageSchema), async (req, res) => {
+  router.post('/agents/:id/message', messageLimiter, validateBody(sendMessageSchema), async (req, res) => {
     const { text, mode = 'queue' } = req.body;
-    const agent = agentManager.get(req.params.id);
+    const agent = agentManager.get(req.params.id as string);
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
     if (agent.role.id === 'lead') {

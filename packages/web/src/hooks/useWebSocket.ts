@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useGroupStore, groupKey } from '../stores/groupStore';
+import { useTimerStore } from '../stores/timerStore';
 import { useToastStore } from '../components/Toast';
 import type { WsMessage } from '../types';
 import { getAuthToken } from './useApi';
@@ -223,9 +224,41 @@ export function useWebSocket() {
           }
           break;
         }
+        case 'group:reaction': {
+          const gs = useGroupStore.getState();
+          if (msg.messageId && msg.emoji && msg.agentId) {
+            const key = groupKey(msg.leadId, msg.groupName);
+            if (msg.action === 'remove') {
+              gs.removeReaction(key, msg.messageId, msg.emoji, msg.agentId);
+            } else {
+              gs.addReaction(key, msg.messageId, msg.emoji, msg.agentId);
+            }
+          }
+          break;
+        }
         case 'system:paused':
           useAppStore.getState().setSystemPaused(msg.paused);
           break;
+        case 'timer:created': {
+          const ts = useTimerStore.getState();
+          if (msg.timer) ts.addTimer(msg.timer);
+          break;
+        }
+        case 'timer:fired': {
+          const ts = useTimerStore.getState();
+          const timerId = msg.timerId ?? msg.timer?.id;
+          if (timerId) {
+            ts.fireTimer(timerId);
+            ts.scheduleFireRemoval(timerId);
+          }
+          break;
+        }
+        case 'timer:cancelled': {
+          const ts = useTimerStore.getState();
+          const timerId = msg.timerId ?? msg.timer?.id;
+          if (timerId) ts.removeTimer(timerId);
+          break;
+        }
       }
       } catch (err) {
         console.error('[useWebSocket] Failed to parse message:', err);

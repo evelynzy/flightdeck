@@ -20,11 +20,11 @@ import {
 
 // ── Regex patterns ────────────────────────────────────────────────────
 
-const SPAWN_REQUEST_REGEX = /⟦\s*SPAWN_AGENT\s*(\{.*?\})\s*⟧/s;
-const CREATE_AGENT_REGEX = /⟦\s*CREATE_AGENT\s*(\{.*?\})\s*⟧/s;
-const DELEGATE_REGEX = /⟦\s*DELEGATE\s*(\{.*?\})\s*⟧/s;
-const TERMINATE_AGENT_REGEX = /⟦\s*TERMINATE_AGENT\s*(\{.*?\})\s*⟧/s;
-const CANCEL_DELEGATION_REGEX = /⟦\s*CANCEL_DELEGATION\s*(\{.*?\})\s*⟧/s;
+const SPAWN_REQUEST_REGEX = /⟦⟦\s*SPAWN_AGENT\s*(\{.*?\})\s*⟧⟧/s;
+const CREATE_AGENT_REGEX = /⟦⟦\s*CREATE_AGENT\s*(\{.*?\})\s*⟧⟧/s;
+const DELEGATE_REGEX = /⟦⟦\s*DELEGATE\s*(\{.*?\})\s*⟧⟧/s;
+const TERMINATE_AGENT_REGEX = /⟦⟦\s*TERMINATE_AGENT\s*(\{.*?\})\s*⟧⟧/s;
+const CANCEL_DELEGATION_REGEX = /⟦⟦\s*CANCEL_DELEGATION\s*(\{.*?\})\s*⟧⟧/s;
 
 // ── Exported: command entry list ──────────────────────────────────────
 
@@ -239,6 +239,7 @@ function handleDelegate(ctx: CommandHandlerContext, agent: Agent, data: string):
     ctx.delegations.set(delegation.id, delegation);
 
     child.task = req.task;
+    child.taskOutputStartIndex = child.messages?.length ?? 0;
 
     // Link to DAG: mark the corresponding DAG task as running
     let dagNote = '';
@@ -689,7 +690,7 @@ export function requestSecretaryDependencyAnalysis(
     `Description: ${taskDescription.slice(0, 500)}\n\n` +
     `Active tasks:\n${activeTasks}\n\n` +
     `Does "${newTaskId}" depend on any of these tasks? ` +
-    `If yes, reply with ⟦ ADD_DEPENDENCY {"taskId": "${newTaskId}", "depends_on": ["task-id-here"]} ⟧. ` +
+    `If yes, reply with ⟦⟦ ADD_DEPENDENCY {"taskId": "${newTaskId}", "depends_on": ["task-id-here"]} ⟧⟧. ` +
     `If no dependencies, ignore this message.`
   );
   logger.info('delegation', `Requested Secretary dependency analysis for "${newTaskId}"`);
@@ -791,7 +792,7 @@ export function maybeSuggestDagGroup(
     lead.sendMessage(
       `[System suggestion] ${agentIds.size} agents are working on ${keyword}-related tasks: ${memberList}. ` +
       `Consider creating a coordination group:\n` +
-      `⟦ CREATE_GROUP {"name": "${groupName}", "members": ${memberIds}} ⟧`
+      `⟦⟦ CREATE_GROUP {"name": "${groupName}", "members": ${memberIds}} ⟧⟧`
     );
     alreadySuggested.add(groupName);
     logger.info('delegation', `Suggested group "${groupName}" for ${agentIds.size} agents on ${keyword} tasks`);

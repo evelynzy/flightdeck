@@ -19,6 +19,7 @@ export interface GroupMessage {
   fromAgentId: string;
   fromRole: string;
   content: string;
+  reactions: Record<string, string[]>;
   timestamp: string;
 }
 
@@ -125,7 +126,7 @@ export class ChatGroupRegistry extends EventEmitter {
       .values({ id, groupName, leadId, fromAgentId: fromId, fromRole, content, timestamp })
       .run();
 
-    const message: GroupMessage = { id, groupName, leadId, fromAgentId: fromId, fromRole, content, timestamp };
+    const message: GroupMessage = { id, groupName, leadId, fromAgentId: fromId, fromRole, content, reactions: {}, timestamp };
 
     // Get recipient IDs (all members except sender)
     const recipients = this.getMembers(groupName, leadId).filter((m) => m !== fromId);
@@ -202,8 +203,74 @@ export class ChatGroupRegistry extends EventEmitter {
       fromAgentId: r.fromAgentId,
       fromRole: r.fromRole,
       content: r.content,
+      reactions: JSON.parse(r.reactions || '{}') as Record<string, string[]>,
       timestamp: r.timestamp!,
     }));
+  }
+
+  // ── Reactions ──────────────────────────────────────────────────────
+
+  addReaction(messageId: string, agentId: string, emoji: string): boolean {
+    let emitPayload: { messageId: string; groupName: string; leadId: string; agentId: string; emoji: string; action: 'add' } | null = null;
+
+    this.db.drizzle.transaction((tx) => {
+      const row = tx
+        .select()
+        .from(chatGroupMessages)
+        .where(eq(chatGroupMessages.id, messageId))
+        .get();
+      if (!row) return;
+
+      const reactions: Record<string, string[]> = JSON.parse(row.reactions || '{}');
+      if (!reactions[emoji]) reactions[emoji] = [];
+      if (reactions[emoji].includes(agentId)) return; // already reacted
+
+      reactions[emoji].push(agentId);
+      tx.update(chatGroupMessages)
+        .set({ reactions: JSON.stringify(reactions) })
+        .where(eq(chatGroupMessages.id, messageId))
+        .run();
+
+      emitPayload = { messageId, groupName: row.groupName, leadId: row.leadId, agentId, emoji, action: 'add' as const };
+    });
+
+    if (emitPayload) {
+      this.emit('group:reaction', emitPayload);
+      return true;
+    }
+    return false;
+  }
+
+  removeReaction(messageId: string, agentId: string, emoji: string): boolean {
+    let emitPayload: { messageId: string; groupName: string; leadId: string; agentId: string; emoji: string; action: 'remove' } | null = null;
+
+    this.db.drizzle.transaction((tx) => {
+      const row = tx
+        .select()
+        .from(chatGroupMessages)
+        .where(eq(chatGroupMessages.id, messageId))
+        .get();
+      if (!row) return;
+
+      const reactions: Record<string, string[]> = JSON.parse(row.reactions || '{}');
+      if (!reactions[emoji] || !reactions[emoji].includes(agentId)) return;
+
+      reactions[emoji] = reactions[emoji].filter((id) => id !== agentId);
+      if (reactions[emoji].length === 0) delete reactions[emoji];
+
+      tx.update(chatGroupMessages)
+        .set({ reactions: JSON.stringify(reactions) })
+        .where(eq(chatGroupMessages.id, messageId))
+        .run();
+
+      emitPayload = { messageId, groupName: row.groupName, leadId: row.leadId, agentId, emoji, action: 'remove' as const };
+    });
+
+    if (emitPayload) {
+      this.emit('group:reaction', emitPayload);
+      return true;
+    }
+    return false;
   }
 
   isMember(groupName: string, leadId: string, agentId: string): boolean {
