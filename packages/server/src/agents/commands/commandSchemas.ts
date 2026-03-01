@@ -215,6 +215,11 @@ export const completeTaskSchema = z.object({
   output: z.string().max(MAX_CONTENT_LENGTH, `"output" too long (max ${MAX_CONTENT_LENGTH})`).optional(),
 });
 
+export const addDependencySchema = z.object({
+  taskId: z.string({ message: 'Missing required field "taskId"' }).min(1, 'Missing required field "taskId"').max(MAX_ID_LENGTH),
+  depends_on: z.array(z.string().max(MAX_ID_LENGTH)).min(1, '"depends_on" must have at least one task ID').max(20, '"depends_on" max 20 entries'),
+});
+
 // ── Validation helper ────────────────────────────────────────────────
 
 /**

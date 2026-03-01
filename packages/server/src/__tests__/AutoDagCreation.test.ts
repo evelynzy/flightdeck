@@ -2,11 +2,11 @@
  * Tests for auto-DAG creation from CREATE_AGENT and DELEGATE commands.
  * When a lead delegates without a pre-declared DAG task, the system
  * auto-creates a DAG task entry and links the agent to it.
- * Covers 3-tier dependency inference: explicit, review, and NL parsing.
+ * Covers dependency inference: explicit depends_on, review inference, and Secretary-assisted analysis.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getLifecycleCommands } from '../agents/commands/AgentLifecycle.js';
-import { generateAutoTaskId, inferSequentialDependencies } from '../agents/commands/AgentLifecycle.js';
+import { generateAutoTaskId, requestSecretaryDependencyAnalysis } from '../agents/commands/AgentLifecycle.js';
 import type { CommandHandlerContext } from '../agents/commands/types.js';
 
 function makeLeadAgent(overrides: Record<string, any> = {}) {
@@ -401,8 +401,8 @@ describe('Tier 1: Explicit depends_on from payload', () => {
   });
 });
 
-describe('Tier 3: NL dependency parsing', () => {
-  function makeNLCtx(tasks: any[] = []): CommandHandlerContext {
+describe('Tier 3: Secretary-assisted dependency inference', () => {
+  function makeSecretaryCtx(tasks: any[] = [], secretaryAgent?: any): CommandHandlerContext {
     return makeCtx({
       taskDAG: {
         ...makeCtx().taskDAG,
@@ -420,127 +420,181 @@ describe('Tier 3: NL dependency parsing', () => {
         hasAnyTasks: vi.fn().mockReturnValue(false),
         completeTask: vi.fn().mockReturnValue([]),
       },
+      getAllAgents: vi.fn().mockReturnValue(
+        secretaryAgent ? [secretaryAgent] : []
+      ),
     });
   }
 
-  it('parses "after agent X finishes" as dependency', () => {
+  it('sends message to Secretary when no Tier 1/2 deps found', () => {
+    const secretaryAgent = {
+      id: 'sec-001', parentId: 'lead-001', role: { id: 'secretary' },
+      status: 'running', sendMessage: vi.fn(),
+    };
     const tasks = [{
-      id: 'impl-task', role: 'developer', assignedAgentId: '0b85de78-full',
-      dagStatus: 'running', description: 'Implement feature', dependsOn: [], files: [], startedAt: '2026-01-01',
+      id: 'impl-task', role: 'developer', dagStatus: 'running',
+      description: 'Implement feature', dependsOn: [], files: [],
     }];
-    const ctx = makeNLCtx(tasks);
+    const ctx = makeSecretaryCtx(tasks, secretaryAgent);
     const agent = makeLeadAgent();
     const cmd = getCreateAgentHandler(ctx);
 
-    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "After agent 0b85de78 finishes, write integration tests"} ⟧');
+    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Build the deployment pipeline"} ⟧');
 
-    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', expect.stringMatching(/^auto-/), 'impl-task');
+    expect(secretaryAgent.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Dependency analysis needed')
+    );
+    expect(secretaryAgent.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining('ADD_DEPENDENCY')
+    );
   });
 
-  it('parses "once architect reports" as dependency', () => {
+  it('skips Secretary request when no Secretary agent exists', () => {
     const tasks = [{
-      id: 'design-task', role: 'architect', assignedAgentId: 'arch-full-id',
-      dagStatus: 'running', description: 'Design the system', dependsOn: [], files: [], startedAt: '2026-01-01',
+      id: 'impl-task', role: 'developer', dagStatus: 'running',
+      description: 'Implement feature', dependsOn: [], files: [],
     }];
-    const ctx = makeNLCtx(tasks);
+    const ctx = makeSecretaryCtx(tasks); // no secretary
     const agent = makeLeadAgent();
     const cmd = getCreateAgentHandler(ctx);
 
-    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Once architect reports, implement the design"} ⟧');
+    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Build the deployment pipeline"} ⟧');
 
-    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', expect.stringMatching(/^auto-/), 'design-task');
+    // Should not throw — silently skip
+    expect(ctx.taskDAG.addDependency).not.toHaveBeenCalled();
   });
 
-  it('parses "depends on task-id" as dependency', () => {
-    const tasks = [{
-      id: 'p0-2-autolink', role: 'developer', dagStatus: 'running',
-      description: 'Fix auto-linking', dependsOn: [], files: [],
-    }];
-    const ctx = makeNLCtx(tasks);
+  it('skips Secretary request when no active tasks exist', () => {
+    const secretaryAgent = {
+      id: 'sec-001', parentId: 'lead-001', role: { id: 'secretary' },
+      status: 'running', sendMessage: vi.fn(),
+    };
+    const ctx = makeSecretaryCtx([], secretaryAgent); // empty tasks
     const agent = makeLeadAgent();
     const cmd = getCreateAgentHandler(ctx);
 
-    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Depends on p0-2-autolink being done first"} ⟧');
+    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Build something"} ⟧');
 
-    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', expect.stringMatching(/^auto-/), 'p0-2-autolink');
+    expect(secretaryAgent.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('parses "blocked by task-id" as dependency', () => {
+  it('does not send to terminated Secretary', () => {
+    const secretaryAgent = {
+      id: 'sec-001', parentId: 'lead-001', role: { id: 'secretary' },
+      status: 'terminated', sendMessage: vi.fn(),
+    };
+    const tasks = [{
+      id: 'impl-task', role: 'developer', dagStatus: 'running',
+      description: 'Implement feature', dependsOn: [], files: [],
+    }];
+    const ctx = makeSecretaryCtx(tasks, secretaryAgent);
+    const agent = makeLeadAgent();
+    const cmd = getCreateAgentHandler(ctx);
+
+    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Build deployment"} ⟧');
+
+    expect(secretaryAgent.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not send Secretary request when explicit deps exist', () => {
+    const secretaryAgent = {
+      id: 'sec-001', parentId: 'lead-001', role: { id: 'secretary' },
+      status: 'running', sendMessage: vi.fn(),
+    };
     const tasks = [{
       id: 'setup-task', role: 'developer', dagStatus: 'running',
-      description: 'Setup infrastructure', dependsOn: [], files: [],
+      description: 'Setup infra', dependsOn: [], files: [],
     }];
-    const ctx = makeNLCtx(tasks);
+    const ctx = makeSecretaryCtx(tasks, secretaryAgent);
     const agent = makeLeadAgent();
     const cmd = getCreateAgentHandler(ctx);
 
-    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Blocked by setup-task, implement the feature"} ⟧');
+    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "Build feature", "depends_on": ["setup-task"]} ⟧');
 
-    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', expect.stringMatching(/^auto-/), 'setup-task');
-  });
-
-  it('deduplicates dependencies across tiers', () => {
-    const tasks = [{
-      id: 'impl-task', role: 'developer', assignedAgentId: '0b85de78-full',
-      dagStatus: 'running', description: 'Implement feature', dependsOn: [], files: [], startedAt: '2026-01-01',
-    }];
-    const ctx = makeNLCtx(tasks);
-    const agent = makeLeadAgent();
-    const cmd = getCreateAgentHandler(ctx);
-
-    // Explicit + NL both reference the same task
-    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "After agent 0b85de78 finishes, do cleanup", "depends_on": ["impl-task"]} ⟧');
-
-    // Should only call addDependency once for impl-task (deduped)
-    const depCalls = (ctx.taskDAG.addDependency as any).mock.calls
-      .filter((c: any[]) => c[2] === 'impl-task');
-    expect(depCalls.length).toBe(1);
-  });
-
-  it('does not add NL deps when no matching tasks exist', () => {
-    const ctx = makeNLCtx([]); // no tasks in DAG
-    const agent = makeLeadAgent();
-    const cmd = getCreateAgentHandler(ctx);
-
-    cmd.handler(agent, '⟦ CREATE_AGENT {"role": "developer", "task": "After architect finishes, implement"} ⟧');
-
-    expect(ctx.taskDAG.addDependency).not.toHaveBeenCalled();
+    // Has explicit dep — Secretary not needed
+    expect(secretaryAgent.sendMessage).not.toHaveBeenCalled();
   });
 });
 
-describe('inferSequentialDependencies (unit)', () => {
-  function makeMinimalCtx(tasks: any[]): CommandHandlerContext {
-    return {
-      taskDAG: { getTasks: vi.fn().mockReturnValue(tasks) },
+describe('requestSecretaryDependencyAnalysis (unit)', () => {
+  it('sends structured message with active task list', () => {
+    const secretary = {
+      id: 'sec-001', parentId: 'lead-001', role: { id: 'secretary' },
+      status: 'running', sendMessage: vi.fn(),
+    };
+    const ctx = {
+      getAllAgents: vi.fn().mockReturnValue([secretary]),
+      taskDAG: {
+        getTasks: vi.fn().mockReturnValue([
+          { id: 'task-a', dagStatus: 'running', description: 'Build API', role: 'developer' },
+          { id: 'task-b', dagStatus: 'ready', description: 'Write tests', role: 'tester' },
+        ]),
+      },
     } as any;
-  }
 
-  it('returns empty array for text with no dependency patterns', () => {
-    const ctx = makeMinimalCtx([{ id: 'a', role: 'developer', dagStatus: 'running' }]);
-    const result = inferSequentialDependencies(ctx, 'lead-1', 'Just build the feature');
-    expect(result).toEqual([]);
+    requestSecretaryDependencyAnalysis(ctx, 'lead-001', 'new-task', 'Deploy the API');
+
+    expect(secretary.sendMessage).toHaveBeenCalledTimes(1);
+    const msg = secretary.sendMessage.mock.calls[0][0];
+    expect(msg).toContain('new-task');
+    expect(msg).toContain('task-a');
+    expect(msg).toContain('task-b');
+    expect(msg).toContain('ADD_DEPENDENCY');
   });
 
-  it('matches "after agent <id> finishes"', () => {
-    const ctx = makeMinimalCtx([{
-      id: 'task-1', role: 'developer', assignedAgentId: 'abcdef12-full',
-      dagStatus: 'running',
-    }]);
-    const result = inferSequentialDependencies(ctx, 'lead-1', 'After agent abcdef12 finishes, deploy');
-    expect(result).toEqual(['task-1']);
+  it('skips when no secretary exists', () => {
+    const ctx = {
+      getAllAgents: vi.fn().mockReturnValue([]),
+      taskDAG: {
+        getTasks: vi.fn().mockReturnValue([
+          { id: 'task-a', dagStatus: 'running', description: 'Build API' },
+        ]),
+      },
+    } as any;
+
+    // Should not throw
+    requestSecretaryDependencyAnalysis(ctx, 'lead-001', 'new-task', 'Deploy');
+    expect(ctx.taskDAG.getTasks).not.toHaveBeenCalled();
   });
 
-  it('matches "depends on <task-id>"', () => {
-    const ctx = makeMinimalCtx([{ id: 'setup', role: 'developer', dagStatus: 'running' }]);
-    const result = inferSequentialDependencies(ctx, 'lead-1', 'Depends on setup before starting');
-    expect(result).toEqual(['setup']);
+  it('skips when no active tasks exist', () => {
+    const secretary = {
+      id: 'sec-001', parentId: 'lead-001', role: { id: 'secretary' },
+      status: 'running', sendMessage: vi.fn(),
+    };
+    const ctx = {
+      getAllAgents: vi.fn().mockReturnValue([secretary]),
+      taskDAG: {
+        getTasks: vi.fn().mockReturnValue([]),
+      },
+    } as any;
+
+    requestSecretaryDependencyAnalysis(ctx, 'lead-001', 'new-task', 'Deploy');
+    expect(secretary.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('matches role-based "once architect is done"', () => {
-    const ctx = makeMinimalCtx([{
-      id: 'arch-task', role: 'architect', dagStatus: 'running', startedAt: '2026-01-01',
-    }]);
-    const result = inferSequentialDependencies(ctx, 'lead-1', 'Once architect is done, implement');
-    expect(result).toEqual(['arch-task']);
+  it('excludes the new task from active tasks list', () => {
+    const secretary = {
+      id: 'sec-001', parentId: 'lead-001', role: { id: 'secretary' },
+      status: 'running', sendMessage: vi.fn(),
+    };
+    const ctx = {
+      getAllAgents: vi.fn().mockReturnValue([secretary]),
+      taskDAG: {
+        getTasks: vi.fn().mockReturnValue([
+          { id: 'new-task', dagStatus: 'running', description: 'Deploy API' },
+          { id: 'other-task', dagStatus: 'running', description: 'Build API' },
+        ]),
+      },
+    } as any;
+
+    requestSecretaryDependencyAnalysis(ctx, 'lead-001', 'new-task', 'Deploy the API');
+
+    const msg = secretary.sendMessage.mock.calls[0][0];
+    expect(msg).toContain('other-task');
+    // new-task should not appear in the active tasks list (only in the header)
+    const activeSection = msg.split('Active tasks:\n')[1]?.split('\n\nDoes')[0] || '';
+    expect(activeSection).not.toContain('new-task');
+    expect(activeSection).toContain('other-task');
   });
 });

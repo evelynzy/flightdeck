@@ -13,6 +13,7 @@ import {
   addTaskSchema,
   taskIdSchema,
   completeTaskSchema,
+  addDependencySchema,
 } from './commandSchemas.js';
 
 // ── Regex patterns ────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ const ADD_TASK_REGEX = /⟦\s*ADD_TASK\s*(\{.*?\})\s*⟧/s;
 const CANCEL_TASK_REGEX = /⟦\s*CANCEL_TASK\s*(\{.*?\})\s*⟧/s;
 const COMPLETE_TASK_REGEX = /⟦\s*COMPLETE_TASK\s*(\{.*?\})\s*⟧/s;
 const RESET_DAG_REGEX = /⟦\s*RESET_DAG\s*⟧/s;
+const ADD_DEPENDENCY_REGEX = /⟦\s*ADD_DEPENDENCY\s*(\{.*?\})\s*⟧/s;
 
 // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -283,6 +285,38 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
   }
 }
 
+function handleAddDependency(ctx: CommandHandlerContext, agent: Agent, data: string): void {
+  const match = data.match(ADD_DEPENDENCY_REGEX);
+  if (!match) return;
+  try {
+    const req = parseCommandPayload(agent, match[1], addDependencySchema, 'ADD_DEPENDENCY');
+    if (!req) return;
+
+    // Determine the lead that owns the DAG.
+    // If the agent is a lead, use their own ID; otherwise use their parent's ID.
+    const leadId = agent.role.id === 'lead' ? agent.id : agent.parentId;
+    if (!leadId) {
+      agent.sendMessage('[System] ADD_DEPENDENCY error: cannot determine lead. Only agents with a parent lead can add dependencies.');
+      return;
+    }
+
+    const results: string[] = [];
+    for (const depId of req.depends_on) {
+      const added = ctx.taskDAG.addDependency(leadId, req.taskId, depId);
+      if (added) {
+        results.push(`✓ "${req.taskId}" → depends on "${depId}"`);
+      } else {
+        results.push(`⚠️ "${req.taskId}" → "${depId}" (skipped — duplicate or would create cycle)`);
+      }
+    }
+
+    agent.sendMessage(`[System] ADD_DEPENDENCY results:\n${results.join('\n')}`);
+    ctx.emit('dag:updated', { leadId });
+  } catch (err: any) {
+    agent.sendMessage(`[System] ADD_DEPENDENCY error: ${err.message}`);
+  }
+}
+
 // ── Module export ─────────────────────────────────────────────────────
 
 export function getTaskCommands(ctx: CommandHandlerContext): CommandEntry[] {
@@ -297,5 +331,6 @@ export function getTaskCommands(ctx: CommandHandlerContext): CommandEntry[] {
     { regex: ADD_TASK_REGEX, name: 'ADD_TASK', handler: (a, d) => handleAddTask(ctx, a, d) },
     { regex: CANCEL_TASK_REGEX, name: 'CANCEL_TASK', handler: (a, d) => handleCancelTask(ctx, a, d) },
     { regex: RESET_DAG_REGEX, name: 'RESET_DAG', handler: (a, _d) => handleResetDAG(ctx, a, _d) },
+    { regex: ADD_DEPENDENCY_REGEX, name: 'ADD_DEPENDENCY', handler: (a, d) => handleAddDependency(ctx, a, d) },
   ];
 }

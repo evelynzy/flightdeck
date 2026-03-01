@@ -463,3 +463,125 @@ describe('COMPLETE_TASK security', () => {
     expect(parentMsg.length).toBeLessThan(15_000);
   });
 });
+
+// ── ADD_DEPENDENCY tests ────────────────────────────────────────────
+
+describe('ADD_DEPENDENCY command', () => {
+  function getAddDependencyHandler(ctx: CommandHandlerContext) {
+    const commands = getTaskCommands(ctx);
+    return commands.find(c => c.name === 'ADD_DEPENDENCY')!;
+  }
+
+  it('adds dependency via lead agent', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        addDependency: vi.fn().mockReturnValue(true),
+      },
+    });
+    const agent = makeLeadAgent();
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"taskId": "task-a", "depends_on": ["task-b"]} ⟧');
+
+    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', 'task-a', 'task-b');
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('✓'));
+  });
+
+  it('adds dependency via non-lead agent (uses parentId)', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        addDependency: vi.fn().mockReturnValue(true),
+      },
+    });
+    const agent = makeChildAgent('lead-001');
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"taskId": "task-a", "depends_on": ["task-b"]} ⟧');
+
+    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', 'task-a', 'task-b');
+  });
+
+  it('adds multiple dependencies at once', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        addDependency: vi.fn().mockReturnValue(true),
+      },
+    });
+    const agent = makeLeadAgent();
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"taskId": "task-a", "depends_on": ["task-b", "task-c"]} ⟧');
+
+    expect(ctx.taskDAG.addDependency).toHaveBeenCalledTimes(2);
+    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', 'task-a', 'task-b');
+    expect(ctx.taskDAG.addDependency).toHaveBeenCalledWith('lead-001', 'task-a', 'task-c');
+  });
+
+  it('reports skipped when addDependency returns false (cycle/dup)', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        addDependency: vi.fn().mockReturnValue(false),
+      },
+    });
+    const agent = makeLeadAgent();
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"taskId": "task-a", "depends_on": ["task-b"]} ⟧');
+
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('skipped'));
+  });
+
+  it('emits dag:updated after adding dependency', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        addDependency: vi.fn().mockReturnValue(true),
+      },
+    });
+    const agent = makeLeadAgent();
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"taskId": "task-a", "depends_on": ["task-b"]} ⟧');
+
+    expect(ctx.emit).toHaveBeenCalledWith('dag:updated', { leadId: 'lead-001' });
+  });
+
+  it('rejects invalid payload (missing taskId)', () => {
+    const ctx = makeCtx();
+    const agent = makeLeadAgent();
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"depends_on": ["task-b"]} ⟧');
+
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('error'));
+  });
+
+  it('rejects invalid payload (empty depends_on)', () => {
+    const ctx = makeCtx();
+    const agent = makeLeadAgent();
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"taskId": "task-a", "depends_on": []} ⟧');
+
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('error'));
+  });
+
+  it('rejects agent with no parentId and no lead role', () => {
+    const ctx = makeCtx();
+    const agent = {
+      id: 'orphan-001',
+      parentId: undefined,
+      role: { id: 'developer', name: 'Developer' },
+      sendMessage: vi.fn(),
+    } as any;
+    const handler = getAddDependencyHandler(ctx);
+
+    handler.handler(agent, '⟦ ADD_DEPENDENCY {"taskId": "task-a", "depends_on": ["task-b"]} ⟧');
+
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('cannot determine lead'));
+  });
+});

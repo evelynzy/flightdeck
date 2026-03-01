@@ -553,26 +553,29 @@ function autoCreateDagTask(
     return { created: false, taskId: autoId, depNotes };
   }
 
-  // ── 3-tier dependency inference ──
+  // ── Dependency inference (Tier 1 + Tier 2, synchronous) ──
   // Tier 1: Explicit depends_on from payload
   const tier1 = explicitDeps || [];
 
   // Tier 2: Review role inference
   const tier2 = isReviewRole(role) ? inferReviewDependencies(ctx, leadId, taskText) : [];
 
-  // Tier 3: Natural language dependency parsing
-  const tier3 = inferSequentialDependencies(ctx, leadId, taskText);
+  // Apply deterministic deps immediately
+  const allSyncDeps = [...new Set([...tier1, ...tier2])];
 
-  // Merge and deduplicate (explicit wins, then review, then NL)
-  const allDeps = [...new Set([...tier1, ...tier2, ...tier3])];
-
-  for (const depId of allDeps) {
+  for (const depId of allSyncDeps) {
     const added = ctx.taskDAG.addDependency(leadId, autoTask.id, depId);
     if (added) {
-      const source = tier1.includes(depId) ? 'explicit' : tier2.includes(depId) ? 'review' : 'inferred';
+      const source = tier1.includes(depId) ? 'explicit' : 'review';
       depNotes.push(`→ depends on "${depId}" (${source})`);
       logger.info('delegation', `Auto-linked "${autoId}" → depends on "${depId}" (${source})`);
     }
+  }
+
+  // Tier 3: Secretary-assisted inference (async, non-blocking)
+  // Only if no deps found yet — ask the Secretary to analyze
+  if (allSyncDeps.length === 0) {
+    requestSecretaryDependencyAnalysis(ctx, leadId, autoId, taskText);
   }
 
   return { created: true, taskId: autoId, depNotes };
@@ -643,56 +646,39 @@ export function inferReviewDependencies(
   return deps;
 }
 
-// ── Tier 3: Natural language dependency parsing ───────────────────────
-
-/** Patterns that indicate a dependency on another agent/task completing */
-const NL_DEP_PATTERNS = [
-  /(?:after|once|when)\s+(?:agent\s+)?([0-9a-f]{8,})\s+(?:finishes|completes|reports|is done)/gi,
-  /(?:after|once|when)\s+(?:the\s+)?(\w+)\s+(?:finishes|completes|reports|is done)/gi,
-  /(?:depends on|blocked by|requires|needs)\s+(?:task\s+)?["']?([\w-]+)["']?/gi,
-  /(?:after|once)\s+["']?([\w-]+)["']?\s+(?:is\s+)?(?:done|complete|finished)/gi,
-];
+// ── Tier 3: Secretary-assisted dependency inference ───────────────────
 
 /**
- * Parse natural language to detect sequential dependencies.
- * Handles patterns like "after agent X finishes", "once architect reports",
- * "depends on task-id", "blocked by p0-2-autolink".
+ * Send a message to the Secretary agent asking it to analyze the DAG
+ * and identify any dependencies for the newly created task.
+ * Non-blocking: Secretary replies asynchronously with ADD_DEPENDENCY commands.
  */
-export function inferSequentialDependencies(
+export function requestSecretaryDependencyAnalysis(
   ctx: CommandHandlerContext,
   leadId: string,
-  taskDesc: string,
-): string[] {
-  const deps: string[] = [];
-  const allTasks = ctx.taskDAG.getTasks(leadId);
+  newTaskId: string,
+  taskDescription: string,
+): void {
+  // Find secretary agent for this lead
+  const secretary = ctx.getAllAgents().find(a =>
+    a.parentId === leadId && a.role.id === 'secretary' && a.status !== 'terminated'
+  );
+  if (!secretary) return;
 
-  for (const pattern of NL_DEP_PATTERNS) {
-    // Reset regex lastIndex for each call since they're global
-    pattern.lastIndex = 0;
-    for (const match of taskDesc.matchAll(pattern)) {
-      const ref = match[1];
+  const activeTasks = ctx.taskDAG.getTasks(leadId)
+    .filter(t => ['running', 'ready', 'pending'].includes(t.dagStatus) && t.id !== newTaskId)
+    .map(t => `  - ${t.id}: ${t.description?.slice(0, 100) || t.role}`)
+    .join('\n');
 
-      // Try as agent ID (hex string)
-      if (/^[0-9a-f]{8,}$/.test(ref)) {
-        const byAgent = allTasks.find(t =>
-          t.assignedAgentId?.startsWith(ref) &&
-          ['running', 'done', 'ready'].includes(t.dagStatus)
-        );
-        if (byAgent && !deps.includes(byAgent.id)) { deps.push(byAgent.id); continue; }
-      }
+  if (!activeTasks) return;
 
-      // Try as task ID (exact match)
-      const byTaskId = allTasks.find(t => t.id.toLowerCase() === ref.toLowerCase());
-      if (byTaskId && !deps.includes(byTaskId.id)) { deps.push(byTaskId.id); continue; }
-
-      // Try as role name
-      const byRole = allTasks
-        .filter(t => t.role === ref.toLowerCase() && ['running', 'done'].includes(t.dagStatus))
-        .sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''))
-        [0];
-      if (byRole && !deps.includes(byRole.id)) deps.push(byRole.id);
-    }
-  }
-
-  return deps;
+  secretary.sendMessage(
+    `[System] Dependency analysis needed for new task "${newTaskId}":\n` +
+    `Description: ${taskDescription.slice(0, 500)}\n\n` +
+    `Active tasks:\n${activeTasks}\n\n` +
+    `Does "${newTaskId}" depend on any of these tasks? ` +
+    `If yes, reply with ⟦ ADD_DEPENDENCY {"taskId": "${newTaskId}", "depends_on": ["task-id-here"]} ⟧. ` +
+    `If no dependencies, ignore this message.`
+  );
+  logger.info('delegation', `Requested Secretary dependency analysis for "${newTaskId}"`);
 }
