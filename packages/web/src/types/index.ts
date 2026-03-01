@@ -129,6 +129,7 @@ export interface AgentInfo {
   role: Role;
   status: AgentStatus;
   task?: string;
+  dagTaskId?: string;
   parentId?: string;
   childIds: string[];
   createdAt: string;
@@ -224,4 +225,22 @@ export interface LeadProgress {
     contextWindowUsed?: number;
   }>;
   delegations: Delegation[];
+}
+
+// ── Cost Tracking ─────────────────────────────────────────────────
+
+export interface AgentCostSummary {
+  agentId: string;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  taskCount: number;
+}
+
+export interface TaskCostSummary {
+  dagTaskId: string;
+  leadId: string;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  agentCount: number;
+  agents: Array<{ agentId: string; inputTokens: number; outputTokens: number }>;
 }

@@ -1,0 +1,188 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { Database } from '../db/database.js';
+import { CostTracker } from '../agents/CostTracker.js';
+
+const TEST_DB = ':memory:';
+
+describe('CostTracker', () => {
+  let db: Database;
+  let tracker: CostTracker;
+
+  beforeEach(() => {
+    db = new Database(TEST_DB);
+    tracker = new CostTracker(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  // ── recordUsage: basic delta computation ─────────────────────────────
+
+  it('records first usage as the full cumulative value', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+
+    const costs = tracker.getAgentCosts();
+    expect(costs).toHaveLength(1);
+    expect(costs[0].agentId).toBe('agent-1');
+    expect(costs[0].totalInputTokens).toBe(1000);
+    expect(costs[0].totalOutputTokens).toBe(500);
+  });
+
+  it('computes delta from cumulative values on subsequent calls', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 3000, 1200);
+
+    const costs = tracker.getAgentCosts();
+    expect(costs).toHaveLength(1);
+    expect(costs[0].totalInputTokens).toBe(3000); // 1000 + (3000-1000)
+    expect(costs[0].totalOutputTokens).toBe(1200); // 500 + (1200-500)
+  });
+
+  it('skips zero-delta updates', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500); // same values
+
+    const costs = tracker.getAgentCosts();
+    expect(costs).toHaveLength(1);
+    expect(costs[0].totalInputTokens).toBe(1000);
+  });
+
+  it('handles negative deltas gracefully (clamped to 0)', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 5000, 2000);
+    // Cumulative values decrease (e.g. session reset)
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+
+    const costs = tracker.getAgentCosts();
+    // Original 5000 stays, negative delta is ignored (max(0, -4000) = 0)
+    expect(costs[0].totalInputTokens).toBe(5000);
+    expect(costs[0].totalOutputTokens).toBe(2000);
+  });
+
+  // ── recordUsage: task switching ──────────────────────────────────────
+
+  it('attributes delta to the correct task when agent switches tasks', () => {
+    // Agent works on task-a
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+
+    // Agent switches to task-b — cumulative values continue rising
+    tracker.recordUsage('agent-1', 'task-b', 'lead-1', 2500, 1000);
+
+    const taskCosts = tracker.getTaskCosts();
+    expect(taskCosts).toHaveLength(2);
+
+    const taskA = taskCosts.find(t => t.dagTaskId === 'task-a')!;
+    const taskB = taskCosts.find(t => t.dagTaskId === 'task-b')!;
+
+    expect(taskA.totalInputTokens).toBe(1000);
+    expect(taskA.totalOutputTokens).toBe(500);
+    expect(taskB.totalInputTokens).toBe(1500); // 2500 - 1000
+    expect(taskB.totalOutputTokens).toBe(500);  // 1000 - 500
+  });
+
+  // ── recordUsage: multiple agents ─────────────────────────────────────
+
+  it('tracks costs independently per agent', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-2', 'task-a', 'lead-1', 2000, 800);
+
+    const agentCosts = tracker.getAgentCosts();
+    expect(agentCosts).toHaveLength(2);
+
+    const agent1 = agentCosts.find(c => c.agentId === 'agent-1')!;
+    const agent2 = agentCosts.find(c => c.agentId === 'agent-2')!;
+
+    expect(agent1.totalInputTokens).toBe(1000);
+    expect(agent2.totalInputTokens).toBe(2000);
+  });
+
+  // ── getAgentCosts: aggregation across tasks ──────────────────────────
+
+  it('aggregates costs across multiple tasks per agent', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-1', 'task-b', 'lead-1', 3000, 1500);
+
+    const agentCosts = tracker.getAgentCosts();
+    expect(agentCosts).toHaveLength(1);
+    expect(agentCosts[0].totalInputTokens).toBe(3000); // 1000 + (3000-1000)
+    expect(agentCosts[0].totalOutputTokens).toBe(1500); // 500 + (1500-500)
+    expect(agentCosts[0].taskCount).toBe(2);
+  });
+
+  // ── getTaskCosts: per-task view ──────────────────────────────────────
+
+  it('provides per-task cost breakdown with agent details', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-2', 'task-a', 'lead-1', 2000, 800);
+
+    const taskCosts = tracker.getTaskCosts();
+    expect(taskCosts).toHaveLength(1);
+    expect(taskCosts[0].dagTaskId).toBe('task-a');
+    expect(taskCosts[0].totalInputTokens).toBe(3000);
+    expect(taskCosts[0].totalOutputTokens).toBe(1300);
+    expect(taskCosts[0].agentCount).toBe(2);
+    expect(taskCosts[0].agents).toHaveLength(2);
+  });
+
+  it('filters task costs by leadId', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-2', 'task-b', 'lead-2', 2000, 800);
+
+    const lead1Costs = tracker.getTaskCosts('lead-1');
+    expect(lead1Costs).toHaveLength(1);
+    expect(lead1Costs[0].dagTaskId).toBe('task-a');
+
+    const lead2Costs = tracker.getTaskCosts('lead-2');
+    expect(lead2Costs).toHaveLength(1);
+    expect(lead2Costs[0].dagTaskId).toBe('task-b');
+  });
+
+  // ── getAgentTaskCosts: per-agent detail ──────────────────────────────
+
+  it('returns all cost records for a specific agent', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-1', 'task-b', 'lead-1', 3000, 1500);
+
+    const records = tracker.getAgentTaskCosts('agent-1');
+    expect(records).toHaveLength(2);
+    expect(records.map(r => r.dagTaskId).sort()).toEqual(['task-a', 'task-b']);
+  });
+
+  it('returns empty array for unknown agent', () => {
+    const records = tracker.getAgentTaskCosts('unknown');
+    expect(records).toHaveLength(0);
+  });
+
+  // ── resetLastSeen ────────────────────────────────────────────────────
+
+  it('resetLastSeen causes next usage to be treated as first call', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 5000, 2000);
+    tracker.resetLastSeen();
+
+    // After reset, cumulative 3000 is treated as first call (full value)
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 3000, 1000);
+
+    const costs = tracker.getAgentCosts();
+    // 5000 (from first recording) + 3000 (from post-reset recording)
+    expect(costs[0].totalInputTokens).toBe(8000);
+    expect(costs[0].totalOutputTokens).toBe(3000);
+  });
+
+  // ── Edge cases ───────────────────────────────────────────────────────
+
+  it('handles empty state gracefully', () => {
+    expect(tracker.getAgentCosts()).toEqual([]);
+    expect(tracker.getTaskCosts()).toEqual([]);
+    expect(tracker.getAgentTaskCosts('any')).toEqual([]);
+  });
+
+  it('handles multiple leads with same task IDs', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 1000, 500);
+    tracker.recordUsage('agent-2', 'task-a', 'lead-2', 2000, 800);
+
+    const allTaskCosts = tracker.getTaskCosts();
+    expect(allTaskCosts).toHaveLength(2);
+    // Same task ID, different leads
+    expect(allTaskCosts.map(t => t.leadId).sort()).toEqual(['lead-1', 'lead-2']);
+  });
+});

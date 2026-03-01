@@ -251,6 +251,22 @@ export const collectiveMemory = sqliteTable('collective_memory', {
   uniqueIndex('idx_collective_memory_cat_key').on(table.category, table.key),
 ]);
 
+// ── Task Cost Records (per-agent per-task token usage) ──────────────
+
+export const taskCostRecords = sqliteTable('task_cost_records', {
+  agentId: text('agent_id').notNull(),
+  dagTaskId: text('dag_task_id').notNull(),
+  leadId: text('lead_id').notNull(),
+  inputTokens: integer('input_tokens').default(0),
+  outputTokens: integer('output_tokens').default(0),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').default(sql`(datetime('now'))`),
+}, (table) => [
+  primaryKey({ columns: [table.agentId, table.dagTaskId, table.leadId] }),
+  index('idx_task_cost_agent').on(table.agentId),
+  index('idx_task_cost_task').on(table.dagTaskId, table.leadId),
+]);
+
 // ── Session Retrospectives ──────────────────────────────────────────
 
 export const sessionRetros = sqliteTable('session_retros', {
