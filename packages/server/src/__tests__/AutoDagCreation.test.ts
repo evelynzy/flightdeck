@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getLifecycleCommands } from '../agents/commands/AgentLifecycle.js';
-import { generateAutoTaskId, requestSecretaryDependencyAnalysis, maybeSuggestDagGroup } from '../agents/commands/AgentLifecycle.js';
+import { generateAutoTaskId, requestSecretaryDependencyAnalysis, maybeSuggestDagGroup, suggestedGroupNames } from '../agents/commands/AgentLifecycle.js';
 import type { CommandHandlerContext } from '../agents/commands/types.js';
 
 function makeLeadAgent(overrides: Record<string, any> = {}) {
@@ -725,6 +725,8 @@ describe('requestSecretaryDependencyAnalysis (unit)', () => {
 // ── DAG-aware group chat suggestions ──────────────────────────────────
 
 describe('maybeSuggestDagGroup', () => {
+  beforeEach(() => { suggestedGroupNames.clear(); });
+
   function makeGroupCtx(tasks: any[], existingGroups: any[] = []): { ctx: CommandHandlerContext; leadAgent: any } {
     const leadAgent = makeLeadAgent();
     const agents = new Map<string, any>([['lead-001', leadAgent]]);
@@ -837,5 +839,25 @@ describe('maybeSuggestDagGroup', () => {
     expect(msg).toContain('agent-bb');
     expect(msg).toContain('agent-cc');
     expect(msg).toContain('System suggestion');
+  });
+
+  it('does not re-suggest after lead ignores first suggestion', () => {
+    suggestedGroupNames.clear();
+    const tasks = [
+      { id: 't1', dagStatus: 'running', assignedAgentId: 'agent-aaa', description: 'Write presentation slides', role: 'developer' },
+      { id: 't2', dagStatus: 'running', assignedAgentId: 'agent-bbb', description: 'Review presentation flow', role: 'code-reviewer' },
+      { id: 't3', dagStatus: 'running', assignedAgentId: 'agent-ccc', description: 'Polish presentation narrative', role: 'tech-writer' },
+    ];
+    const { ctx, leadAgent } = makeGroupCtx(tasks);
+
+    // First call — should suggest
+    maybeSuggestDagGroup(ctx, 'lead-001');
+    expect(leadAgent.sendMessage).toHaveBeenCalledTimes(1);
+
+    leadAgent.sendMessage.mockClear();
+
+    // Second call — should NOT re-suggest (already suggested)
+    maybeSuggestDagGroup(ctx, 'lead-001');
+    expect(leadAgent.sendMessage).not.toHaveBeenCalled();
   });
 });

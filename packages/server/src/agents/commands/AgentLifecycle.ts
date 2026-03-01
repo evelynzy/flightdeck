@@ -166,6 +166,7 @@ function handleCreateAgent(ctx: CommandHandlerContext, agent: Agent, data: strin
     if (req.model) ctx.agentMemory.store(agent.id, child.id, 'model', req.model);
     if (req.task) ctx.agentMemory.store(agent.id, child.id, 'task', req.task.slice(0, 200));
 
+    maybeSuggestDagGroup(ctx, agent.id);
     ctx.emit('agent:sub_spawned', { parentId: agent.id, child: child.toJSON() });
   } catch (err: any) {
     if (_autoScaleRetry) throw err;
@@ -696,6 +697,9 @@ export function requestSecretaryDependencyAnalysis(
 
 // ── DAG-aware group chat suggestions ──────────────────────────────────
 
+/** Track suggested group names per lead to avoid repeating suggestions. Exported for testing. */
+export const suggestedGroupNames = new Map<string, Set<string>>();
+
 const GROUP_STOP_WORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'all', 'its',
   'implement', 'create', 'build', 'fix', 'add', 'review', 'update', 'check',
@@ -763,9 +767,11 @@ export function maybeSuggestDagGroup(
 
   if (clusters.size === 0) return;
 
-  // Check existing groups to avoid re-suggesting
+  // Check existing groups and prior suggestions to avoid re-suggesting
   const existingGroups = ctx.chatGroupRegistry.getGroups(leadId);
   const existingGroupNames = new Set(existingGroups.map(g => g.name.toLowerCase()));
+  if (!suggestedGroupNames.has(leadId)) suggestedGroupNames.set(leadId, new Set());
+  const alreadySuggested = suggestedGroupNames.get(leadId)!;
 
   const lead = ctx.getAgent(leadId);
   if (!lead) return;
@@ -773,6 +779,7 @@ export function maybeSuggestDagGroup(
   for (const [keyword, agentIds] of clusters) {
     const groupName = `${keyword}-team`;
     if (existingGroupNames.has(groupName)) continue;
+    if (alreadySuggested.has(groupName)) continue;
 
     const memberList = [...agentIds].map(id => {
       const a = ctx.getAgent(id);
@@ -786,6 +793,7 @@ export function maybeSuggestDagGroup(
       `Consider creating a coordination group:\n` +
       `⟦ CREATE_GROUP {"name": "${groupName}", "members": ${memberIds}} ⟧`
     );
+    alreadySuggested.add(groupName);
     logger.info('delegation', `Suggested group "${groupName}" for ${agentIds.size} agents on ${keyword} tasks`);
     break; // One suggestion per delegation event
   }
