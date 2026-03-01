@@ -239,10 +239,10 @@ tracks progress and provides status reports. You can also define custom roles.
 ```ts
 DECLARE_TASKS {"tasks": [
   {"id": "design",    "role": "architect",   "description": "Design API schema"},
-  {"id": "implement", "role": "developer",   "description": "Build endpoints",   "deps": ["design"]},
-  {"id": "test",      "role": "qa-tester",   "description": "Write E2E tests",   "deps": ["implement"]},
-  {"id": "review",    "role": "code-review", "description": "Review changes",    "deps": ["implement"]},
-  {"id": "docs",      "role": "tech-writer", "description": "Update API docs",   "deps": ["review", "test"]}
+  {"id": "implement", "role": "developer",   "description": "Build endpoints",   "depends_on": ["design"]},
+  {"id": "test",      "role": "qa-tester",   "description": "Write E2E tests",   "depends_on": ["implement"]},
+  {"id": "review",    "role": "code-review", "description": "Review changes",    "depends_on": ["implement"]},
+  {"id": "docs",      "role": "tech-writer", "description": "Update API docs",   "depends_on": ["review", "test"]}
 ]}
 ```
 
