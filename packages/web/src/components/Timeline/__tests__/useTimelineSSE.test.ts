@@ -688,4 +688,33 @@ describe('mergeCommEvent', () => {
     expect(result.communications[0].toAgentId).toBeUndefined();
     expect(result.communications[0].groupName).toBe('devs');
   });
+
+  it('caps communications at 500 entries (sliding window)', () => {
+    const prev = makeTimelineData();
+    // Pre-fill with 500 entries
+    for (let i = 0; i < 500; i++) {
+      prev.communications.push({
+        type: 'message' as const,
+        fromAgentId: 'a1',
+        toAgentId: 'a2',
+        summary: `msg-${i}`,
+        timestamp: ts(i),
+      });
+    }
+    expect(prev.communications.length).toBe(500);
+
+    const comm = {
+      type: 'message',
+      fromAgentId: 'a1',
+      toAgentId: 'a2',
+      summary: 'newest',
+      timestamp: ts(600),
+    };
+
+    const result = mergeCommEvent(prev, comm);
+    expect(result.communications.length).toBe(500);
+    // Oldest entry dropped, newest appended
+    expect(result.communications[0].summary).toBe('msg-1');
+    expect(result.communications[499].summary).toBe('newest');
+  });
 });

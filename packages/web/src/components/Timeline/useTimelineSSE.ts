@@ -340,9 +340,12 @@ function mergeLockEvent(prev: TimelineData, lockEvent: any): TimelineData {
   return { ...prev, locks };
 }
 
+/** Max communications kept in the sliding window to bound memory usage */
+const MAX_COMMUNICATIONS = 500;
+
 /** Merge an incremental comm:update event into existing timeline data */
 export function mergeCommEvent(prev: TimelineData, comm: any): TimelineData {
-  const communications = [...prev.communications, {
+  const appended = [...prev.communications, {
     type: comm.type,
     fromAgentId: comm.fromAgentId,
     toAgentId: comm.toAgentId ?? undefined,
@@ -350,6 +353,10 @@ export function mergeCommEvent(prev: TimelineData, comm: any): TimelineData {
     summary: comm.summary,
     timestamp: comm.timestamp,
   }];
+  // Sliding window: keep the most recent entries when over the cap
+  const communications = appended.length > MAX_COMMUNICATIONS
+    ? appended.slice(appended.length - MAX_COMMUNICATIONS)
+    : appended;
 
   const timeRange = {
     start: prev.timeRange.start,
