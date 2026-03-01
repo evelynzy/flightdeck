@@ -1105,50 +1105,6 @@ environments. Three passes, three different perspectives, bulletproof result.
 
 ---
 
-# The Bug That Only Exists in Multi-Agent Systems
-
-<div class="bg-gray-800 rounded-lg p-4 border border-red-500 mt-2">
-
-### Critical reviewer b529689d discovered:
-
-<div class="bg-gray-900 rounded p-3 mt-2 text-sm font-mono">
-<div class="text-gray-500"># Agent A (17:23:01)</div>
-<div>git add CoordCommands.ts</div>
-<div class="text-gray-500"># Agent B (17:23:01) — same millisecond!</div>
-<div>git add AgentLifecycle.ts</div>
-<div class="text-gray-500"># Agent A (17:23:02)</div>
-<div>git commit -m "hardening"</div>
-<div class="text-red-400"># ⚠️ Agent A's commit now contains Agent B's file!</div>
-</div>
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3">
-
-**Why this matters:** This bug is *invisible* in single-agent systems. It only appears when multiple agents share a git working directory. The critical reviewer — who never wrote a line of code — found it by reasoning about what happens at the millisecond level.
-
-</div>
-
-<div class="bg-gray-800 rounded-lg p-3 border border-green-500 mt-2">
-
-**The fix:** <code>git commit -m "msg" -- file1 file2</code> — bypass the shared index entirely. Atomic and clean.
-
-</div>
-
-<!--
-This is the "aha" moment. Pause and let the audience absorb it. Git's staging
-area — the index — is a single file on disk. When Agent A runs "git add" and
-then "git commit", there's a tiny window where Agent B's "git add" can slip in.
-Agent A's commit now includes Agent B's files. No single-developer workflow
-would EVER hit this bug. It only exists because multiple agents share one
-working directory. The critical reviewer found it just by thinking — not by
-running code, not by testing, but by reasoning about concurrent execution.
-The fix is one line: pass files directly to git commit, skipping the index.
-This is why you want specialists who think about failure modes for a living.
--->
-
----
-
 # The system improves itself
 
 <div class="bg-gray-800 rounded-lg p-3 border border-green-500 mt-2">
@@ -1210,9 +1166,15 @@ Each agent has finite context. Long tasks degrade quality.
 <div class="bg-gray-800 rounded-lg p-3 border border-green-500">
 
 ### ✅ Git conflicts with parallel work
-Multiple agents editing the same codebase causes merge conflicts.
+Multiple agents editing the same codebase causes merge conflicts — and worse, **cross-contamination**.
 
-**Solved:** File locking (pessimistic locks), scoped commits (only stage locked files). Zero conflicts this session.
+<div class="bg-gray-900 rounded p-2 mt-1 text-xs font-mono">
+<span class="text-gray-500"># Agent A:</span> git add file1.ts<br/>
+<span class="text-gray-500"># Agent B (same ms!):</span> git add file2.ts<br/>
+<span class="text-gray-500"># Agent A:</span> git commit → <span class="text-red-400">includes B's file!</span>
+</div>
+
+**Solved:** File locking + `git commit -- file1 file2` bypasses shared index. Zero conflicts.
 
 </div>
 <div class="bg-gray-800 rounded-lg p-3 border border-green-500">
