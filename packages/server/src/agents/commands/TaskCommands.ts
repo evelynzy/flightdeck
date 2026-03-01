@@ -197,21 +197,63 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
   try {
     const req = JSON.parse(match[1]);
 
-    // Non-lead agents: signal delegation completion to parent
+    // Non-lead agents: relay completion to parent lead's DAG
     if (agent.role.id !== 'lead') {
-      if (agent.parentId) {
-        const parent = ctx.getAgent(agent.parentId);
+      const summary = req.summary || req.output || '(no summary)';
+      const status = req.status || 'done';
+
+      if (!agent.parentId) {
+        agent.sendMessage('[System] COMPLETE_TASK failed: no parent agent found.');
+        return;
+      }
+
+      const parent = ctx.getAgent(agent.parentId);
+
+      // Determine the DAG task ID: explicit from payload, or from agent's assignment
+      const taskId = req.id || agent.dagTaskId;
+
+      // Relay to parent's DAG if we have a task ID
+      if (taskId) {
+        const error = ctx.taskDAG.getTransitionError(agent.parentId, taskId, 'complete');
+        if (error) {
+          // Task not completable — still notify parent via message
+          if (parent) {
+            parent.sendMessage(`[Agent Report] ${agent.role.name} (${agent.id.slice(0, 8)}) completed task "${taskId}".\nStatus: ${status}\nSummary: ${summary}`);
+          }
+          agent.sendMessage(`[System] Task "${taskId}" could not be marked done in DAG (status: ${error.currentStatus}). Parent notified.`);
+          return;
+        }
+
+        const newlyReady = ctx.taskDAG.completeTask(agent.parentId, taskId);
+
+        // Notify parent with completion details and newly ready tasks
+        let parentMsg = `[Agent Report] ${agent.role.name} (${agent.id.slice(0, 8)}) completed DAG task "${taskId}".\nStatus: ${status}\nSummary: ${summary}`;
+        if (newlyReady && newlyReady.length > 0) {
+          const readyNames = newlyReady.map(d => d.id).join(', ');
+          parentMsg += `\nNewly ready tasks: ${readyNames}. Use DELEGATE or CREATE_AGENT to assign them.`;
+        }
         if (parent) {
-          const summary = req.summary || '(no summary)';
-          parent.sendMessage(`[Agent Report] ${agent.role.name} (${agent.id.slice(0, 8)}) completed task.\nSummary: ${summary}`);
+          parent.sendMessage(parentMsg);
+          ctx.emit('agent:message_sent', {
+            from: agent.id, fromRole: agent.role.name,
+            to: parent.id, toRole: parent.role.name,
+            content: `COMPLETE_TASK [${taskId}]: ${summary}`,
+          });
+        }
+        ctx.emit('dag:updated', { leadId: agent.parentId });
+        agent.sendMessage(`[System] Task "${taskId}" marked as done in DAG.${newlyReady && newlyReady.length > 0 ? ` ${newlyReady.length} task(s) now ready.` : ''}`);
+      } else {
+        // No DAG task ID — fallback to message-only notification
+        if (parent) {
+          parent.sendMessage(`[Agent Report] ${agent.role.name} (${agent.id.slice(0, 8)}) completed task.\nStatus: ${status}\nSummary: ${summary}`);
           ctx.emit('agent:message_sent', {
             from: agent.id, fromRole: agent.role.name,
             to: parent.id, toRole: parent.role.name,
             content: `COMPLETE_TASK: ${summary}`,
           });
         }
+        agent.sendMessage(`[System] Task completion signaled to parent. (No DAG task ID — use dagTaskId for DAG integration.)`);
       }
-      agent.sendMessage(`[System] Task completion signaled to parent.`);
       return;
     }
 

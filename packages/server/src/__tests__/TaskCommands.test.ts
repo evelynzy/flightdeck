@@ -12,13 +12,27 @@ function makeLeadAgent(overrides: Record<string, any> = {}) {
   } as any;
 }
 
+function makeChildAgent(parentId: string, overrides: Record<string, any> = {}) {
+  return {
+    id: 'child-001',
+    parentId,
+    role: { id: 'developer', name: 'Developer' },
+    dagTaskId: undefined,
+    sendMessage: vi.fn(),
+    ...overrides,
+  } as any;
+}
+
 function makeCtx(overrides: Record<string, any> = {}): CommandHandlerContext {
   return {
     taskDAG: {
       declareTaskBatch: vi.fn().mockReturnValue({ tasks: [], conflicts: [] }),
       addTask: vi.fn(),
       getStatus: vi.fn().mockReturnValue({ tasks: [], fileLockMap: {}, summary: {} }),
+      getTransitionError: vi.fn().mockReturnValue(null),
+      completeTask: vi.fn().mockReturnValue([]),
     },
+    getAgent: vi.fn(),
     emit: vi.fn(),
     ...overrides,
   } as any;
@@ -28,6 +42,13 @@ function getDeclareHandler(ctx: CommandHandlerContext) {
   const cmds = getTaskCommands(ctx);
   const cmd = cmds.find(c => c.name === 'DECLARE_TASKS');
   if (!cmd) throw new Error('DECLARE_TASKS command not found');
+  return cmd;
+}
+
+function getCompleteHandler(ctx: CommandHandlerContext) {
+  const cmds = getTaskCommands(ctx);
+  const cmd = cmds.find(c => c.name === 'COMPLETE_TASK');
+  if (!cmd) throw new Error('COMPLETE_TASK command not found');
   return cmd;
 }
 
@@ -116,5 +137,195 @@ describe('DECLARE_TASKS validation', () => {
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '[[[ DECLARE_TASKS {"tasks": [{"id": "t1", "role": "developer"}]} ]]]');
     expect(ctx.taskDAG.declareTaskBatch).toHaveBeenCalledWith(agent.id, [{ id: 't1', role: 'developer' }]);
+  });
+});
+
+describe('COMPLETE_TASK from non-lead agents (DAG relay)', () => {
+  it('relays completion to parent DAG via agent.dagTaskId', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'impl-auth' });
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"summary": "Auth module implemented"} ]]]');
+
+    expect(ctx.taskDAG.getTransitionError).toHaveBeenCalledWith('lead-001', 'impl-auth', 'complete');
+    expect(ctx.taskDAG.completeTask).toHaveBeenCalledWith('lead-001', 'impl-auth');
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('completed DAG task "impl-auth"'));
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Auth module implemented'));
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('marked as done in DAG'));
+    expect(ctx.emit).toHaveBeenCalledWith('dag:updated', { leadId: 'lead-001' });
+  });
+
+  it('uses explicit id from payload over agent.dagTaskId', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'old-task' });
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"id": "explicit-task", "summary": "Done"} ]]]');
+
+    expect(ctx.taskDAG.getTransitionError).toHaveBeenCalledWith('lead-001', 'explicit-task', 'complete');
+    expect(ctx.taskDAG.completeTask).toHaveBeenCalledWith('lead-001', 'explicit-task');
+  });
+
+  it('includes status field in parent notification', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'task-1' });
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"status": "done", "output": "All tests pass"} ]]]');
+
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Status: done'));
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('All tests pass'));
+  });
+
+  it('reports newly ready tasks after DAG completion', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTransitionError: vi.fn().mockReturnValue(null),
+        completeTask: vi.fn().mockReturnValue([{ id: 'deploy-task' }, { id: 'review-task' }]),
+      },
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'build-task' });
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"summary": "Build done"} ]]]');
+
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Newly ready tasks: deploy-task, review-task'));
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('2 task(s) now ready'));
+  });
+
+  it('falls back to message-only when no dagTaskId', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+    });
+    const agent = makeChildAgent('lead-001');
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"summary": "Done with work"} ]]]');
+
+    expect(ctx.taskDAG.completeTask).not.toHaveBeenCalled();
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('completed task'));
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Done with work'));
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('No DAG task ID'));
+  });
+
+  it('fails gracefully when no parent agent found', () => {
+    const agent = makeChildAgent(undefined as any);
+    agent.parentId = undefined;
+    const ctx = makeCtx();
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"summary": "Done"} ]]]');
+
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('no parent agent found'));
+    expect(ctx.taskDAG.completeTask).not.toHaveBeenCalled();
+  });
+
+  it('handles DAG transition error gracefully', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTransitionError: vi.fn().mockReturnValue({ currentStatus: 'done', attemptedAction: 'complete', validStatuses: ['running', 'ready'] }),
+        completeTask: vi.fn(),
+      },
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'already-done' });
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"summary": "Done again"} ]]]');
+
+    expect(ctx.taskDAG.completeTask).not.toHaveBeenCalled();
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('completed task "already-done"'));
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('could not be marked done in DAG'));
+  });
+
+  it('emits agent:message_sent event on successful relay', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'task-1' });
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"summary": "Implemented feature"} ]]]');
+
+    expect(ctx.emit).toHaveBeenCalledWith('agent:message_sent', {
+      from: agent.id,
+      fromRole: 'Developer',
+      to: parent.id,
+      toRole: 'Project Lead',
+      content: expect.stringContaining('COMPLETE_TASK [task-1]'),
+    });
+  });
+
+  it('defaults status to done and summary to (no summary)', () => {
+    const parent = makeLeadAgent({ id: 'lead-001' });
+    const ctx = makeCtx({
+      getAgent: vi.fn().mockReturnValue(parent),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'task-1' });
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {} ]]]');
+
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Status: done'));
+    expect(parent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('(no summary)'));
+  });
+});
+
+describe('COMPLETE_TASK from lead agent', () => {
+  it('completes DAG task by id', () => {
+    const ctx = makeCtx();
+    const agent = makeLeadAgent();
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"id": "task-1"} ]]]');
+
+    expect(ctx.taskDAG.getTransitionError).toHaveBeenCalledWith(agent.id, 'task-1', 'complete');
+    expect(ctx.taskDAG.completeTask).toHaveBeenCalledWith(agent.id, 'task-1');
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('marked as done'));
+  });
+
+  it('requires id field for lead agents', () => {
+    const ctx = makeCtx();
+    const agent = makeLeadAgent();
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {} ]]]');
+
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('requires an "id" field'));
+    expect(ctx.taskDAG.completeTask).not.toHaveBeenCalled();
+  });
+
+  it('reports transition error for lead', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTransitionError: vi.fn().mockReturnValue({ currentStatus: 'pending', taskId: 'task-1', attemptedAction: 'complete', validStatuses: ['running', 'ready'] }),
+        completeTask: vi.fn(),
+      },
+    });
+    const agent = makeLeadAgent();
+    const cmd = getCompleteHandler(ctx);
+
+    cmd.handler(agent, '[[[ COMPLETE_TASK {"id": "task-1"} ]]]');
+
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Cannot complete task'));
+    expect(ctx.taskDAG.completeTask).not.toHaveBeenCalled();
   });
 });
