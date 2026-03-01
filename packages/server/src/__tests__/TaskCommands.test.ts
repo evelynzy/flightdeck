@@ -31,6 +31,7 @@ function makeCtx(overrides: Record<string, any> = {}): CommandHandlerContext {
       getStatus: vi.fn().mockReturnValue({ tasks: [], fileLockMap: {}, summary: {} }),
       getTransitionError: vi.fn().mockReturnValue(null),
       completeTask: vi.fn().mockReturnValue([]),
+      getTask: vi.fn().mockReturnValue(null),
     },
     getAgent: vi.fn(),
     emit: vi.fn(),
@@ -59,7 +60,7 @@ describe('DECLARE_TASKS validation', () => {
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '[[[ DECLARE_TASKS {"tasks": [{"role": "developer"}]} ]]]');
     expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('Task at index 0 is missing required field "id"'),
+      expect.stringContaining('Missing required field "id"'),
     );
     expect(ctx.taskDAG.declareTaskBatch).not.toHaveBeenCalled();
   });
@@ -70,7 +71,7 @@ describe('DECLARE_TASKS validation', () => {
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '[[[ DECLARE_TASKS {"tasks": [{"id": "", "role": "developer"}]} ]]]');
     expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('missing required field "id"'),
+      expect.stringContaining('Missing required field "id"'),
     );
     expect(ctx.taskDAG.declareTaskBatch).not.toHaveBeenCalled();
   });
@@ -81,7 +82,7 @@ describe('DECLARE_TASKS validation', () => {
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '[[[ DECLARE_TASKS {"tasks": [{"id": "   ", "role": "developer"}]} ]]]');
     expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('missing required field "id"'),
+      expect.stringContaining('Missing required field "id"'),
     );
     expect(ctx.taskDAG.declareTaskBatch).not.toHaveBeenCalled();
   });
@@ -93,7 +94,7 @@ describe('DECLARE_TASKS validation', () => {
     const longId = 'x'.repeat(101);
     cmd.handler(agent, `[[[ DECLARE_TASKS {"tasks": [{"id": "${longId}", "role": "developer"}]} ]]]`);
     expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('has invalid id (too long, max 100 chars)'),
+      expect.stringContaining('id too long (max 100 chars)'),
     );
     expect(ctx.taskDAG.declareTaskBatch).not.toHaveBeenCalled();
   });
@@ -104,7 +105,7 @@ describe('DECLARE_TASKS validation', () => {
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '[[[ DECLARE_TASKS {"tasks": [{"id": "task-1"}]} ]]]');
     expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('Task at index 0 is missing required field "role"'),
+      expect.stringContaining('Missing required field "role"'),
     );
     expect(ctx.taskDAG.declareTaskBatch).not.toHaveBeenCalled();
   });
@@ -115,18 +116,21 @@ describe('DECLARE_TASKS validation', () => {
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '[[[ DECLARE_TASKS {"tasks": [{"id": "task-1", "role": "  "}]} ]]]');
     expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('missing required field "role"'),
+      expect.stringContaining('Missing required field "role"'),
     );
     expect(ctx.taskDAG.declareTaskBatch).not.toHaveBeenCalled();
   });
 
-  it('reports correct index for second invalid task', () => {
+  it('reports correct path for second invalid task', () => {
     const ctx = makeCtx();
     const agent = makeLeadAgent();
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '[[[ DECLARE_TASKS {"tasks": [{"id": "ok", "role": "dev"}, {"id": "bad"}]} ]]]');
     expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('Task at index 1 is missing required field "role"'),
+      expect.stringContaining('tasks[1].role'),
+    );
+    expect(agent.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Missing required field "role"'),
     );
     expect(ctx.taskDAG.declareTaskBatch).not.toHaveBeenCalled();
   });
@@ -370,5 +374,92 @@ describe('COMPLETE_TASK edge cases', () => {
     expect(ctx.emit).not.toHaveBeenCalledWith('agent:message_sent', expect.anything());
     // But dag:updated should still fire
     expect(ctx.emit).toHaveBeenCalledWith('dag:updated', { leadId: 'lead-001' });
+  });
+});
+
+describe('COMPLETE_TASK security', () => {
+  it('denies completion when explicit id belongs to another agent', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTask: vi.fn().mockReturnValue({ id: 'task-x', assignedAgentId: 'other-agent-999', dagStatus: 'running' }),
+        getTransitionError: vi.fn().mockReturnValue(null),
+        completeTask: vi.fn(),
+      },
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'my-task' });
+    const handler = getCompleteHandler(ctx);
+    handler.handler(agent, '[[[ COMPLETE_TASK {"id": "task-x", "summary": "done"} ]]]');
+    expect(agent.sendMessage).toHaveBeenCalledWith(expect.stringContaining('denied'));
+    expect(ctx.taskDAG.completeTask).not.toHaveBeenCalled();
+  });
+
+  it('allows completion when explicit id matches calling agent', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTask: vi.fn().mockReturnValue({ id: 'task-x', assignedAgentId: 'child-001', dagStatus: 'running' }),
+        getTransitionError: vi.fn().mockReturnValue(null),
+        completeTask: vi.fn().mockReturnValue([]),
+      },
+      getAgent: vi.fn().mockReturnValue(makeLeadAgent()),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'my-task' });
+    const handler = getCompleteHandler(ctx);
+    handler.handler(agent, '[[[ COMPLETE_TASK {"id": "task-x", "summary": "done"} ]]]');
+    expect(ctx.taskDAG.completeTask).toHaveBeenCalledWith('lead-001', 'task-x');
+  });
+
+  it('allows completion when task has no assignedAgentId (unassigned task)', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTask: vi.fn().mockReturnValue({ id: 'task-x', assignedAgentId: undefined, dagStatus: 'running' }),
+        getTransitionError: vi.fn().mockReturnValue(null),
+        completeTask: vi.fn().mockReturnValue([]),
+      },
+      getAgent: vi.fn().mockReturnValue(makeLeadAgent()),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'my-task' });
+    const handler = getCompleteHandler(ctx);
+    handler.handler(agent, '[[[ COMPLETE_TASK {"id": "task-x", "summary": "done"} ]]]');
+    expect(ctx.taskDAG.completeTask).toHaveBeenCalledWith('lead-001', 'task-x');
+  });
+
+  it('skips auth check when using own dagTaskId (not explicit id)', () => {
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTask: vi.fn(),
+        getTransitionError: vi.fn().mockReturnValue(null),
+        completeTask: vi.fn().mockReturnValue([]),
+      },
+      getAgent: vi.fn().mockReturnValue(makeLeadAgent()),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'my-task' });
+    const handler = getCompleteHandler(ctx);
+    handler.handler(agent, '[[[ COMPLETE_TASK {"summary": "done"} ]]]');
+    expect(ctx.taskDAG.getTask).not.toHaveBeenCalled();
+    expect(ctx.taskDAG.completeTask).toHaveBeenCalledWith('lead-001', 'my-task');
+  });
+
+  it('truncates oversized summary and output fields', () => {
+    const longText = 'x'.repeat(20_000);
+    const ctx = makeCtx({
+      taskDAG: {
+        ...makeCtx().taskDAG,
+        getTransitionError: vi.fn().mockReturnValue(null),
+        completeTask: vi.fn().mockReturnValue([]),
+      },
+      getAgent: vi.fn().mockReturnValue(makeLeadAgent()),
+    });
+    const agent = makeChildAgent('lead-001', { dagTaskId: 'task-1' });
+    const handler = getCompleteHandler(ctx);
+    handler.handler(agent, `[[[ COMPLETE_TASK {"summary": "${longText}"} ]]]`);
+
+    const parentAgent = ctx.getAgent('lead-001');
+    const parentMsg = parentAgent.sendMessage.mock.calls[0][0];
+    // Summary in the message should be truncated to 10K
+    expect(parentMsg.length).toBeLessThan(15_000);
   });
 });

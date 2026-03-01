@@ -191,8 +191,9 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
 
     // Non-lead agents: relay completion to parent lead's DAG
     if (agent.role.id !== 'lead') {
-      const summary = req.summary || req.output || '(no summary)';
-      const status = req.status || 'done';
+      const MAX_FIELD_LENGTH = 10_000;
+      const summary = (req.summary || req.output || '(no summary)').slice(0, MAX_FIELD_LENGTH);
+      const status = (req.status || 'done').slice(0, 200);
 
       if (!agent.parentId) {
         agent.sendMessage('[System] COMPLETE_TASK failed: no parent agent found.');
@@ -206,6 +207,15 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
 
       // Relay to parent's DAG if we have a task ID
       if (taskId) {
+        // Security: verify calling agent is assigned to this task (or it's their dagTaskId)
+        if (req.id && req.id !== agent.dagTaskId) {
+          const task = ctx.taskDAG.getTask(agent.parentId, taskId);
+          if (task && task.assignedAgentId && task.assignedAgentId !== agent.id) {
+            agent.sendMessage(`[System] COMPLETE_TASK denied: task "${taskId}" is assigned to another agent.`);
+            return;
+          }
+        }
+
         const error = ctx.taskDAG.getTransitionError(agent.parentId, taskId, 'complete');
         if (error) {
           // Task not completable — still notify parent via message
@@ -254,7 +264,7 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
       agent.sendMessage('[System] COMPLETE_TASK requires an "id" field (the DAG task ID).');
       return;
     }
-    const summary = req.summary || req.output;
+    const summary = (req.summary || req.output || '').slice(0, 10_000) || undefined;
     const error = ctx.taskDAG.getTransitionError(agent.id, req.id, 'complete');
     if (error) {
       agent.sendMessage(`[System] Cannot complete task "${req.id}": ${error.currentStatus === 'not_found' ? 'task not found.' : `current status is "${error.currentStatus}". Must be running or ready.`}`);
