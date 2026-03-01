@@ -1,6 +1,6 @@
 import type { Database } from '../db/database.js';
 import { taskCostRecords } from '../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export interface CostRecord {
   agentId: string;
@@ -42,6 +42,31 @@ export class CostTracker {
 
   constructor(db: Database) {
     this.db = db;
+    this.initializeFromDb();
+  }
+
+  /**
+   * Initialize lastSeen from DB so that a server restart doesn't cause
+   * the entire session history to be re-attributed as a burst to the
+   * current task. Sum of stored deltas per agent ≈ last cumulative ACP value.
+   */
+  private initializeFromDb(): void {
+    const rows = this.db.drizzle
+      .select({
+        agentId: taskCostRecords.agentId,
+        totalInput: sql<number>`sum(${taskCostRecords.inputTokens})`,
+        totalOutput: sql<number>`sum(${taskCostRecords.outputTokens})`,
+      })
+      .from(taskCostRecords)
+      .groupBy(taskCostRecords.agentId)
+      .all();
+
+    for (const row of rows) {
+      this.lastSeen.set(row.agentId, {
+        inputTokens: row.totalInput ?? 0,
+        outputTokens: row.totalOutput ?? 0,
+      });
+    }
   }
 
   /**
@@ -68,43 +93,25 @@ export class CostTracker {
     // Skip zero-delta updates
     if (deltaInput === 0 && deltaOutput === 0) return;
 
-    // Upsert: add delta to existing record or create new one
-    const existing = this.db.drizzle
-      .select()
-      .from(taskCostRecords)
-      .where(and(
-        eq(taskCostRecords.agentId, agentId),
-        eq(taskCostRecords.dagTaskId, dagTaskId),
-        eq(taskCostRecords.leadId, leadId),
-      ))
-      .get();
-
-    if (existing) {
-      this.db.drizzle
-        .update(taskCostRecords)
-        .set({
-          inputTokens: (existing.inputTokens ?? 0) + deltaInput,
-          outputTokens: (existing.outputTokens ?? 0) + deltaOutput,
+    // Atomic upsert: insert or add delta to existing record
+    this.db.drizzle
+      .insert(taskCostRecords)
+      .values({
+        agentId,
+        dagTaskId,
+        leadId,
+        inputTokens: deltaInput,
+        outputTokens: deltaOutput,
+      })
+      .onConflictDoUpdate({
+        target: [taskCostRecords.agentId, taskCostRecords.dagTaskId, taskCostRecords.leadId],
+        set: {
+          inputTokens: sql`${taskCostRecords.inputTokens} + ${deltaInput}`,
+          outputTokens: sql`${taskCostRecords.outputTokens} + ${deltaOutput}`,
           updatedAt: sql`datetime('now')`,
-        })
-        .where(and(
-          eq(taskCostRecords.agentId, agentId),
-          eq(taskCostRecords.dagTaskId, dagTaskId),
-          eq(taskCostRecords.leadId, leadId),
-        ))
-        .run();
-    } else {
-      this.db.drizzle
-        .insert(taskCostRecords)
-        .values({
-          agentId,
-          dagTaskId,
-          leadId,
-          inputTokens: deltaInput,
-          outputTokens: deltaOutput,
-        })
-        .run();
-    }
+        },
+      })
+      .run();
   }
 
   /** Get cost breakdown per agent (across all tasks). */

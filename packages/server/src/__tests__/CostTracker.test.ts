@@ -168,6 +168,37 @@ describe('CostTracker', () => {
     expect(costs[0].totalOutputTokens).toBe(3000);
   });
 
+  // ── Server restart recovery ─────────────────────────────────────────
+
+  it('new CostTracker instance initializes lastSeen from DB (restart recovery)', () => {
+    // Simulate pre-restart: agent accumulated 5000 input, 2000 output
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 5000, 2000);
+
+    // Simulate restart: create a new CostTracker (same DB)
+    const tracker2 = new CostTracker(db);
+
+    // Post-restart: agent reports cumulative 7000 (grew by 2000 during restart)
+    tracker2.recordUsage('agent-1', 'task-a', 'lead-1', 7000, 3000);
+
+    const costs = tracker2.getAgentCosts();
+    // Should be 5000 + 2000 = 7000, NOT 5000 + 7000 = 12000
+    expect(costs[0].totalInputTokens).toBe(7000);
+    expect(costs[0].totalOutputTokens).toBe(3000);
+  });
+
+  it('restart recovery: same cumulative values produce zero delta', () => {
+    tracker.recordUsage('agent-1', 'task-a', 'lead-1', 5000, 2000);
+
+    const tracker2 = new CostTracker(db);
+    // Same cumulative values as before restart — no new usage
+    tracker2.recordUsage('agent-1', 'task-a', 'lead-1', 5000, 2000);
+
+    const costs = tracker2.getAgentCosts();
+    // Should still be 5000, not 10000
+    expect(costs[0].totalInputTokens).toBe(5000);
+    expect(costs[0].totalOutputTokens).toBe(2000);
+  });
+
   // ── Edge cases ───────────────────────────────────────────────────────
 
   it('handles empty state gracefully', () => {
