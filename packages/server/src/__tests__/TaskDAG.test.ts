@@ -841,6 +841,19 @@ describe('TaskDAG', () => {
       expect(task).not.toBeNull();
       expect(task!.id).toBe('task-auth');
     });
+
+    it('preserves priority order when descriptions score equally', () => {
+      dag.declareTaskBatch('lead-1', [
+        { id: 'low-pri', role: 'developer', description: 'Build feature XYZ', priority: 1 },
+        { id: 'high-pri', role: 'developer', description: 'Build feature XYZ', priority: 10 },
+      ]);
+      const task = dag.findReadyTask('lead-1', {
+        role: 'developer',
+        taskDescription: 'Build feature XYZ for the platform',
+      });
+      expect(task).not.toBeNull();
+      expect(task!.id).toBe('high-pri');
+    });
   });
 
   describe('getTasks', () => {

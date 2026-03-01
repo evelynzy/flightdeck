@@ -56,6 +56,13 @@ export interface FileConflict {
   tasks: string[];
 }
 
+/**
+ * Minimum Dice coefficient score to consider a description match meaningful.
+ * A single shared word between two 3-word phrases scores ~0.33;
+ * 0.2 catches partial matches while filtering noise from unrelated descriptions.
+ */
+const MIN_DESCRIPTION_MATCH_THRESHOLD = 0.2;
+
 const STOP_WORDS = new Set([
   'the', 'a', 'an', 'is', 'are', 'was', 'to', 'of', 'in', 'for', 'on',
   'and', 'or', 'with', 'that', 'this', 'it', 'from', 'by', 'as', 'at',
@@ -590,7 +597,7 @@ export class TaskDAG extends EventEmitter {
       }));
       scored.sort((a, b) => b.score - a.score);
 
-      if (scored[0].score > 0.2) {
+      if (scored[0].score > MIN_DESCRIPTION_MATCH_THRESHOLD) {
         return scored[0].task;
       }
     }
