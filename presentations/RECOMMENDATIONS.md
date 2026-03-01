@@ -11,19 +11,23 @@ Tips for presenting AI Crew to your team.
 
 ## During the Presentation
 
-### Timing Guide (~20 minutes)
+### Timing Guide (~40 minutes)
 | Section | Slides | Time |
 |---------|--------|------|
-| Problem & Solution | 1–3 | 3 min |
-| Architecture & Roles | 4–6 | 4 min |
-| Features Deep-Dive | 7–12 | 6 min |
-| Real Stats & Demo | 13–14 | 4 min |
-| Differentiators & Roadmap | 15–18 | 3 min |
+| Opening & Problem | 1–3 | 3 min |
+| Architecture & Roles | 4–6 | 5 min |
+| Features Deep-Dive | 7–12 | 7 min |
+| **Case Study: This Session** | **13–19** | **8 min** |
+| Differentiators & Philosophy | 20–22 | 4 min |
+| Roadmap | 23 | 2 min |
+| Live Demo | 24–25 | 7 min |
+| Getting Started + Q&A | 26–27 | 4 min |
 
 ### Key Moments to Emphasize
 1. **Slide 4 (How It Works)** — This is the "aha" moment. Stress that the lead agent does the planning, not the user.
 2. **Slide 9 (Coordination)** — The scoped commit / file locking system is novel. This is where most multi-agent systems fail.
-3. **Slide 13 (Real Stats)** — Use concrete numbers. "10 agents, 9 features, 30 minutes" is more compelling than abstractions.
+3. **Slides 13–19 (Case Study)** — This is the most compelling section. Real numbers, real bugs, real fixes. Don't rush it.
+4. **Slide 16 (When Things Go Wrong)** — Counterintuitively, showing failures builds more credibility than only showing successes.
 
 ### Live Demo Tips
 - Start with the **Mission Control** dashboard — it's the most visually impressive screen
