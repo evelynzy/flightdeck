@@ -85,12 +85,12 @@ describe('CREW_UPDATE content hashing', () => {
     expect(result).toBe(true);
   });
 
-  it('returns true when activity changes', () => {
+  it('returns false when only activity changes (activity excluded from hash)', () => {
     const peers = makePeers({ id: 'p1', task: 'task' });
 
     agent.injectContextUpdate(peers, ['activity 1']);
     const result = agent.injectContextUpdate(peers, ['activity 1', 'activity 2']);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   it('returns true when a new peer is added', () => {

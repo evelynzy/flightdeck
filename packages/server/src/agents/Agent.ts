@@ -489,8 +489,9 @@ ${healthHeader ? healthHeader + '\n' : ''}${crewStatus}${budgetLine}
 ${activityLines}
 CREW_UPDATE ]]]`;
 
-    // Content hashing: skip sending if update is identical to the last one
-    const hash = createHash('md5').update(update).digest('hex');
+    // Hash only stable parts (crew status, budget, health) — not activity timestamps
+    const stableContent = `${healthHeader || ''}${crewStatus}${budgetLine}`;
+    const hash = createHash('md5').update(stableContent).digest('hex');
     if (hash === this.lastUpdateHash) {
       return false;
     }
