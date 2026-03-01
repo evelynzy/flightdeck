@@ -191,64 +191,60 @@ The tool is improving itself. That's not a demo — that's a feedback loop.
 
 ---
 
-# Meet the crew
+# Meet the crew — 13 built-in roles
 
-<div class="grid grid-cols-3 gap-3 mt-2">
-<div class="bg-gray-800 rounded-lg p-3 border border-blue-500">
-
-### 🎯 The Lead
-<span class="text-sm text-gray-400">Think: senior engineering manager</span><br/>
-Plans the work, hires the team, makes decisions — never writes a line of code
-
+<div class="grid grid-cols-4 gap-1.5 mt-1 text-xs">
+<div class="bg-gray-800 rounded p-1.5 border border-blue-500">
+<span class="font-bold">🎯 Project Lead</span><br/>Plans work, hires the team, delegates — never writes code
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
-
-### 👷 The Developers
-<span class="text-sm text-gray-400">Think: your best IC engineers</span><br/>
-Write code and tests. Each one owns specific files — no stepping on toes
-
+<div class="bg-gray-800 rounded p-1.5 border border-purple-500">
+<span class="font-bold">🏗️ Architect</span><br/>Designs system structure so agents work in parallel
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
-
-### 🔍 The Reviewers
-<span class="text-sm text-gray-400">Think: that colleague who always finds the bug</span><br/>
-Read every line. Only flag real problems — zero style nits
-
+<div class="bg-gray-800 rounded p-1.5 border border-green-500">
+<span class="font-bold">👷 Developer</span><br/>Writes code and tests. Owns specific files — no conflicts
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-red-500">
-
-### 🛡️ The Security Reviewer
-<span class="text-sm text-gray-400">Think: a paranoid pen-tester</span><br/>
-Hunts for vulnerabilities and failure modes. Found a real one this session.
-
+<div class="bg-gray-800 rounded p-1.5 border border-yellow-500">
+<span class="font-bold">🔍 Code Reviewer</span><br/>Reads every line. Only flags real problems — zero style nits
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-purple-500">
-
-### 🏗️ The Architect
-<span class="text-sm text-gray-400">Think: the person who draws on whiteboards</span><br/>
-Designs the structure so agents can work in parallel without blocking each other
-
+<div class="bg-gray-800 rounded p-1.5 border border-red-500">
+<span class="font-bold">🛡️ Critical Reviewer</span><br/>Hunts security vulnerabilities, failure modes, edge cases
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-gray-500">
-
-### 📝 The Secretary
-<span class="text-sm text-gray-400">Think: a project manager who reads every ticket</span><br/>
-Tracks every task. Caught a major data discrepancy this session.
-
+<div class="bg-gray-800 rounded p-1.5 border border-cyan-500">
+<span class="font-bold">🧪 QA Tester</span><br/>Runs code end-to-end, catches runtime failures reviews miss
+</div>
+<div class="bg-gray-800 rounded p-1.5 border border-orange-500">
+<span class="font-bold">📖 Technical Writer</span><br/>Documentation, API design, examples, developer experience
+</div>
+<div class="bg-gray-800 rounded p-1.5 border border-gray-500">
+<span class="font-bold">📝 Secretary</span><br/>Tracks tasks, maintains checklists, provides status reports
+</div>
+<div class="bg-gray-800 rounded p-1.5 border border-pink-500">
+<span class="font-bold">💡 Radical Thinker</span><br/>Challenges assumptions, shifts perspective, sparks innovation
+</div>
+<div class="bg-gray-800 rounded p-1.5 border border-teal-500">
+<span class="font-bold">📋 Product Manager</span><br/>Anticipates user needs, defines quality bar, shapes product
+</div>
+<div class="bg-gray-800 rounded p-1.5 border border-indigo-500">
+<span class="font-bold">🎨 Designer</span><br/>UX/UI design, interaction patterns, human-agent interfaces
+</div>
+<div class="bg-gray-800 rounded p-1.5 border border-amber-500">
+<span class="font-bold">🔧 Generalist</span><br/>Cross-disciplinary: mechanical eng, 3D modeling, research
+</div>
+<div class="bg-gray-800 rounded p-1.5 border border-slate-500">
+<span class="font-bold">⚙️ Agent</span><br/>Neutral general-purpose — no role-specific instructions
 </div>
 </div>
 
-<p class="text-sm text-gray-500 mt-2">Each agent is a real Copilot CLI session — the same tool you already use. Full terminal, file editing, everything.</p>
+<p class="text-xs text-gray-500 mt-1">Each agent is a real Copilot CLI session — same tool you already use. Define as many as you need.</p>
 
 <!--
-Spend a moment on this slide — let the audience absorb the roles. The key
-comparison: this is like a real engineering team. The lead is like a senior
-EM who never opens an IDE. The developers are ICs who own their code. The
-reviewers are that teammate who always finds the edge case. The secretary
-is a project manager who reads every status update. The difference? They
-all start working in the same minute. No onboarding, no standups, no
-context switching. Point out that each agent is the exact same Copilot CLI
-the audience already uses — this isn't sci-fi, it's a multiplier.
+All 13 built-in roles from RoleRegistry. Each is a real Copilot CLI
+session with full terminal access. The key insight: it's a real
+engineering org. Lead manages, developers code, reviewers catch bugs,
+architect designs, secretary tracks progress, radical thinker challenges
+assumptions. Users pick which roles they need — and can define custom
+roles too. No onboarding, no standups — everyone starts in the same
+minute.
 
 [Transition: "Now that you know the team, let me show you how YOU
 interact with this system."]
