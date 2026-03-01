@@ -156,6 +156,7 @@ export const dagTasks = sqliteTable('dag_tasks', {
   model: text('model'),
   assignedAgentId: text('assigned_agent_id'),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
+  startedAt: text('started_at'),
   completedAt: text('completed_at'),
 }, (table) => [
   primaryKey({ columns: [table.id, table.leadId] }),

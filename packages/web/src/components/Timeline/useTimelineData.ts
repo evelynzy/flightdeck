@@ -134,7 +134,7 @@ export function useTimelineData(leadId: string | null) {
     ? (polling.error ? 'degraded' : polling.data ? 'connected' : 'connecting')
     : sse.connectionHealth;
 
-  const refetch = sse.sseUnavailable ? polling.refetch : async () => {};
+  const refetch = sse.sseUnavailable ? polling.refetch : async () => { sse.reconnect(); };
 
   return { data, loading, error, refetch, connectionHealth };
 }

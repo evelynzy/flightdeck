@@ -48,7 +48,7 @@ A real-time web UI that orchestrates teams of [Copilot CLI](https://docs.github.
 - **File Locking** — Pessimistic locks with TTL and glob support prevent concurrent edits
 - **Scoped COMMIT** — The `COMMIT` command executes `git add` only on files the agent has locked, then commits and runs post-commit verification (`git diff --name-only HEAD~1`) to confirm the expected files actually landed. Prevents `git add -A` from leaking other agents' uncommitted work.
 - **Merge Scope Validation** — When merging agent branches, `WorktreeManager.merge()` validates that only locked files were modified — defense-in-depth against accidental cross-contamination
-- **Worktree Isolation** — ⚠️ _In development, not yet enabled._ Per-agent git worktrees are implemented in the backend (`WorktreeManager`) but not yet active in production. Agents currently share the repository working directory. See [docs/coordination.md](docs/coordination.md) for details.
+- **Worktree Isolation** — ⚠️ _In development, not yet enabled._ Per-agent git worktrees are implemented in the backend (`WorktreeManager`) but not yet active in production. Agents currently share the repository working directory. See the [Coordination guide](packages/docs/guide/coordination.md) for details.
 - **Event Pipeline** — Reactive event handlers auto-trigger actions (e.g., run tests after commits, log summaries on task completion)
 - **Agent Controls** — Interrupt, terminate, restart agents; change models on the fly
 - **Security** — Auto-generated auth tokens, CORS lockdown, rate limiting, path traversal validation
@@ -146,7 +146,7 @@ React UI ←→ WebSocket ←→ Node.js Server ←→ ACP ←→ Copilot CLI ×
 | **ReportGenerator** | Session report generation in HTML and Markdown |
 | **KnowledgeTransfer** | Cross-project knowledge sharing and context reuse |
 
-> See [docs/architecture-decisions.md](docs/architecture-decisions.md) for the rationale behind key design choices.
+> See the [Architecture Decisions](packages/docs/reference/architecture-decisions.md) page for the rationale behind key design choices.
 
 ## Agent Roles
 
@@ -252,12 +252,12 @@ Agents communicate via structured triple-bracket commands detected in their outp
 
 | Document | Description |
 |----------|-------------|
-| [docs/api-reference.md](docs/api-reference.md) | Full REST API reference for all endpoints |
-| [docs/architecture-decisions.md](docs/architecture-decisions.md) | Key architecture decision records (ADRs) |
-| [docs/agent-communication.md](docs/agent-communication.md) | ACP agent communication protocol details |
-| [docs/coordination.md](docs/coordination.md) | File locking, delegation, and coordination primitives |
-| [docs/database-design.md](docs/database-design.md) | SQLite schema and Drizzle ORM setup |
-| [docs/ui-design.md](docs/ui-design.md) | Frontend component architecture and design tokens |
+| [REST API Reference](packages/docs/reference/api.md) | Full REST API reference for all endpoints |
+| [Architecture Decisions](packages/docs/reference/architecture-decisions.md) | Key architecture decision records (ADRs) |
+| [Agent Communication](packages/docs/guide/agent-communication.md) | ACP agent communication protocol details |
+| [Coordination](packages/docs/guide/coordination.md) | File locking, delegation, and coordination primitives |
+| [Database Schema](packages/docs/reference/database.md) | SQLite schema and Drizzle ORM setup |
+| [UI Design](packages/docs/guide/ui-design.md) | Frontend component architecture and design tokens |
 
 ## Screenshots
 

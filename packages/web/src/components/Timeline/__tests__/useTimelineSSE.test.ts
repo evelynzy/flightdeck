@@ -284,6 +284,33 @@ describe('useTimelineSSE', () => {
     expect(es.readyState).toBe(MockEventSource.CLOSED);
   });
 
+  it('reconnect clears data and creates new connection', async () => {
+    const { result } = renderHook(() => useTimelineSSE('lead-1'));
+    const es1 = MockEventSource.instances[0];
+
+    // Establish initial connection with data
+    act(() => {
+      es1.simulateOpen();
+      es1.simulateEvent('init', makeTimelineData(), 'evt-1');
+    });
+    expect(result.current.data).not.toBeNull();
+    expect(result.current.connectionHealth).toBe('connected');
+
+    // Call reconnect
+    act(() => {
+      result.current.reconnect();
+    });
+
+    // Old connection should be closed
+    expect(es1.readyState).toBe(MockEventSource.CLOSED);
+    // Data should be cleared
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(true);
+    expect(result.current.connectionHealth).toBe('connecting');
+    // New connection should be created
+    expect(MockEventSource.instances.length).toBe(2);
+  });
+
   it('updates time range when new events arrive', async () => {
     const { result } = renderHook(() => useTimelineSSE('lead-1'));
     const es = MockEventSource.instances[0];

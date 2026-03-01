@@ -37,6 +37,7 @@ export interface DagTask {
   model?: string;
   assignedAgentId?: string;
   createdAt: string;
+  startedAt?: string;
   completedAt?: string;
 }
 
@@ -124,6 +125,7 @@ function rowToTask(row: typeof dagTasks.$inferSelect): DagTask {
     model: row.model || undefined,
     assignedAgentId: row.assignedAgentId || undefined,
     createdAt: row.createdAt!,
+    startedAt: row.startedAt || undefined,
     completedAt: row.completedAt || undefined,
   };
 }
@@ -299,7 +301,7 @@ export class TaskDAG extends EventEmitter {
     if (error) return null;
     this.db.drizzle
       .update(dagTasks)
-      .set({ dagStatus: 'running', assignedAgentId: agentId })
+      .set({ dagStatus: 'running', assignedAgentId: agentId, startedAt: sql`datetime('now')` })
       .where(and(eq(dagTasks.id, taskId), eq(dagTasks.leadId, leadId)))
       .run();
     this.emit('dag:updated', { leadId });

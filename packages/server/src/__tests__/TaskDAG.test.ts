@@ -538,6 +538,15 @@ describe('TaskDAG', () => {
       expect(task!.dagStatus).toBe('running');
       expect(task!.assignedAgentId).toBe('agent-1');
     });
+
+    it('records startedAt timestamp', () => {
+      dag.declareTaskBatch('lead-1', [{ id: 'a', role: 'Dev' }]);
+      const task = dag.startTask('lead-1', 'a', 'agent-1');
+      expect(task).not.toBeNull();
+      expect(task!.startedAt).toBeDefined();
+      // SQLite datetime('now') returns 'YYYY-MM-DD HH:MM:SS'
+      expect(task!.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    });
   });
 
   describe('getStatus', () => {

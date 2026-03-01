@@ -10,6 +10,8 @@ export interface UseTimelineSSEResult {
   connectionHealth: ConnectionHealth;
   /** True if SSE has permanently failed and caller should use polling fallback */
   sseUnavailable: boolean;
+  /** Close the current connection, clear data, and reconnect fresh */
+  reconnect: () => void;
 }
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
@@ -240,7 +242,20 @@ export function useTimelineSSE(leadId: string | null): UseTimelineSSEResult {
     };
   }, [leadId, connect, cleanup, sseUnavailable]);
 
-  return { data, loading, error, connectionHealth, sseUnavailable };
+  const reconnect = useCallback(() => {
+    cleanup();
+    setData(null);
+    hasDataRef.current = false;
+    seenEventIds.current.clear();
+    lastEventId.current = null;
+    consecutiveFailures.current = 0;
+    reconnectDelay.current = INITIAL_RECONNECT_DELAY_MS;
+    setLoading(true);
+    setConnectionHealth('connecting');
+    connect();
+  }, [cleanup, connect]);
+
+  return { data, loading, error, connectionHealth, sseUnavailable, reconnect };
 }
 
 /** Merge an incremental activity entry into existing timeline data */

@@ -11,6 +11,7 @@ export interface DagTask {
   model?: string;
   assignedAgentId?: string;
   createdAt: string;
+  startedAt?: string;
   completedAt?: string;
 }
 

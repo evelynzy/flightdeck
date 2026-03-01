@@ -377,6 +377,7 @@ export function TaskQueuePanel({ api }: Props) {
                 assignee:    t.role,
                 dependsOn:   t.dependsOn,
                 createdAt:   new Date(t.createdAt).getTime(),
+                startedAt:   t.startedAt ? new Date(t.startedAt).getTime() : undefined,
                 completedAt: t.completedAt ? new Date(t.completedAt).getTime() : undefined,
               }));
 
