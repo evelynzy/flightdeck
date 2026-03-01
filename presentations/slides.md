@@ -155,6 +155,74 @@ isn't in any single agent — it's in the interaction patterns between them.
 -->
 
 ---
+layout: center
+---
+
+<div class="text-center">
+
+# How was this built?
+
+<br/>
+
+<div class="text-xl text-gray-400">With itself.</div>
+
+</div>
+
+<!--
+Pause after "With itself." Let it land. Then say: "Let me tell you the
+origin story — because it's the best proof of concept I can give you."
+-->
+
+---
+
+# Built by the thing it builds
+
+<div class="space-y-3 mt-2">
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+
+### 🌱 Day 1: One human, one AI
+A single Copilot CLI agent got one prompt: *"Build a system where multiple AI agents can work together."* That one agent wrote the first prototype.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500">
+
+### 🔄 Then it got recursive
+Use **version N** of AI Crew → to build **version N+1**. Each generation is built by the previous generation's team of agents. Each version is better at building the next one.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
+
+### ⚡ This session — right now
+The 13 agents you're about to meet? They're building the **next version** of the system they're running on. New features, bug fixes, even this presentation — all produced by the tool itself.
+
+</div>
+
+</div>
+
+<div class="text-center mt-3">
+<span class="text-yellow-400 font-bold">You're not watching a demo. You're watching a system evolving in real time.</span>
+</div>
+
+<!--
+This is the origin story. A single Copilot CLI agent — the same tool you
+already use — got one prompt and wrote the first prototype. Then we used
+version 1 to build version 2. Version 2 had more features, so it built
+version 3 faster. Each generation improves the next.
+
+This session? The 13 agents are building the next version of the system
+they're running on. They found bugs in their own infrastructure and fixed
+them. One agent found a race condition in the commit system all the agents
+use to save their work.
+
+The tool is improving itself. That's not a demo — that's a feedback loop.
+
+[Transition: "Now let's talk about what this means for engineering teams..."]
+-->
+
+---
 
 # Your team's deepest frustration, solved
 
@@ -1074,6 +1142,71 @@ at each column briefly: "15 scoped commits, zero conflicts. PRs created
 with context. Issues filed automatically when bugs are found. Architecture
 audits and cost analysis produced in the background." Then: "The boring
 parts of your workflow? Handled."
+-->
+
+---
+
+# These agents don't just write code — they ship it
+
+<div class="grid grid-cols-4 gap-3 mt-4">
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
+
+### 🔒 Commits
+
+<div class="text-sm mt-2">
+
+Each agent commits only its own files. **15+ scoped commits** this session, zero conflicts.
+
+</div>
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
+
+### 🔀 Pull Requests
+
+<div class="text-sm mt-2">
+
+The crew opens a PR with full context — what changed, why, which agent did it. **Ready for your review.**
+
+</div>
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
+
+### 📋 Issues
+
+<div class="text-sm mt-2">
+
+Found a bug during development? The crew **files a GitHub issue** and keeps working. No manual triage.
+
+</div>
+</div>
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
+
+### 📊 Analysis
+
+<div class="text-sm mt-2">
+
+Architecture audits, security reviews, cost breakdowns — **produced while you do other work.**
+
+</div>
+</div>
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500 mt-4 text-center">
+
+The boring parts of your workflow? They're handled.
+
+</div>
+
+<!--
+These are real capabilities you can use TODAY — not a roadmap. Each one is
+something you'd normally do manually that the crew handles automatically.
+
+Commits are scoped and atomic — each agent only stages its own files.
+Pull requests get created with full context. When an agent finds a bug,
+it files a GitHub issue and keeps working. And analysis — architecture
+audits, security reviews, cost breakdowns — happens in the background.
+
+This isn't a toy demo. This is a production workflow.
 -->
 
 ---

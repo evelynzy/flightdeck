@@ -318,12 +318,12 @@ export class TaskDAG extends EventEmitter {
       .where(and(eq(dagTasks.id, taskId), eq(dagTasks.leadId, leadId)))
       .run();
     const newlyReady = this.resolveReady(leadId);
-    // Auto-promote newly ready tasks from pending to ready
+    // Auto-promote newly ready tasks from pending/blocked to ready
     for (const task of newlyReady) {
       this.db.drizzle
         .update(dagTasks)
         .set({ dagStatus: 'ready' })
-        .where(and(eq(dagTasks.id, task.id), eq(dagTasks.leadId, leadId), eq(dagTasks.dagStatus, 'pending')))
+        .where(and(eq(dagTasks.id, task.id), eq(dagTasks.leadId, leadId), inArray(dagTasks.dagStatus, ['pending', 'blocked'])))
         .run();
     }
     this.emit('dag:updated', { leadId });
