@@ -19,35 +19,35 @@ Any agent can create groups (non-leads use their own ID as context). The lead is
 
 **Group creation (any agent):**
 ```
-[[[ CREATE_GROUP {"name": "config-team", "members": ["agent-id-1", "agent-id-2"]} ]]]
+⟦ CREATE_GROUP {"name": "config-team", "members": ["agent-id-1", "agent-id-2"]} ⟧
 ```
 Creates a named group. Members are agent IDs (short 8-char prefixes work). The lead is automatically added. Responds with a confirmation including the group name and resolved member list.
 
 **Role-based membership:**
 ```
-[[[ CREATE_GROUP {"name": "frontend-team", "roles": ["developer", "designer"]} ]]]
+⟦ CREATE_GROUP {"name": "frontend-team", "roles": ["developer", "designer"]} ⟧
 ```
 Auto-adds all active agents with matching roles. Terminated/completed agents are excluded via `isTerminalStatus()` filter. Can be combined with explicit `members`.
 
 ```
-[[[ ADD_TO_GROUP {"group": "config-team", "members": ["agent-id-3"]} ]]]
+⟦ ADD_TO_GROUP {"group": "config-team", "members": ["agent-id-3"]} ⟧
 ```
 Adds members to an existing group. The new member receives the group's recent message history (last 20 messages) so they have context.
 
 ```
-[[[ REMOVE_FROM_GROUP {"group": "config-team", "members": ["agent-id-2"]} ]]]
+⟦ REMOVE_FROM_GROUP {"group": "config-team", "members": ["agent-id-2"]} ⟧
 ```
 Removes members. The lead cannot be removed.
 
 **Any group member:**
 ```
-[[[ GROUP_MESSAGE {"group": "config-team", "content": "I found a pattern we should all follow..."} ]]]
+⟦ GROUP_MESSAGE {"group": "config-team", "content": "I found a pattern we should all follow..."} ⟧
 ```
 Sends a message to all other group members. The sender sees a delivery confirmation. Each recipient receives the message with the sender's role and ID.
 
 **Any agent — discover groups:**
 ```
-[[[ QUERY_GROUPS ]]]
+⟦ QUERY_GROUPS ⟧
 ```
 Lists all groups the agent belongs to, with member names/roles, message count, and last message preview (first 100 chars). Also aliased as `LIST_GROUPS`.
 
