@@ -685,4 +685,67 @@ describe('GET /api/browse — security', () => {
       expect(body.parent).not.toBe('/proc');
     }
   });
+
+  // ── POST /lead/start — Auto-Secretary Spawn ─────────────────────────
+
+  describe('POST /lead/start', () => {
+    it('auto-spawns a Secretary agent alongside the Lead', async () => {
+      const leadAgent = createLeadAgent({ projectName: 'Test Project' });
+      const secretaryAgent = createMockAgent({
+        id: 'secretary-001',
+        role: { id: 'secretary', name: 'Secretary', model: 'gpt-4.1' },
+        parentId: 'lead-001',
+      });
+
+      let spawnCallCount = 0;
+      mockAgentManager.spawn.mockImplementation(() => {
+        spawnCallCount++;
+        return spawnCallCount === 1 ? leadAgent : secretaryAgent;
+      });
+
+      // roleRegistry.get must return both lead and secretary roles
+      const leadRole = { id: 'lead', name: 'Project Lead', model: 'claude-sonnet-4.5' };
+      const secretaryRole = { id: 'secretary', name: 'Secretary', model: 'gpt-4.1' };
+      mockRoleRegistry.get.mockImplementation((id: string) => {
+        if (id === 'lead') return leadRole;
+        if (id === 'secretary') return secretaryRole;
+        return mockRole;
+      });
+
+      const res = await post('/api/lead/start', { task: 'Build something' });
+      expect(res.status).toBe(201);
+
+      // Should have been called twice: once for Lead, once for Secretary
+      expect(mockAgentManager.spawn).toHaveBeenCalledTimes(2);
+
+      // Second call should be the secretary
+      const secondCall = mockAgentManager.spawn.mock.calls[1];
+      expect(secondCall[0]).toEqual(secretaryRole);         // role
+      expect(secondCall[2]).toBe('lead-001');                // parentId = lead
+      expect(secondCall[4]).toBe('gpt-4.1');                 // model
+    });
+
+    it('succeeds even if Secretary spawn fails', async () => {
+      const leadAgent = createLeadAgent({ projectName: 'Test Project' });
+
+      let spawnCallCount = 0;
+      mockAgentManager.spawn.mockImplementation(() => {
+        spawnCallCount++;
+        if (spawnCallCount === 1) return leadAgent;
+        throw new Error('Concurrency limit reached');
+      });
+
+      const leadRole = { id: 'lead', name: 'Project Lead', model: 'claude-sonnet-4.5' };
+      const secretaryRole = { id: 'secretary', name: 'Secretary', model: 'gpt-4.1' };
+      mockRoleRegistry.get.mockImplementation((id: string) => {
+        if (id === 'lead') return leadRole;
+        if (id === 'secretary') return secretaryRole;
+        return mockRole;
+      });
+
+      const res = await post('/api/lead/start', { task: 'Build something' });
+      // Lead creation still succeeds
+      expect(res.status).toBe(201);
+    });
+  });
 });

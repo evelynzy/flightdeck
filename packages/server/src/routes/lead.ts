@@ -69,6 +69,29 @@ export function leadRoutes(ctx: AppContext): Router {
           agent.sendMessage(task);
         }, 2000);
       }
+
+      // Auto-spawn Secretary agent for DAG tracking and dependency analysis
+      try {
+        const secretaryRole = roleRegistry.get('secretary');
+        if (secretaryRole) {
+          const secretary = agentManager.spawn(
+            secretaryRole,
+            'You are the auto-created Secretary for this project. Track DAG progress, analyze dependencies, and provide status reports when asked.',
+            agent.id, // parentId = lead
+            true,      // autopilot
+            'gpt-4.1',
+            cwd,
+            undefined, // no resumeSessionId
+            undefined, // no id
+            { projectName: agent.projectName, projectId: resolvedProjectId },
+          );
+          logger.info('lead', `Auto-spawned Secretary (${secretary.id.slice(0, 8)}) for project "${agent.projectName}"`);
+        }
+      } catch (err: any) {
+        // Non-fatal — project can work without a secretary
+        logger.warn('lead', `Failed to auto-spawn Secretary: ${err.message}`);
+      }
+
       res.status(201).json(agent.toJSON());
     } catch (err: any) {
       // Clean up orphan project row if spawn failed after project creation
