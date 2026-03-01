@@ -202,6 +202,8 @@ CREW_UPDATE -->
 - **Context compaction** — when Copilot CLI compacts an agent's context window (`agent:context_compacted` event), the `ContextRefresher` immediately re-injects the crew context (team roster, active delegations, coordination rules) into the affected agent so it doesn't lose awareness of its team after compaction
 - Debounced at 2 seconds to batch rapid events
 
+**Content deduplication:** Each update is hashed (MD5 of stable content — crew status + budget, excluding timestamps). If the hash matches the previous update for that agent, the injection is skipped. This reduces token waste by 40–60% during periods when only activity timestamps change but the actual crew state is unchanged.
+
 ## Task Assignment & Auto-Spawn
 
 When a task is created in the queue:

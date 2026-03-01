@@ -24,6 +24,8 @@ Creates a new agent with a specific role. The **lead** and **architect** can use
 | `model` | ❌ | Model override (defaults to role's default) |
 | `task` | ❌ | Initial task description |
 | `context` | ❌ | Additional context for the agent |
+| `dagTaskId` | ❌ | Link to a specific DAG task |
+| `depends_on` | ❌ | Array of DAG task IDs this work depends on |
 
 ### TERMINATE_AGENT
 
@@ -51,6 +53,8 @@ Assigns a task to an existing agent. Only the **lead** can use this.
 | `to` | ✅ | Target agent ID (short ID) |
 | `task` | ✅ | Task description |
 | `context` | ❌ | Additional context |
+| `dagTaskId` | ❌ | Link to a specific DAG task |
+| `depends_on` | ❌ | Array of DAG task IDs this work depends on |
 
 ### AGENT_MESSAGE
 
@@ -184,6 +188,67 @@ Set reminders that fire after a delay, with optional repeat.
 ⟦ LIST_TIMERS ⟧
 ```
 
+### SPAWN_AGENT
+
+Request parent to create a new agent. Non-lead agents use this to request help:
+
+```
+⟦ SPAWN_AGENT {"role": "developer", "task": "Help me fix the database migration"} ⟧
+```
+
+### CANCEL_DELEGATION
+
+Cancel an active delegation to an agent. The agent is terminated and the task is freed:
+
+```
+⟦ CANCEL_DELEGATION {"agentId": "agent-id-prefix"} ⟧
+```
+
+### COMMIT
+
+Commit changes from the agent's locked files. Auto-scopes to only files the agent has locked:
+
+```
+⟦ COMMIT {"message": "feat: add input validation for all commands"} ⟧
+```
+
+Optional `files` parameter to commit specific files instead of all locked files.
+
+### GROUP_MESSAGE
+
+Send a message to all members of a chat group:
+
+```
+⟦ GROUP_MESSAGE {"group": "backend-team", "content": "API design is finalized"} ⟧
+```
+
+### ADD_TO_GROUP / REMOVE_FROM_GROUP
+
+Manage group membership:
+
+```
+⟦ ADD_TO_GROUP {"group": "backend-team", "members": ["agent-id"]} ⟧
+⟦ REMOVE_FROM_GROUP {"group": "backend-team", "members": ["agent-id"]} ⟧
+```
+
+### QUERY_GROUPS / LIST_GROUPS
+
+List all groups the agent belongs to, with member info and recent messages:
+
+```
+⟦ QUERY_GROUPS ⟧
+```
+
+### ADD_DEPENDENCY
+
+Add dependencies between DAG tasks. Any agent can use this:
+
+```
+⟦ ADD_DEPENDENCY {"taskId": "build-frontend", "depends_on": ["design-api", "setup-db"]} ⟧
+```
+
+Validates that both tasks exist and the new dependency doesn't create a cycle. See [Auto-DAG](./auto-dag.md) for details.
+
 ### Task DAG Management (Lead-only)
 
 Additional commands for managing the task DAG:
@@ -191,7 +256,8 @@ Additional commands for managing the task DAG:
 | Command | Description |
 |---------|-------------|
 | `TASK_STATUS` / `QUERY_TASKS` | View current DAG state and progress summary |
-| `ADD_TASK {"id": "...", "role": "...", "description": "...", "deps": [...]}` | Add a single task to an existing DAG |
+| `ADD_TASK {"id": "...", "role": "...", "description": "...", "depends_on": [...]}` | Add a single task to an existing DAG |
+| `ADD_DEPENDENCY {"taskId": "...", "depends_on": ["..."]}` | Add dependencies between tasks |
 | `CANCEL_TASK {"id": "..."}` | Cancel a task |
 | `SKIP_TASK {"id": "..."}` | Skip a task and unblock dependents |
 | `RETRY_TASK {"id": "..."}` | Retry a failed task |
