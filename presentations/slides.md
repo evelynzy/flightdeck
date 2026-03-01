@@ -250,8 +250,131 @@ all start working in the same minute. No onboarding, no standups, no
 context switching. Point out that each agent is the exact same Copilot CLI
 the audience already uses — this isn't sci-fi, it's a multiplier.
 
-[Transition: "Now that you know the team, let me show you the technology
-that connects them — starting with the communication protocol."]
+[Transition: "Now that you know the team, let me show you how YOU
+interact with this system."]
+-->
+
+
+---
+
+# How you interact with the system
+
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500 mt-2">
+
+You talk to the **lead agent** through a chat interface — just like chatting with Copilot. The lead reads your request, makes a plan, and delegates to specialists.
+
+</div>
+
+<div class="bg-gray-900 rounded-lg p-3 mt-3 text-xs font-mono">
+
+```mermaid
+graph LR
+    You["🧑 You"] -->|"Chat message"| Lead["🎯 Lead Agent"]
+    Lead -->|"DELEGATE"| D1["👷 Developer"]
+    Lead -->|"DELEGATE"| D2["🔍 Reviewer"]
+    Lead -->|"DELEGATE"| D3["🏗️ Architect"]
+    D1 -->|"Results"| Lead
+    D2 -->|"Findings"| Lead
+    D3 -->|"Design"| Lead
+    Lead -->|"Summary"| You
+```
+
+</div>
+
+<div class="grid grid-cols-2 gap-2 mt-3 text-sm">
+<div class="bg-gray-800 rounded-lg p-2 border border-green-500">
+
+**You can interrupt anytime** — send a priority message and the lead stops current work to handle your request
+
+</div>
+<div class="bg-gray-800 rounded-lg p-2 border border-yellow-500">
+
+**Full visibility** — watch every agent work in real-time, read their conversations, pause the whole system if needed
+
+</div>
+</div>
+
+<!--
+The human interaction model is simple: you type a message, just like
+chatting with Copilot. The lead agent reads it, breaks it into tasks,
+and delegates to the right specialists. You can see everything happening
+in real-time. If you want to redirect, just type another message —
+priority messages interrupt the lead immediately. You're always in
+control, but you don't need to micromanage.
+-->
+
+
+---
+
+# The delegation loop
+
+<div class="grid grid-cols-2 gap-3 mt-2">
+<div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500">
+
+### Creating agents
+
+```
+⟦ CREATE_AGENT {
+  "role": "developer",
+  "model": "claude-sonnet-4.5",
+  "task": "Build the login feature"
+} ⟧
+```
+
+The lead picks the **role** (developer, reviewer, architect...) and the **model** (Claude, GPT, Gemini) for each agent based on the task.
+
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500 mt-2">
+
+### Delegating work
+
+```
+⟦ DELEGATE {
+  "to": "3194c4df",
+  "task": "Now harden the commit system"
+} ⟧
+```
+
+Reuse existing agents for new tasks. The lead manages the queue.
+
+</div>
+
+</div>
+<div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 h-full">
+
+### The coordination cycle
+
+1. **You** describe what you want
+2. **Lead** analyzes and plans the approach
+3. **Lead** creates/delegates to specialist agents
+4. **Agents** work in parallel, report results
+5. **Lead** reviews, coordinates next steps
+6. **Lead** assigns reviewers for quality
+7. **Results** flow back to you
+
+<div class="bg-gray-900 rounded p-2 mt-2 text-xs">
+
+The lead can manage **multiple workstreams simultaneously** — coding, reviewing, testing, docs — all running in parallel.
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+<!--
+The lead is like a senior engineering manager. It reads your request,
+decides the team composition, creates agents with the right roles and
+models, then delegates tasks. Agents report back when done. The lead
+reviews the results, assigns follow-up work or code reviews, and
+coordinates the next phase. Multiple workstreams run in parallel —
+the lead doesn't context-switch, it holds everything at once.
 -->
 
 
@@ -483,7 +606,57 @@ routing messages, assigning tasks, and resolving conflicts in real-time.
 
 ---
 
-# Three communication channels
+# Organizational structure
+
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500 mt-2">
+
+**Parent-child hierarchy** — the lead creates agents, agents report to the lead. No agent can control a sibling — only the lead has authority.
+
+</div>
+
+<div class="bg-gray-900 rounded-lg p-3 mt-3">
+
+```mermaid
+graph TD
+    Lead["🎯 Lead Agent"]
+    Lead --> Dev1["👷 Developer A<br/>Feature work"]
+    Lead --> Dev2["👷 Developer B<br/>Bug fixes"]
+    Lead --> Arch["🏗️ Architect<br/>System design"]
+    Lead --> Rev["🔍 Code Reviewer"]
+    Lead --> Sec["📝 Secretary<br/>Progress tracking"]
+    Dev1 -.->|"AGENT_MESSAGE"| Arch
+    Dev2 -.->|"AGENT_MESSAGE"| Rev
+    Arch -.->|"GROUP_MESSAGE"| Dev1
+    Arch -.->|"GROUP_MESSAGE"| Dev2
+```
+
+</div>
+
+<div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+<div class="bg-gray-800 rounded-lg p-2 border border-green-500">
+
+**Lead → Agents**: CREATE_AGENT, DELEGATE, INTERRUPT, TERMINATE — full lifecycle control
+
+</div>
+<div class="bg-gray-800 rounded-lg p-2 border border-yellow-500">
+
+**Agents ↔ Agents**: AGENT_MESSAGE, GROUP_MESSAGE — peer communication is async, never interrupts
+
+</div>
+</div>
+
+<!--
+The organizational structure is a tree rooted at the lead. The lead
+creates all agents and can delegate, interrupt, or terminate any of them.
+Agents can communicate with each other via direct messages or groups,
+but they can't control siblings — only the lead has authority. This
+prevents cascading chaos. The lead can also INTERRUPT an agent to
+redirect their work immediately.
+-->
+
+---
+
+# How agents communicate
 
 <div class="grid grid-cols-3 gap-3 mt-2 text-sm">
 <div class="bg-gray-800 rounded-lg p-3 border border-blue-500">
@@ -499,6 +672,7 @@ routing messages, assigning tasks, and resolving conflicts in real-time.
 
 - Point-to-point, async
 - Resolves by ID prefix or role
+- Developer asks architect for clarification
 
 </div>
 </div>
@@ -507,47 +681,49 @@ routing messages, assigning tasks, and resolving conflicts in real-time.
 ### 👥 Group Chat
 
 <div class="bg-gray-900 rounded p-2 mt-1 text-xs font-mono">
-⟦ GROUP_MESSAGE {"group":<br/>
-&nbsp; "presentation-team", ...} ⟧
+⟦ CREATE_GROUP {<br/>
+&nbsp; "name": "presentation-team",<br/>
+&nbsp; "members": ["dev", "arch",<br/>
+&nbsp;&nbsp; "writer", "thinker"]} ⟧
 </div>
 
 <div class="text-sm text-gray-400 mt-2">
 
 - Persistent, SQLite-backed
-- 5 agents coordinated this deck
+- Any member can post, all members see it
+- **This deck**: 5 agents debating slides in real-time
 
 </div>
 </div>
 <div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
 
-### 📢 Broadcast
+### 📢 Broadcast + Interrupt
 
 <div class="bg-gray-900 rounded p-2 mt-1 text-xs font-mono">
 ⟦ BROADCAST {"content":<br/>
-&nbsp; "Never use git add -A"} ⟧
+&nbsp; "Never use git add -A"} ⟧<br/>
+⟦ INTERRUPT {"to": "bf1e",<br/>
+&nbsp; "content": "Stop, new task"} ⟧
 </div>
 
 <div class="text-sm text-gray-400 mt-2">
 
-- One-to-all, urgent
-- All agents received it
+- Broadcast: one-to-all announcements
+- Interrupt: stop agent mid-task, redirect
 
 </div>
 </div>
 </div>
 
-<p class="text-sm text-gray-500 mt-2">This presentation was coordinated via group chat — 5 agents discussing slides in real-time.</p>
+<p class="text-sm text-gray-500 mt-2">Agents self-organize: they create groups, query peers, message directly, and escalate through broadcast when needed.</p>
 
 <!--
-Three channels, each for a different purpose. Direct messages for
-point-to-point coordination — the architect sends specs to the developer
-who needs them. Group chat for team coordination — our presentation-team
-group had 5 agents (lead, architect, developer, radical thinker, tech
-writer) all collaborating on these slides in real-time. And broadcast
-for urgent announcements — when the lead discovered the git add -A
-problem, it broadcast a warning to all agents simultaneously. The
-agents self-organize: they create groups, message peers directly, and
-escalate through broadcast when needed.
+Three communication channels plus interrupt. Direct messages are
+point-to-point — an agent messages any other by ID or role. Group chat
+creates persistent discussions — our presentation-team group had 5 agents
+debating slide content. Broadcast is for system-wide announcements.
+INTERRUPT lets the lead stop an agent mid-task and redirect them
+immediately.
 -->
 
 ---
@@ -653,19 +829,20 @@ zero operational overhead.
 <div class="grid grid-cols-2 gap-4 mt-2">
 <div>
 
-**Directed Acyclic Graph** of task dependencies
+**Explicit planning** with DECLARE_TASKS:
 
 ```
 ⟦ DECLARE_TASKS {
   "tasks": [
     {"id": "api",  "depends_on": []},
     {"id": "ui",   "depends_on": ["api"]},
-    {"id": "test", "depends_on": ["api","ui"]}
+    {"id": "test", "depends_on": ["api","ui"]},
+    {"id": "review", "depends_on": ["api"]}
   ]
 } ⟧
 ```
 
-When `api` completes → `ui` auto-starts
+When `api` completes → `ui` AND `review` auto-start
 When `api` + `ui` complete → `test` auto-starts
 
 </div>
@@ -673,34 +850,93 @@ When `api` + `ui` complete → `test` auto-starts
 
 <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
 
-**Auto-DAG** — no planning required
+**Task states:**
 
-When agents use `⟦ DELEGATE ⟧` without a plan, the system **auto-creates DAG nodes** from each delegation.
-
-- Near-duplicate detection prevents redundant tasks
-- Secretary agent infers dependencies between related work
-- Review tasks auto-link to their parent feature
+<div class="text-sm space-y-1 mt-1">
+<div>⬜ <code>pending</code> — waiting for dependencies</div>
+<div>🟦 <code>ready</code> — all deps done, waiting for agent</div>
+<div>🟢 <code>in_progress</code> — agent working on it</div>
+<div>✅ <code>done</code> — completed</div>
+<div>🔴 <code>blocked</code> / <code>failed</code></div>
+</div>
 
 </div>
 
-<div class="text-sm text-gray-400 mt-2">
+<div class="bg-gray-800 rounded-lg p-3 border border-green-500 mt-2">
 
-📊 **UI visualization**: task nodes with dependency arrows, color-coded by status (pending → running → done)
+**Runtime adjustments:**
+
+```
+⟦ ADD_DEPENDENCY {
+  "task": "deploy",
+  "depends_on": "security-review"
+} ⟧
+
+⟦ COMPLETE_TASK {
+  "taskId": "api",
+  "summary": "Built 5 endpoints"
+} ⟧
+```
 
 </div>
+
 </div>
 </div>
 
 <!--
-The DAG is a core differentiator. Most multi-agent systems fire-and-forget
-delegations. AI Crew PLANS and TRACKS. DECLARE_TASKS creates explicit
-dependency graphs. Auto-DAG creates them implicitly from DELEGATE commands.
-Tasks auto-start when their dependencies resolve — no polling, no manual
-scheduling. The UI shows this as a live graph with nodes and arrows.
+The Task DAG is the planning backbone. DECLARE_TASKS creates an explicit
+dependency graph upfront. Tasks auto-promote through states as dependencies
+complete. ADD_DEPENDENCY lets you adjust the graph at runtime — discovered
+a new requirement? Add it. COMPLETE_TASK lets agents signal they're done,
+triggering dependent tasks to auto-start.
+-->
 
-[Transition: "That's how the system works under the hood. Now let me show
-you what happens when real agents use these capabilities — starting with
-two stories from this session."]
+---
+
+# Auto-DAG: Planning without planning
+
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500 mt-2">
+
+When the lead uses `⟦ DELEGATE ⟧` without a DECLARE_TASKS plan, the system **auto-creates DAG nodes** from each delegation.
+
+</div>
+
+<div class="grid grid-cols-3 gap-2 mt-3 text-sm">
+<div class="bg-gray-800 rounded-lg p-2 border border-green-500">
+
+### Tier 1: Explicit
+`depends_on` field in DECLARE_TASKS — you specify the graph directly
+
+</div>
+<div class="bg-gray-800 rounded-lg p-2 border border-yellow-500">
+
+### Tier 2: Role-based
+Reviews auto-depend on implementations. Tests auto-depend on features. The system infers from role types.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-2 border border-purple-500">
+
+### Tier 3: Secretary LLM
+The Secretary agent analyzes task descriptions and infers semantic dependencies that role-based rules miss.
+
+</div>
+</div>
+
+<div class="bg-gray-800 rounded-lg p-3 border border-gray-700 mt-3 text-sm">
+
+**Near-duplicate detection** prevents redundant tasks. If the lead delegates "Fix login" and then "Fix the login bug", the system detects the overlap and links them instead of creating two tasks. The DAG visualization shows the full graph: nodes are tasks, arrows are dependencies, colors indicate status.
+
+</div>
+
+<!--
+Auto-DAG is the magic that makes the system feel intelligent. Most
+multi-agent systems fire-and-forget delegations. AI Crew builds a
+dependency graph automatically. Three tiers of inference: explicit
+deps you specify, role-based rules (reviews depend on implementations),
+and LLM-based semantic analysis by the Secretary. Near-duplicate
+detection prevents the same work from being done twice. The UI shows
+this as a live graph — you can see the critical path, bottlenecks,
+and progress at a glance.
 -->
 
 ---
@@ -1101,57 +1337,61 @@ parts of your workflow? Handled."
 
 ---
 
-# Real-time visibility into everything
+# The dashboard: your mission control
 
-<div class="grid grid-cols-2 gap-3 mt-2">
-<div class="bg-gray-800 rounded-lg p-3 border border-blue-500">
+<div class="bg-gray-800 rounded-lg p-3 border border-blue-500 mt-2">
 
-### 📊 Timeline Visualization
-<div class="text-sm text-gray-400">
+**Main chat panel** — talk to the lead agent directly. Type a message, get a response. See the lead's thinking and delegations in real-time.
 
-Swim lanes per agent showing activity over time. Communication links drawn between agents. Zoom, brush select, minimap navigation.
+</div>
+
+<div class="grid grid-cols-3 gap-2 mt-3 text-sm">
+<div class="bg-gray-800 rounded-lg p-2 border border-green-500">
+
+### 🤖 Agent Roster
+Every agent's status: idle, running, busy. Their current task, model, locked files. Click to see their full conversation.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-2 border border-yellow-500">
+
+### 📊 Timeline
+Swim lanes per agent showing activity over time. Communication links drawn between agents. Zoom, brush select, minimap.
+
+</div>
+<div class="bg-gray-800 rounded-lg p-2 border border-purple-500">
+
+### 🔗 DAG Visualization
+Interactive task dependency graph. Color-coded: green (done), blue (running), gray (pending). See the critical path.
 
 </div>
 </div>
-<div class="bg-gray-800 rounded-lg p-3 border border-green-500">
 
-### 🏢 Org Chart
-<div class="text-sm text-gray-400">
-
-Hierarchical view: Lead → Agents. Shows role, status, model, current task. Real-time WebSocket updates.
-
-</div>
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-yellow-500">
+<div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+<div class="bg-gray-800 rounded-lg p-2 border border-red-500">
 
 ### 🔥 Communication Heatmap
-<div class="text-sm text-gray-400">
-
 Matrix showing message frequency between agent pairs. Hot spots reveal collaboration patterns. SSE-powered real-time updates.
 
 </div>
-</div>
-<div class="bg-gray-800 rounded-lg p-3 border border-purple-500">
+<div class="bg-gray-800 rounded-lg p-2 border border-cyan-500">
 
-### 🔗 DAG Task Graph
-<div class="text-sm text-gray-400">
-
-Interactive dependency graph. Color-coded: green (done), blue (running), gray (pending). Shows which agent is assigned to each task.
+### 📈 Cost & Token Tracking
+Per-agent and total token usage. See which agents cost most. Budget limits configurable.
 
 </div>
 </div>
-</div>
 
-<p class="text-sm text-gray-500 mt-2">All views update in real-time. You can message any agent, pause the system, or just watch. Like mission control for your AI team.</p>
+<p class="text-sm text-gray-500 mt-2">All views update in real-time via WebSocket + SSE. You can message any agent, pause the system, or just watch.</p>
 
 <!--
-You're not flying blind. Eight live panels — timeline, org chart, heatmap,
-DAG graph, activity feed, agent fleet, token costs, and alerts. The
-timeline is powerful for post-mortem: see exactly when agents communicated,
-who was blocked, where bottlenecks formed. The heatmap reveals
-collaboration patterns you didn't design — agents naturally cluster around
-problems. All of this updates via WebSocket push. You'll see it in the
-live demo.
+The dashboard gives you full visibility. The main panel is a chat
+interface — you talk to the lead just like chatting with Copilot. The
+agent roster shows every agent: their status, current task, which
+files they own. The timeline shows swim lanes of activity over time —
+great for post-mortems. The DAG visualization shows task progress as a
+live graph. The heatmap reveals communication patterns. Cost tracking
+shows token usage per agent. Everything updates in real-time. You can
+pause the entire system with one click if anything looks wrong.
 -->
 
 ---
