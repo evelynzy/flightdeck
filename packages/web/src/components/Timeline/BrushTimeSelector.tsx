@@ -50,6 +50,7 @@ export function BrushTimeSelector({
   leftOffset = 0,
 }: BrushTimeSelectorProps) {
   const brushRef = useRef<BaseBrush | null>(null);
+  const isBrushDragging = useRef(false);
 
   const effectiveLeft = PADDING.left + leftOffset;
   const innerWidth = width - effectiveLeft - PADDING.right;
@@ -77,20 +78,29 @@ export function BrushTimeSelector({
     end: { x: xScale(visibleRange.end) },
   }), []); // Only set once on mount
 
-  const handleBrushEnd = useCallback((bounds: Bounds | null) => {
+  const handleBrushChange = useCallback((bounds: Bounds | null) => {
+    isBrushDragging.current = true;
     if (!bounds) return;
-    // bounds.x0/x1 are already domain values (timestamps) — @visx/brush
-    // calls convertRangeToDomain internally before invoking onBrushEnd
     const newStart = new Date(bounds.x0);
     const newEnd = new Date(bounds.x1);
-    // Prevent degenerate ranges
+    if (newEnd.getTime() - newStart.getTime() < 1000) return;
+    onRangeChange({ start: newStart, end: newEnd });
+  }, [onRangeChange]);
+
+  const handleBrushEnd = useCallback((bounds: Bounds | null) => {
+    isBrushDragging.current = false;
+    if (!bounds) return;
+    const newStart = new Date(bounds.x0);
+    const newEnd = new Date(bounds.x1);
     if (newEnd.getTime() - newStart.getTime() < 1000) return;
     onRangeChange({ start: newStart, end: newEnd });
   }, [onRangeChange]);
 
   // Update brush position when visibleRange changes externally (e.g., from zoom buttons)
+  // Skip while user is actively dragging the brush to prevent feedback loop
   const prevRangeRef = useRef(visibleRange);
   useEffect(() => {
+    if (isBrushDragging.current) return;
     if (
       prevRangeRef.current.start.getTime() === visibleRange.start.getTime() &&
       prevRangeRef.current.end.getTime() === visibleRange.end.getTime()
@@ -152,12 +162,14 @@ export function BrushTimeSelector({
             resizeTriggerAreas={['left', 'right']}
             brushDirection="horizontal"
             initialBrushPosition={initialBrushPosition}
+            onChange={handleBrushChange}
             onBrushEnd={handleBrushEnd}
             selectedBoxStyle={{
-              fill: 'rgba(88, 166, 255, 0.15)',
+              fill: 'rgba(88, 166, 255, 0.25)',
               stroke: '#58a6ff',
               strokeWidth: 1,
               strokeOpacity: 0.8,
+              cursor: 'grab',
             }}
             useWindowMoveEvents
             disableDraggingSelection={false}
