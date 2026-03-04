@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore, type ActivityEvent } from '../../stores/leadStore';
 import type { AcpToolCall, AcpPlanEntry, AcpTextChunk } from '../../types';
-import { ChevronDown, ChevronUp, ChevronRight, FolderOpen, Clock, Loader2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, FolderOpen, Clock, Loader2, X, MessageSquare } from 'lucide-react';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { InlineMarkdownWithMentions, MentionText } from '../../utils/markdown';
 import { PromptNav, hasUserMention } from '../PromptNav';
@@ -286,11 +286,16 @@ export function AcpOutput({ agentId }: Props) {
 
             // User messages — right-aligned blue bubble
             if (sender === 'user') {
+              const rawText = typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text);
+              // Incoming DMs from other agents — render as collapsible, collapsed by default
+              if (rawText.startsWith('📨')) {
+                return <CollapsibleIncomingMessage key={`msg-${item.index}`} text={rawText} timestamp={ts} />;
+              }
               return (
                 <div key={`msg-${item.index}`} data-user-prompt={item.index} className="flex justify-end items-start gap-2 py-1">
                   <span className="text-[10px] text-th-text-muted mt-1.5 shrink-0">{ts}</span>
                   <div className="max-w-[80%] rounded-lg px-3 py-2 bg-blue-600 text-white font-mono text-sm whitespace-pre-wrap">
-                    <MentionText text={typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text)} agents={useAppStore.getState().agents} onClickAgent={(id) => useAppStore.getState().setSelectedAgent(id)} />
+                    <MentionText text={rawText} agents={useAppStore.getState().agents} onClickAgent={(id) => useAppStore.getState().setSelectedAgent(id)} />
                   </div>
                 </div>
               );
@@ -314,6 +319,8 @@ export function AcpOutput({ agentId }: Props) {
             // System messages — centered, muted, smaller
             if (sender === 'system') {
               const text = typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text);
+              // Hide outgoing DM notifications — redundant with command blocks
+              if (text.startsWith('📤')) return null;
               if (text === '---') {
                 return <hr key={`msg-${item.index}`} className="border-th-border/50 my-1" />;
               }
@@ -419,6 +426,37 @@ export function AcpOutput({ agentId }: Props) {
       )}
     </div>
     <PromptNav containerRef={containerRef} messages={messages} useOriginalIndices />
+    </div>
+  );
+}
+
+/** Collapsed-by-default incoming DM with click to expand */
+function CollapsibleIncomingMessage({ text, timestamp }: { text: string; timestamp: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const headerMatch = text.match(/^📨\s*\[From\s+(.+?)\]\s*/);
+  const sender = headerMatch ? headerMatch[1] : 'Agent';
+  const body = headerMatch ? text.slice(headerMatch[0].length) : text;
+  const preview = body.replace(/[\n\r]+/g, ' ').slice(0, 80);
+
+  return (
+    <div className="py-0.5">
+      <div
+        className="my-0.5 px-2 py-1 bg-amber-500/10 border border-amber-400/20 rounded text-[11px] text-th-text-alt cursor-pointer hover:border-amber-400/40 transition-colors"
+        onClick={() => setExpanded((e) => !e)}
+      >
+        <div className="flex items-center gap-1 min-w-0">
+          {expanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+          <MessageSquare className="w-3 h-3 shrink-0 text-amber-500" />
+          <span className="font-mono text-amber-600 dark:text-amber-400 shrink-0">{sender}</span>
+          {!expanded && preview && <span className="font-mono text-th-text-muted truncate ml-1">— {preview}</span>}
+          {timestamp && <span className="text-[10px] text-th-text-muted ml-auto shrink-0">{timestamp}</span>}
+        </div>
+        {expanded && (
+          <div className="mt-1 whitespace-pre-wrap break-words text-th-text-alt font-mono text-xs">
+            <MentionText text={body} agents={useAppStore.getState().agents} onClickAgent={(id) => useAppStore.getState().setSelectedAgent(id)} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

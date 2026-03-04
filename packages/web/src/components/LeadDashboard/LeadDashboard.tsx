@@ -1530,6 +1530,9 @@ export function LeadDashboard({ api, ws }: Props) {
                 }
 
                 if (msg.sender === 'system') {
+                  const sysText = typeof msg.text === 'string' ? msg.text : '';
+                  // Hide outgoing DM notifications — redundant with command blocks
+                  if (sysText.startsWith('📤')) return null;
                   return (
                     <div key={i} className="flex justify-center py-1">
                       <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-th-bg-alt/60 border border-th-border/50 text-xs font-mono text-th-text-muted">
