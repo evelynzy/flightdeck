@@ -33,7 +33,9 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       setConnected(true);
-      // Subscribe to all agent text events so child agent messages reach the UI
+      // Subscribe to ALL agent events ('*') — the UI is a monitoring dashboard that
+      // needs visibility into every agent's output for panel rendering. Project-scoping
+      // is handled server-side (subscribedProject filter), not via agent-level subscriptions.
       ws.send(JSON.stringify({ type: 'subscribe', agentId: '*' }));
     };
     ws.onclose = () => {
