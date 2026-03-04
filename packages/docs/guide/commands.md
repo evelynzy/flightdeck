@@ -120,7 +120,7 @@ Mark a DAG task as done. Any agent can use this — non-lead agents relay comple
 Declare a batch of tasks in the DAG (directed acyclic graph).
 
 ```
-⟦⟦ DECLARE_TASKS {"tasks": [{"id": "auth", "role": "developer", "description": "Build auth module", "dependsOn": []}, {"id": "api", "role": "developer", "description": "Build API layer", "dependsOn": ["auth"]}]} ⟧⟧
+⟦⟦ DECLARE_TASKS {"tasks": [{"taskId": "auth", "role": "developer", "description": "Build auth module", "dependsOn": []}, {"taskId": "api", "role": "developer", "description": "Build API layer", "dependsOn": ["auth"]}]} ⟧⟧
 ```
 
 ### LOCK_FILE / UNLOCK_FILE
@@ -270,12 +270,12 @@ Validates that both tasks exist and the new dependency doesn't create a cycle. S
 Force a task to "ready" state, overriding dependency checks. Lead-only.
 
 ```
-⟦⟦ FORCE_READY {"id": "task-id"} ⟧⟧
+⟦⟦ FORCE_READY {"taskId": "task-id"} ⟧⟧
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | ✅ | DAG task ID to force into ready state |
+| `taskId` | ✅ | DAG task ID to force into ready state |
 
 ### ASSIGN_TASK
 
@@ -379,10 +379,10 @@ Additional commands for managing the task DAG:
 | Command | Description |
 |---------|-------------|
 | `TASK_STATUS` / `QUERY_TASKS` | View current DAG state and progress summary |
-| `ADD_TASK {"id": "...", "role": "...", "description": "...", "dependsOn": [...]}` | Add a single task to an existing DAG |
+| `ADD_TASK {"taskId": "...", "role": "...", "description": "...", "dependsOn": [...]}` | Add a single task to an existing DAG |
 | `ADD_DEPENDENCY {"taskId": "...", "dependsOn": ["..."]}` | Add dependencies between tasks |
-| `CANCEL_TASK {"id": "..."}` | Cancel a task |
-| `SKIP_TASK {"id": "..."}` | Skip a task and unblock dependents |
-| `RETRY_TASK {"id": "..."}` | Retry a failed task |
-| `PAUSE_TASK {"id": "..."}` | Pause a pending/ready task |
+| `CANCEL_TASK {"taskId": "..."}` | Cancel a task |
+| `SKIP_TASK {"taskId": "..."}` | Skip a task and unblock dependents |
+| `RETRY_TASK {"taskId": "..."}` | Retry a failed task |
+| `PAUSE_TASK {"taskId": "..."}` | Pause a pending/ready task |
 | `RESET_DAG` | Clear all tasks and start fresh |

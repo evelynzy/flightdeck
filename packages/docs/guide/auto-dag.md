@@ -135,9 +135,9 @@ Non-lead agents resolve the lead through their parent chain, so they can manage 
 
 ```
 ⟦⟦ DECLARE_TASKS {"tasks": [
-  {"id": "design-api", "role": "architect", "title": "Design REST API"},
-  {"id": "impl-api", "role": "developer", "title": "Implement API", "dependsOn": ["design-api"]},
-  {"id": "review-api", "role": "code-reviewer", "title": "Review API", "dependsOn": ["impl-api"]}
+  {"taskId": "design-api", "role": "architect", "title": "Design REST API"},
+  {"taskId": "impl-api", "role": "developer", "title": "Implement API", "dependsOn": ["design-api"]},
+  {"taskId": "review-api", "role": "code-reviewer", "title": "Review API", "dependsOn": ["impl-api"]}
 ]} ⟧⟧
 
 ⟦⟦ CREATE_AGENT {"role": "architect", "task": "Design the REST API", "dagTaskId": "design-api"} ⟧⟧
@@ -158,8 +158,8 @@ Non-lead agents resolve the lead through their parent chain, so they can manage 
 
 ```
 ⟦⟦ DECLARE_TASKS {"tasks": [
-  {"id": "auth", "role": "developer", "title": "Build auth module"},
-  {"id": "api", "role": "developer", "title": "Build API", "dependsOn": ["auth"]}
+  {"taskId": "auth", "role": "developer", "title": "Build auth module"},
+  {"taskId": "api", "role": "developer", "title": "Build API", "dependsOn": ["auth"]}
 ]} ⟧⟧
 
 // These link to declared tasks:
