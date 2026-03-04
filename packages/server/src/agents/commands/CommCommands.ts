@@ -353,9 +353,10 @@ function handleRemoveFromGroup(ctx: CommandHandlerContext, agent: Agent, data: s
     if (!req) return;
     const leadId = agent.role.id === 'lead' ? agent.id : agent.parentId;
     if (!leadId) { agent.sendMessage('[System] Cannot manage groups — no lead context found.'); return; }
+    const senderProjectId = ctx.getProjectIdForAgent(agent.id);
     const resolvedIds = req.members.map((m: string) => {
-      const found = ctx.getAllAgents().find((a) => a.id === m || a.id.startsWith(m));
-      return found?.id;
+      const resolved = resolveAgentInProject(ctx, m, senderProjectId);
+      return resolved?.id;
     }).filter(Boolean) as string[];
 
     const removed = ctx.chatGroupRegistry.removeMembers(leadId, req.group, resolvedIds);

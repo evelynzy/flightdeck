@@ -206,7 +206,7 @@ describe('AGENT_MESSAGE project isolation', () => {
     );
   });
 
-  it('blocks cross-project messaging by exact UUID when sender projectId is only on parent', () => {
+  it('backward compat: messaging allowed when sender has no projectId', () => {
     // Regression: sender doesn't have projectId directly — only resolvable via parent chain.
     // The old boundary check relied on senderProjectId being truthy; if getProjectIdForAgent
     // returned undefined due to parent-chain lookup failure, the check was bypassed.
@@ -648,5 +648,97 @@ describe('QUERY_CREW project isolation', () => {
     const response = (subLead.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
     expect(response).toContain('Sub Dev');
     expect(response).not.toContain('Lead B');
+  });
+});
+
+// ── INTERRUPT project isolation ──────────────────────────────────────
+
+describe('INTERRUPT project isolation', () => {
+  it('blocks interrupt to agent in different project by exact UUID', () => {
+    const leadA = makeAgent({
+      id: 'lead-aaaa-0000-0000-000000000000',
+      parentId: undefined,
+      projectId: PROJECT_A,
+      role: { id: 'lead', name: 'Lead A' },
+    });
+    const leadB = makeAgent({
+      id: 'lead-bbbb-0000-0000-000000000000',
+      parentId: undefined,
+      projectId: PROJECT_B,
+      role: { id: 'lead', name: 'Lead B' },
+    });
+    const childB = makeAgent({
+      id: 'bbbbbbbb-1111-0000-0000-000000000000',
+      parentId: leadB.id,
+      projectId: PROJECT_B,
+      role: { id: 'developer', name: 'Developer' },
+    });
+
+    const ctx = makeCtx([leadA, leadB, childB]);
+    const commands = getCommCommands(ctx);
+    const interruptCmd = commands.find((c) => c.name === 'INTERRUPT')!;
+
+    // leadA tries to interrupt childB (cross-project) — should not resolve
+    interruptCmd.handler(leadA, `⟦⟦ INTERRUPT {"to": "${childB.id}", "content": "stop"} ⟧⟧`);
+
+    expect(leadA.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Cannot resolve'));
+  });
+
+  it('blocks interrupt to agent in different project by prefix', () => {
+    const leadA = makeAgent({
+      id: 'lead-aaaa-0000-0000-000000000000',
+      parentId: undefined,
+      projectId: PROJECT_A,
+      role: { id: 'lead', name: 'Lead A' },
+    });
+    const leadB = makeAgent({
+      id: 'lead-bbbb-0000-0000-000000000000',
+      parentId: undefined,
+      projectId: PROJECT_B,
+      role: { id: 'lead', name: 'Lead B' },
+    });
+    const childB = makeAgent({
+      id: 'bbbbbbbb-1111-0000-0000-000000000000',
+      parentId: leadB.id,
+      projectId: PROJECT_B,
+      role: { id: 'developer', name: 'Developer' },
+    });
+
+    const ctx = makeCtx([leadA, leadB, childB]);
+    const commands = getCommCommands(ctx);
+    const interruptCmd = commands.find((c) => c.name === 'INTERRUPT')!;
+
+    interruptCmd.handler(leadA, `⟦⟦ INTERRUPT {"to": "bbbbbbbb", "content": "stop"} ⟧⟧`);
+
+    expect(leadA.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Cannot resolve'));
+  });
+
+  it('blocks interrupt to agent in different project by role name', () => {
+    const leadA = makeAgent({
+      id: 'lead-aaaa-0000-0000-000000000000',
+      parentId: undefined,
+      projectId: PROJECT_A,
+      role: { id: 'lead', name: 'Lead A' },
+    });
+    const leadB = makeAgent({
+      id: 'lead-bbbb-0000-0000-000000000000',
+      parentId: undefined,
+      projectId: PROJECT_B,
+      role: { id: 'lead', name: 'Lead B' },
+    });
+    const architectB = makeAgent({
+      id: 'bbbbbbbb-1111-0000-0000-000000000000',
+      parentId: leadB.id,
+      projectId: PROJECT_B,
+      role: { id: 'architect', name: 'Architect' },
+    });
+
+    const ctx = makeCtx([leadA, leadB, architectB]);
+    const commands = getCommCommands(ctx);
+    const interruptCmd = commands.find((c) => c.name === 'INTERRUPT')!;
+
+    interruptCmd.handler(leadA, `⟦⟦ INTERRUPT {"to": "Architect", "content": "stop"} ⟧⟧`);
+
+    expect(leadA.sendMessage).toHaveBeenCalledWith(expect.stringContaining('Cannot resolve'));
   });
 });
