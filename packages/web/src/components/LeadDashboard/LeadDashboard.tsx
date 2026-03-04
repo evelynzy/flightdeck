@@ -46,7 +46,7 @@ export function LeadDashboard({ api, ws }: Props) {
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<RoleInfo[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
-  const [showModelConfig, setShowModelConfig] = useState(false);
+  const [showModelConfig, setShowModelConfig] = useState(true);
   const [newProjectModelConfig, setNewProjectModelConfig] = useState<Record<string, string[]> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -60,10 +60,19 @@ export function LeadDashboard({ api, ws }: Props) {
       const stored = localStorage.getItem('flightdeck-sidebar-tabs');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length >= 4) return parsed.filter((id: string) => id !== 'activity');
+        if (Array.isArray(parsed) && parsed.length >= 4) {
+          let tabs = parsed.filter((id: string) => id !== 'activity');
+          // Migrate: ensure 'models' is in a prominent position (not appended at end)
+          if (!tabs.includes('models')) {
+            const dagIndex = tabs.indexOf('dag');
+            tabs.splice(dagIndex >= 0 ? dagIndex + 1 : 3, 0, 'models');
+            localStorage.setItem('flightdeck-sidebar-tabs', JSON.stringify(tabs));
+          }
+          return tabs;
+        }
       }
     } catch {}
-    return ['team', 'comms', 'groups', 'dag'];
+    return ['team', 'comms', 'dag', 'models'];
   });
   const [dragOverTab, setDragOverTab] = useState<string | null>(null);
   const [showProgressDetail, setShowProgressDetail] = useState(false);
@@ -1151,12 +1160,11 @@ export function LeadDashboard({ api, ws }: Props) {
                 <button
                   type="button"
                   onClick={() => setShowModelConfig(!showModelConfig)}
-                  className="flex items-center gap-1 text-xs text-th-text-muted hover:text-th-text-alt font-medium transition-colors"
+                  className="flex items-center gap-1 text-xs text-th-text-alt hover:text-th-text font-medium transition-colors"
                 >
                   {showModelConfig ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                   <Wrench className="w-3 h-3" />
                   Model Configuration
-                  <span className="text-[10px] text-th-text-muted">(optional)</span>
                 </button>
                 {showModelConfig && (
                   <div className="mt-2 border border-th-border rounded-md p-2 bg-th-bg">
@@ -1668,7 +1676,7 @@ export function LeadDashboard({ api, ws }: Props) {
 
                 {/* Tabbed bottom panels */}
                 <div className="flex-1 min-h-0 border-t border-th-border flex flex-col relative">
-                  <div className="flex border-b border-th-border shrink-0 overflow-x-auto">
+                  <div className="flex flex-wrap border-b border-th-border shrink-0">
                     {(() => {
                       const allTabs: Record<string, { icon: React.ReactNode; label: string; badge?: number }> = {
                         team: { icon: <Bot className="w-3 h-3" />, label: 'Team', badge: teamAgents.length },
