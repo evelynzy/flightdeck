@@ -53,7 +53,7 @@ export function LeadDashboard({ api, ws }: Props) {
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<RoleInfo[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
-  const [showModelConfig, setShowModelConfig] = useState(true);
+  const [showModelConfig, setShowModelConfig] = useState(false);
   const [newProjectModelConfig, setNewProjectModelConfig] = useState<Record<string, string[]> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -1146,7 +1146,7 @@ export function LeadDashboard({ api, ws }: Props) {
               <Crown className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
               <h2 className="text-base font-semibold text-th-text">New Project</h2>
             </div>
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-5 py-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
               <div>
                 <label className="block text-xs text-th-text-muted mb-1 font-medium">Project Name</label>
                 <input
@@ -1840,7 +1840,7 @@ export function LeadDashboard({ api, ws }: Props) {
                       {showTabConfig && (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setShowTabConfig(false)} />
-                          <div className="absolute right-0 top-full mt-1 z-50 bg-th-bg-panel border border-th-border rounded-md shadow-lg py-1 min-w-[140px]">
+                          <div className="absolute right-0 top-full mt-1 z-50 glass-dropdown rounded-md py-1 min-w-[140px]">
                             {(['team', 'comms', 'groups', 'dag', 'models', 'tokens', 'costs', 'timers'] as const).map((tabId) => (
                               <button
                                 key={tabId}
