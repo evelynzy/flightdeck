@@ -1038,11 +1038,11 @@ describe('TaskDAG', () => {
       expect(dag.getTask('lead-1', 'a')!.dagStatus).toBe('skipped');
     });
 
-    it('completeTask returns null for paused task', () => {
+    it('completeTask succeeds for paused task', () => {
       dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }]);
       dag.pauseTask('lead-1', 'a');
-      expect(dag.completeTask('lead-1', 'a')).toBeNull();
-      expect(dag.getTask('lead-1', 'a')!.dagStatus).toBe('paused');
+      expect(dag.completeTask('lead-1', 'a')).not.toBeNull();
+      expect(dag.getTask('lead-1', 'a')!.dagStatus).toBe('done');
     });
 
     it('completeTask returns null for already done task', () => {
@@ -1093,11 +1093,14 @@ describe('TaskDAG', () => {
 
   describe('getTransitionError', () => {
     it('returns error for invalid transition', () => {
-      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }]);
-      dag.pauseTask('lead-1', 'a');
-      const error = dag.getTransitionError('lead-1', 'a', 'complete');
+      dag.declareTaskBatch('lead-1', [
+        { taskId: 'a', role: 'Dev' },
+        { taskId: 'b', role: 'Dev', dependsOn: ['a'] },
+      ]);
+      // b is pending — cannot complete a pending task
+      const error = dag.getTransitionError('lead-1', 'b', 'complete');
       expect(error).not.toBeNull();
-      expect(error!.currentStatus).toBe('paused');
+      expect(error!.currentStatus).toBe('pending');
       expect(error!.attemptedAction).toBe('complete');
       expect(error!.validStatuses).toEqual(VALID_TRANSITIONS.complete);
     });
@@ -1332,7 +1335,60 @@ describe('TaskDAG', () => {
       const error = dag.getTransitionError('lead-1', 'a', 'complete');
       expect(error).not.toBeNull();
       expect(error!.currentStatus).toBe('ready');
-      expect(error!.validStatuses).toEqual(['running']);
+      expect(error!.validStatuses).toEqual(['running', 'paused']);
+    });
+
+    it('allows completing a paused task (work done outside DAG)', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }]);
+      dag.pauseTask('lead-1', 'a');
+      expect(dag.getTask('lead-1', 'a')!.dagStatus).toBe('paused');
+      const result = dag.completeTask('lead-1', 'a');
+      expect(result).not.toBeNull();
+      expect(dag.getTask('lead-1', 'a')!.dagStatus).toBe('done');
+    });
+
+    it('completing paused task promotes dependents', () => {
+      dag.declareTaskBatch('lead-1', [
+        { taskId: 'a', role: 'Dev' },
+        { taskId: 'b', role: 'Dev', dependsOn: ['a'] },
+      ]);
+      dag.pauseTask('lead-1', 'a');
+      const newlyReady = dag.completeTask('lead-1', 'a');
+      expect(newlyReady).not.toBeNull();
+      expect(newlyReady!.map(t => t.id)).toContain('b');
+      expect(dag.getTask('lead-1', 'b')!.dagStatus).toBe('ready');
+    });
+  });
+
+  describe('resumeTask', () => {
+    it('resumes paused task to ready when deps satisfied', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }]);
+      dag.pauseTask('lead-1', 'a');
+      expect(dag.getTask('lead-1', 'a')!.dagStatus).toBe('paused');
+      const ok = dag.resumeTask('lead-1', 'a');
+      expect(ok).toBe(true);
+      expect(dag.getTask('lead-1', 'a')!.dagStatus).toBe('ready');
+    });
+
+    it('resumes paused task to pending when deps not satisfied', () => {
+      dag.declareTaskBatch('lead-1', [
+        { taskId: 'a', role: 'Dev' },
+        { taskId: 'b', role: 'Dev', dependsOn: ['a'] },
+      ]);
+      dag.pauseTask('lead-1', 'b');
+      const ok = dag.resumeTask('lead-1', 'b');
+      expect(ok).toBe(true);
+      // a is not done, so b goes back to pending
+      expect(dag.getTask('lead-1', 'b')!.dagStatus).toBe('pending');
+    });
+
+    it('returns false for non-paused task', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }]);
+      expect(dag.resumeTask('lead-1', 'a')).toBe(false);
+    });
+
+    it('returns false for nonexistent task', () => {
+      expect(dag.resumeTask('lead-1', 'nope')).toBe(false);
     });
   });
 

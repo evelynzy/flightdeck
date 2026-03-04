@@ -8,7 +8,7 @@ export type DagTaskStatus = 'pending' | 'ready' | 'running' | 'done' | 'failed' 
 /** Valid source states for each state transition method */
 export const VALID_TRANSITIONS: Record<string, DagTaskStatus[]> = {
   start:    ['ready'],
-  complete: ['running'],
+  complete: ['running', 'paused'],
   fail:     ['running'],
   pause:    ['pending', 'ready'],
   resume:   ['paused'],
