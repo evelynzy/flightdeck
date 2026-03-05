@@ -26,6 +26,8 @@ import { notificationRoutes } from './notifications.js';
 import { nlRoutes } from './nl.js';
 import { predictionRoutes } from './predictions.js';
 import { workflowRoutes } from './workflows.js';
+import { githubRoutes } from './github.js';
+import { conflictRoutes } from './conflicts.js';
 
 export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(agentsRoutes(ctx));
@@ -54,4 +56,6 @@ export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(nlRoutes(ctx));
   router.use(predictionRoutes(ctx));
   router.use(workflowRoutes(ctx));
+  router.use(githubRoutes(ctx));
+  router.use(conflictRoutes(ctx));
 }
