@@ -36,7 +36,7 @@ export interface Prediction {
   actions: PredictionAction[];
   createdAt: string;
   expiresAt: string;
-  outcome?: 'correct' | 'avoided' | 'wrong' | null;
+  outcome?: 'correct' | 'avoided' | 'wrong' | 'expired' | null;
 }
 
 export interface PredictionConfig {
@@ -141,12 +141,13 @@ export class PredictionService {
 
   /** Compute accuracy statistics across resolved predictions */
   getAccuracy(): AccuracyStats {
+    this.expirePredictions();
     const resolved = this.predictions.filter(p => p.outcome != null);
     const correct = resolved.filter(p => p.outcome === 'correct').length;
     const avoided = resolved.filter(p => p.outcome === 'avoided').length;
     const wrong = resolved.filter(p => p.outcome === 'wrong').length;
-    const expired = resolved.filter(p => p.outcome === null).length; // won't match after filter, but kept for type-safety
-    const total = correct + avoided + wrong;
+    const expired = resolved.filter(p => p.outcome === 'expired').length;
+    const total = correct + avoided + wrong + expired;
 
     return {
       total,
@@ -519,14 +520,12 @@ export class PredictionService {
     const now = new Date().toISOString();
     let changed = false;
 
-    this.predictions = this.predictions.filter(p => {
-      if (p.outcome != null) return true; // keep resolved predictions
-      if (p.expiresAt <= now) {
+    for (const p of this.predictions) {
+      if (p.outcome == null && p.expiresAt <= now) {
+        p.outcome = 'expired';
         changed = true;
-        return false; // remove expired, unresolved predictions
       }
-      return true;
-    });
+    }
 
     if (changed) {
       this.savePredictions();

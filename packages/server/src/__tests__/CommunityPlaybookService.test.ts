@@ -673,5 +673,37 @@ describe('CommunityPlaybookService', () => {
       expect(looksLikeSecret('hello world')).toBe(false);
       expect(looksLikeSecret('my-playbook-name')).toBe(false);
     });
+
+    it('strips secret strings inside arrays', () => {
+      const pb = service.publish(makeInput({
+        config: { tokens: ['ghp_1234567890abcdef1234567890abcdef12345678', 'safe-value'] },
+      }));
+      expect(pb.config).toEqual({ tokens: ['safe-value'] });
+    });
+
+    it('recurses into objects inside arrays', () => {
+      const pb = service.publish(makeInput({
+        config: {
+          steps: [
+            { name: 'build', password: 'secret123' },
+            { name: 'test', safe: true },
+          ],
+        },
+      }));
+      expect(pb.config).toEqual({
+        steps: [
+          { name: 'build' },
+          { name: 'test', safe: true },
+        ],
+      });
+    });
+
+    it('handles nested arrays', () => {
+      const longToken = 'a'.repeat(45);
+      const result = sanitizeConfig({
+        matrix: [['ok', longToken], ['fine']],
+      });
+      expect(result).toEqual({ matrix: [['ok'], ['fine']] });
+    });
   });
 });

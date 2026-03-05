@@ -85,13 +85,30 @@ export function sanitizeConfig(obj: Record<string, unknown>): Record<string, unk
   for (const [key, value] of Object.entries(obj)) {
     if (SENSITIVE_KEYS.has(key)) continue;
     if (typeof value === 'string' && looksLikeSecret(value)) continue;
-    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    if (Array.isArray(value)) {
+      result[key] = sanitizeArray(value);
+    } else if (value !== null && typeof value === 'object') {
       result[key] = sanitizeConfig(value as Record<string, unknown>);
     } else {
       result[key] = value;
     }
   }
   return result;
+}
+
+/** Sanitize array items: filter secret strings, recurse into objects */
+function sanitizeArray(arr: unknown[]): unknown[] {
+  return arr
+    .filter(item => !(typeof item === 'string' && looksLikeSecret(item)))
+    .map(item => {
+      if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+        return sanitizeConfig(item as Record<string, unknown>);
+      }
+      if (Array.isArray(item)) {
+        return sanitizeArray(item);
+      }
+      return item;
+    });
 }
 
 /** Heuristic: detect strings that look like tokens/secrets */

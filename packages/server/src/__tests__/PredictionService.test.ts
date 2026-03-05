@@ -436,7 +436,7 @@ describe('PredictionService', () => {
   // ── Expiry ──────────────────────────────────────────────────
 
   describe('expiry', () => {
-    it('removes expired predictions from active list', () => {
+    it('marks expired predictions with outcome expired', () => {
       const agent = makeAgent({
         contextBurnRate: 10_000,
         contextWindowUsed: 195_000,
@@ -455,6 +455,29 @@ describe('PredictionService', () => {
       // Reconstruct to pick up the expired prediction
       const service2 = new PredictionService(db as any);
       expect(service2.getActive()).toEqual([]);
+      // Expired prediction should be in history with outcome 'expired'
+      const history = service2.getHistory();
+      expect(history.length).toBe(1);
+      expect(history[0].outcome).toBe('expired');
+    });
+
+    it('counts expired predictions in accuracy stats', () => {
+      const agent = makeAgent({
+        contextBurnRate: 10_000,
+        contextWindowUsed: 195_000,
+        contextWindowSize: 200_000,
+      });
+      service.generatePredictions([agent]);
+
+      // Expire the prediction
+      const active = service.getActive();
+      (active[0] as any).expiresAt = new Date(Date.now() - 1000).toISOString();
+      (service as any).savePredictions();
+
+      const service2 = new PredictionService(db as any);
+      const stats = service2.getAccuracy();
+      expect(stats.expired).toBe(1);
+      expect(stats.total).toBe(1);
     });
   });
 
