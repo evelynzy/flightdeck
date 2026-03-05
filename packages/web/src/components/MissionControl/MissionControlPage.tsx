@@ -14,6 +14,7 @@ import { CommHeatmap } from '../FleetOverview/CommHeatmap';
 import { CommFlowGraph } from '../CommFlow';
 import { DiffPreview } from '../DiffPreview';
 import { DebatesPanel } from '../Debates';
+import { HandoffHistoryPanel } from '../Handoff';
 import { useFocusAgent } from '../../hooks/useFocusAgent';
 import { useDashboardLayout } from '../../hooks/useDashboardLayout';
 import type { PanelConfig } from '../../hooks/useDashboardLayout';
@@ -102,6 +103,12 @@ function PanelSlot({ panel, leadId, agents }: { panel: PanelConfig; leadId: stri
       return (
         <div className="bg-th-bg rounded-lg border border-th-border-muted p-4">
           <DebatesPanel leadId={leadId} />
+        </div>
+      );
+    case 'handoffs':
+      return (
+        <div className="bg-th-bg rounded-lg border border-th-border-muted p-4">
+          <HandoffHistoryPanel />
         </div>
       );
     default:

@@ -20,15 +20,15 @@ export function NotificationPreferencesPanel() {
   // Load settings
   useEffect(() => {
     Promise.all([
-      apiFetch<{ channels: NotificationChannel[] }>('/notifications/channels').catch(() => ({ channels: [] })),
+      apiFetch<NotificationChannel[] | { channels: NotificationChannel[] }>('/notifications/channels').catch(() => ({ channels: [] })),
       apiFetch<{ routing: Record<NotifiableEvent, ChannelType[]>; preset: PresetName }>('/notifications/routing').catch(() => ({
         routing: PRESET_DEFAULTS.conservative,
         preset: 'conservative' as PresetName,
       })),
     ]).then(([channelsData, routingData]) => {
-      setChannels(channelsData.channels);
-      setRouting(routingData.routing);
-      setPreset(routingData.preset);
+      setChannels(Array.isArray(channelsData) ? channelsData : channelsData?.channels ?? []);
+      setRouting(routingData.routing ?? PRESET_DEFAULTS.conservative);
+      setPreset(routingData.preset ?? 'conservative');
     }).finally(() => setLoading(false));
   }, []);
 
