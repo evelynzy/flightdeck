@@ -10,6 +10,16 @@ import { logger } from '../utils/logger.js';
 
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 
+export interface AlertAction {
+  label: string;
+  description: string;
+  actionType: 'api_call';
+  endpoint: string;
+  method: 'POST' | 'DELETE';
+  body?: Record<string, unknown>;
+  confidence?: number;
+}
+
 export interface Alert {
   id: number;
   type: string;
@@ -18,6 +28,7 @@ export interface Alert {
   timestamp: string;
   agentId?: string;
   projectId?: string;
+  actions?: AlertAction[];
 }
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -129,11 +140,31 @@ export class AlertEngine extends EventEmitter {
       const usage = agent.contextWindowUsed / agent.contextWindowSize;
       if (usage > CONTEXT_PRESSURE_THRESHOLD) {
         const pct = Math.round(usage * 100);
+        const exhaustionMin = agent.estimatedExhaustionMinutes;
+        const timeWarning = exhaustionMin != null ? ` (~${Math.round(exhaustionMin)} min remaining)` : '';
         this.addAlert({
           type: 'context_pressure',
           severity: pct > 95 ? 'critical' : 'warning',
-          message: `Agent ${agent.role.name} (${agent.id.slice(0, 8)}) context window at ${pct}% — quality may degrade`,
+          message: `Agent ${agent.role.name} (${agent.id.slice(0, 8)}) context window at ${pct}%${timeWarning} — quality may degrade`,
           agentId: agent.id,
+          actions: [
+            {
+              label: 'Compress context',
+              description: 'Restart agent with context handoff',
+              actionType: 'api_call',
+              endpoint: `/api/agents/${agent.id}/restart`,
+              method: 'POST',
+              confidence: 90,
+            },
+            {
+              label: 'Dismiss',
+              description: 'Ignore this alert',
+              actionType: 'api_call',
+              endpoint: '',
+              method: 'POST',
+              confidence: 10,
+            },
+          ],
         });
       }
     }

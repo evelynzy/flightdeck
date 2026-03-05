@@ -47,6 +47,12 @@ describe('DecisionLog — Batch Operations', () => {
     it('returns general for unrecognized titles', () => {
       expect(classifyDecision('Do something random')).toBe('general');
     });
+
+    it('does not false-positive on substrings (word boundary)', () => {
+      expect(classifyDecision('Get latest information')).toBe('general');
+      expect(classifyDecision('Contest this decision')).toBe('general');
+      expect(classifyDecision('Lifestyle choices')).toBe('general');
+    });
   });
 
   // ── Batch confirm/reject ──────────────────────────────────────────

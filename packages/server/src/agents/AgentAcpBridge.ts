@@ -134,6 +134,9 @@ function wireAcpEvents(agent: Agent, conn: AcpConnection): void {
     agent.contextWindowSize = info.size;
     agent.contextWindowUsed = info.used;
 
+    // Record sample for burn rate calculation
+    agent.recordTokenSample(info.used);
+
     // Detect compaction: significant drop (>30%) in context usage
     if (previousUsed > 0 && info.used < previousUsed * 0.7 && previousUsed > 10000) {
       const percentDrop = Math.round(((previousUsed - info.used) / previousUsed) * 100);

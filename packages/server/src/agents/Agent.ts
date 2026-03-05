@@ -54,6 +54,8 @@ export interface AgentJSON {
   outputTokens: number;
   contextWindowSize: number;
   contextWindowUsed: number;
+  contextBurnRate: number;
+  estimatedExhaustionMinutes: number | null;
   pendingMessages: number;
   isSubLead: boolean;
   hierarchyLevel: number;
@@ -98,6 +100,12 @@ export class Agent {
   /** Context window info from ACP usage_update */
   public contextWindowSize = 0;
   public contextWindowUsed = 0;
+  /** Token usage history for burn rate calculation */
+  private tokenHistory: Array<{ timestamp: number; used: number }> = [];
+  private static MIN_SAMPLE_INTERVAL_MS = 10_000;   // 10s dedup between samples
+  private static MAX_WINDOW_AGE_MS = 600_000;        // 10min max window
+  private static MIN_POINTS_FOR_PREDICTION = 3;      // minimum data points
+  private static MIN_SPAN_MS = 30_000;               // minimum 30s span
   private terminated = false;
   /** Hash of the last CREW_UPDATE sent — used to skip duplicate updates */
   private lastUpdateHash: string = '';
@@ -541,6 +549,45 @@ When you discover something important about the codebase, a pattern, a gotcha, o
     return result.length > maxChars ? result.slice(-maxChars) : result;
   }
 
+  // ── Burn Rate Tracking ────────────────────────────────────────────
+
+  /** Record a context window usage sample for burn rate calculation */
+  recordTokenSample(used: number): void {
+    const now = Date.now();
+    const last = this.tokenHistory[this.tokenHistory.length - 1];
+    if (last && now - last.timestamp < Agent.MIN_SAMPLE_INTERVAL_MS) return;
+    this.tokenHistory.push({ timestamp: now, used });
+    this.pruneTokenHistory();
+  }
+
+  private pruneTokenHistory(): void {
+    const cutoff = Date.now() - Agent.MAX_WINDOW_AGE_MS;
+    while (this.tokenHistory.length > 0 && this.tokenHistory[0].timestamp < cutoff) {
+      this.tokenHistory.shift();
+    }
+  }
+
+  /** Tokens per second burn rate based on the sliding window */
+  get contextBurnRate(): number {
+    this.pruneTokenHistory();
+    if (this.tokenHistory.length < Agent.MIN_POINTS_FOR_PREDICTION) return 0;
+    const first = this.tokenHistory[0];
+    const last = this.tokenHistory[this.tokenHistory.length - 1];
+    const dtMs = last.timestamp - first.timestamp;
+    if (dtMs < Agent.MIN_SPAN_MS) return 0;
+    const tokensConsumed = last.used - first.used;
+    if (tokensConsumed <= 0) return 0;
+    return tokensConsumed / (dtMs / 1000);
+  }
+
+  /** Estimated minutes until context window is exhausted, or null if unknown */
+  get estimatedExhaustionMinutes(): number | null {
+    if (this.contextBurnRate <= 0 || this.contextWindowSize <= 0) return null;
+    const remaining = this.contextWindowSize - this.contextWindowUsed;
+    if (remaining <= 0) return 0;
+    return remaining / this.contextBurnRate / 60;
+  }
+
   toJSON(): AgentJSON {
     return {
       id: this.id,
@@ -564,6 +611,8 @@ When you discover something important about the codebase, a pattern, a gotcha, o
       outputTokens: this.outputTokens,
       contextWindowSize: this.contextWindowSize,
       contextWindowUsed: this.contextWindowUsed,
+      contextBurnRate: this.contextBurnRate,
+      estimatedExhaustionMinutes: this.estimatedExhaustionMinutes,
       pendingMessages: this.pendingMessageCount,
       isSubLead: this.role.id === 'lead' && !!this.parentId,
       hierarchyLevel: this.hierarchyLevel,

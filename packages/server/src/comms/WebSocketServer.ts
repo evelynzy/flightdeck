@@ -266,6 +266,18 @@ export class WebSocketServer {
       const projectId = decision.projectId ?? this.resolveAgentProjectId(decision.agentId);
       this.broadcastToProject({ type: 'decision:rejected', decision }, projectId);
     });
+
+    this.track(decisionLog, 'decisions:batch_confirmed', (decisions: any[]) => {
+      if (decisions.length === 0) return;
+      const projectId = decisions[0].projectId ?? this.resolveAgentProjectId(decisions[0].agentId);
+      this.broadcastToProject({ type: 'decisions:batch', action: 'confirm', decisions }, projectId);
+    });
+
+    this.track(decisionLog, 'decisions:batch_rejected', (decisions: any[]) => {
+      if (decisions.length === 0) return;
+      const projectId = decisions[0].projectId ?? this.resolveAgentProjectId(decisions[0].agentId);
+      this.broadcastToProject({ type: 'decisions:batch', action: 'reject', decisions }, projectId);
+    });
   }
 
   private wireGroupEvents(chatGroupRegistry: ChatGroupRegistry): void {

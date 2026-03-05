@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import type { AppContext } from './context.js';
+import type { DecisionCategory } from '../coordination/DecisionLog.js';
 
 export function decisionsRoutes(ctx: AppContext): Router {
   const { agentManager, decisionLog } = ctx;
@@ -8,7 +9,10 @@ export function decisionsRoutes(ctx: AppContext): Router {
 
   // --- Decisions ---
   router.get('/decisions', (req, res) => {
-    const { needs_confirmation, projectId } = req.query;
+    const { needs_confirmation, projectId, grouped } = req.query;
+    if (grouped === 'true') {
+      return res.json(decisionLog.getPendingGrouped());
+    }
     let decisions;
     if (needs_confirmation === 'true') {
       decisions = decisionLog.getNeedingConfirmation();
@@ -89,6 +93,70 @@ export function decisionsRoutes(ctx: AppContext): Router {
       lead.sendMessage(`[User Feedback on Decision] "${decision.title}": ${message}\n\nPlease consider this feedback. If the user disagrees with this decision, revise your approach accordingly.`);
     }
     res.json({ ok: true, decision });
+  });
+
+  // --- Batch Operations ---
+  router.post('/decisions/batch', (req, res) => {
+    const { ids, action, reason } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids must be a non-empty array' });
+    }
+    if (action !== 'confirm' && action !== 'reject') {
+      return res.status(400).json({ error: 'action must be "confirm" or "reject"' });
+    }
+
+    const result = action === 'confirm'
+      ? decisionLog.confirmBatch(ids)
+      : decisionLog.rejectBatch(ids);
+
+    // Notify lead agents and execute system actions for each confirmed decision
+    for (const decision of result.results) {
+      const leadId = decision.leadId || decision.agentId;
+      const lead = agentManager.get(leadId);
+
+      if (action === 'confirm') {
+        const sysAction = agentManager.consumePendingSystemAction(decision.id);
+        if (sysAction && sysAction.type === 'set_max_concurrent') {
+          agentManager.setMaxConcurrent(sysAction.value);
+          logger.info('api', `System action executed: max concurrent agents set to ${sysAction.value} (batch approved)`);
+        }
+        if (lead && (lead.status === 'running' || lead.status === 'idle')) {
+          const reasonText = reason ? ` User comment: "${reason}"` : '';
+          lead.sendMessage(`[Decision Approved] "${decision.title}" by ${decision.agentRole} has been approved by the user (batch).${reasonText}`);
+        }
+      } else {
+        agentManager.consumePendingSystemAction(decision.id);
+        if (lead && (lead.status === 'running' || lead.status === 'idle')) {
+          const reasonText = reason ? ` User comment: "${reason}"` : '';
+          lead.sendMessage(`[Decision Rejected] "${decision.title}" by ${decision.agentRole} has been REJECTED by the user (batch). Please revise your approach.${reasonText}`);
+        }
+      }
+    }
+
+    res.json(result);
+  });
+
+  // --- Intent Rules ---
+  router.get('/intents', (_req, res) => {
+    res.json(decisionLog.getIntentRules());
+  });
+
+  router.post('/intents', (req, res) => {
+    const { category, source } = req.body ?? {};
+    const validCategories = ['style', 'architecture', 'tool_access', 'dependency', 'testing', 'general'];
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({ error: `category must be one of: ${validCategories.join(', ')}` });
+    }
+    const validSources = ['manual', 'teach_me'];
+    const ruleSource = validSources.includes(source) ? source : 'manual';
+    const rule = decisionLog.addIntentRule(category as DecisionCategory, ruleSource);
+    res.status(201).json(rule);
+  });
+
+  router.delete('/intents/:id', (req, res) => {
+    const deleted = decisionLog.deleteIntentRule(req.params.id as string);
+    if (!deleted) return res.status(404).json({ error: 'Intent rule not found' });
+    res.json({ deleted: true });
   });
 
   return router;
