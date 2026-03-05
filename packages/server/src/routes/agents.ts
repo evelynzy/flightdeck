@@ -79,6 +79,15 @@ export function agentsRoutes(ctx: AppContext): Router {
     res.status(201).json(newAgent.toJSON());
   });
 
+  router.post('/agents/:id/compact', (req, res) => {
+    const agent = agentManager.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    // Compact = restart with context handoff (same as restart but semantically different)
+    const newAgent = agentManager.restart(req.params.id);
+    if (!newAgent) return res.status(500).json({ error: 'Failed to compact agent context' });
+    res.status(201).json({ compacted: true, agent: newAgent.toJSON() });
+  });
+
   router.get('/agents/:id/plan', (req, res) => {
     const agent = agentManager.get(req.params.id);
     if (agent) {
