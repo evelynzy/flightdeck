@@ -19,6 +19,9 @@ import { apiFetch } from '../../hooks/useApi';
 import { useToastStore } from '../Toast';
 import { PromptNav, hasUserMention } from '../PromptNav';
 import { useFileDrop } from '../../hooks/useFileDrop';
+import { useAttachments } from '../../hooks/useAttachments';
+import { AttachmentBar } from '../AttachmentBar';
+import { DropOverlay } from '../DropOverlay';
 
 interface RoleInfo { id: string; name: string; icon: string; description: string; model: string; }
 
@@ -40,8 +43,10 @@ export function LeadDashboard({ api, ws }: Props) {
   const handleLeadFileInsert = useCallback((text: string) => {
     setInput(input ? input + ' ' + text : text);
   }, [input, setInput]);
+  const { attachments, addAttachment, removeAttachment, clearAttachments } = useAttachments();
   const { isDragOver: isLeadDragOver, handleDragOver: leadDragOver, handleDragLeave: leadDragLeave, handleDrop: leadDrop, dropZoneClassName: leadDropZoneClassName } = useFileDrop({
     onInsertText: handleLeadFileInsert,
+    onAttach: addAttachment,
   });
   const [starting, setStarting] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -804,12 +809,19 @@ export function LeadDashboard({ api, ws }: Props) {
       }
     }
     store.addMessage(selectedLeadId, { type: 'text', text, sender: 'user', queued: mode === 'queue', timestamp: Date.now() });
+    const payload: Record<string, unknown> = { text, mode };
+    if (attachments.length > 0) {
+      payload.attachments = attachments
+        .filter((a) => a.data)
+        .map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data }));
+    }
     await fetch(`/api/lead/${selectedLeadId}/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, mode }),
+      body: JSON.stringify(payload),
     });
-  }, [input, selectedLeadId]);
+    clearAttachments();
+  }, [input, selectedLeadId, attachments, clearAttachments]);
 
   const removeQueuedMessage = useCallback(async (queueIndex: number) => {
     if (!selectedLeadId) return;
@@ -1669,17 +1681,14 @@ export function LeadDashboard({ api, ws }: Props) {
 
             {/* Input */}
             <div className="border-t border-th-border p-3">
+              <AttachmentBar attachments={attachments} onRemove={removeAttachment} />
               <div
                 className={`flex gap-2 items-end relative rounded transition-all ${leadDropZoneClassName}`}
                 onDragOver={leadDragOver}
                 onDragLeave={leadDragLeave}
                 onDrop={leadDrop}
               >
-                {isLeadDragOver && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-accent/10 border-2 border-dashed border-accent rounded z-10 pointer-events-none">
-                    <span className="text-xs font-medium text-accent">Drop file to mention or attach</span>
-                  </div>
-                )}
+                {isLeadDragOver && <DropOverlay />}
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
