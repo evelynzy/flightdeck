@@ -20,6 +20,7 @@ import { playbookRoutes } from './playbooks.js';
 import { debateRoutes } from './debates.js';
 import { sharedRoutes } from './shared.js';
 import { analyticsRoutes } from './analytics.js';
+import { recoveryRoutes } from './recovery.js';
 
 export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(agentsRoutes(ctx));
@@ -42,4 +43,5 @@ export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(debateRoutes(ctx));
   router.use(sharedRoutes(ctx));
   router.use(analyticsRoutes(ctx));
+  router.use(recoveryRoutes(ctx));
 }
