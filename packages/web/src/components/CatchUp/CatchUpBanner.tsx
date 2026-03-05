@@ -168,7 +168,7 @@ export function CatchUpBanner() {
     if (!since || !leadId) return;
 
     try {
-      const resp = await apiFetch(`/api/catchup/${leadId}?since=${encodeURIComponent(since)}`);
+      const resp = await apiFetch(`/api/summary/${leadId}/since?t=${encodeURIComponent(since)}`);
       if (!resp.ok) return;
       const body: CatchUpResponse = await resp.json();
 

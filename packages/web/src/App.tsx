@@ -179,6 +179,13 @@ export function App() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <header className="h-12 border-b border-th-border flex items-center px-4 justify-between shrink-0">
             <div className="flex items-center gap-2">
+              {/* Flightdeck logo */}
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+                <path d="M16 3C13 7 11 12 10.5 17L14 19.5V25L16 22L18 25V19.5L21.5 17C21 12 19 7 16 3Z" fill="currentColor" className="text-accent" stroke="currentColor" strokeWidth="1" strokeLinejoin="round"/>
+                <ellipse cx="16" cy="13" rx="2.2" ry="2.5" fill="currentColor" className="text-th-bg opacity-80"/>
+                <path d="M10.5 17L8 21L11.5 19Z" fill="currentColor" className="text-accent opacity-60"/>
+                <path d="M21.5 17L24 21L20.5 19Z" fill="currentColor" className="text-accent opacity-60"/>
+              </svg>
               <h1 className="text-lg font-semibold">Flightdeck</h1>
               <VersionBadge />
             </div>
