@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { createHash } from 'crypto';
-import type { AcpConnection, ToolCallInfo, PlanEntry } from '../acp/AcpConnection.js';
+import type { AcpConnection, ToolCallInfo, PlanEntry, PromptContent } from '../acp/AcpConnection.js';
 import type { Role } from './RoleRegistry.js';
 import type { ServerConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
@@ -106,7 +106,7 @@ export class Agent {
 
   private acpConnection: AcpConnection | null = null;
   private config: ServerConfig;
-  private pendingMessages: string[] = [];
+  private pendingMessages: PromptContent[] = [];
   private peers: AgentContextInfo[];
   private readonly events = new AgentEventEmitter();
 
@@ -363,7 +363,7 @@ When you discover something important about the codebase, a pattern, a gotcha, o
     return true;
   }
 
-  write(data: string): void {
+  write(data: PromptContent): void {
     if (this.terminated) return;
     if (this.acpConnection?.isConnected) {
       this.status = 'running';
@@ -380,12 +380,12 @@ When you discover something important about the codebase, a pattern, a gotcha, o
   }
 
   /** Send a message to this agent (used for inter-agent communication and completion callbacks) */
-  sendMessage(message: string): void {
+  sendMessage(message: PromptContent): void {
     this.write(message);
   }
 
   /** Queue a message — delivered after the agent finishes its current prompt */
-  queueMessage(message: string): void {
+  queueMessage(message: PromptContent): void {
     if (this.systemPaused) {
       this.pendingMessages.push(message);
       return;
@@ -398,7 +398,7 @@ When you discover something important about the codebase, a pattern, a gotcha, o
   }
 
   /** Interrupt current work, then send message */
-  async interruptWithMessage(message: string): Promise<void> {
+  async interruptWithMessage(message: PromptContent): Promise<void> {
     if (this.acpConnection && this.status === 'running') {
       // Clear any queued messages — interrupt takes priority
       this.pendingMessages.length = 0;
@@ -435,14 +435,18 @@ When you discover something important about the codebase, a pattern, a gotcha, o
   /** Clear all pending (queued, not yet started) messages. Returns the count and previews of cleared messages. */
   clearPendingMessages(): { count: number; previews: string[] } {
     const count = this.pendingMessages.length;
-    const previews = this.pendingMessages.map((msg) => msg.slice(0, 100));
+    const previews = this.pendingMessages.map((msg) =>
+      typeof msg === 'string' ? msg.slice(0, 100) : `[${msg.length} content block(s)]`,
+    );
     this.pendingMessages.length = 0;
     return { count, previews };
   }
 
   /** Get summaries of pending messages for queue visibility (first 100 chars each) */
   getPendingMessageSummaries(): string[] {
-    return this.pendingMessages.map((msg) => msg.slice(0, 100));
+    return this.pendingMessages.map((msg) =>
+      typeof msg === 'string' ? msg.slice(0, 100) : `[${msg.length} content block(s)]`,
+    );
   }
 
   /** Remove a pending message by index. Returns true if removed. */

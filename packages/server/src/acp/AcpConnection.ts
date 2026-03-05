@@ -46,6 +46,8 @@ function extractContentText(content: any): string | undefined {
   return String(content);
 }
 
+export type PromptContent = string | acp.ContentBlock[];
+
 export class AcpConnection extends EventEmitter {
   private process: ChildProcess | null = null;
   private connection: acp.ClientSideConnection | null = null;
@@ -54,8 +56,9 @@ export class AcpConnection extends EventEmitter {
   private _exited = false;
   private _isPrompting = false;
   private _promptingStartedAt: number | null = null;
-  private promptQueue: string[] = [];
+  private promptQueue: PromptContent[] = [];
   private autopilot: boolean;
+  private agentCapabilities: acp.AgentCapabilities | null = null;
   private pendingPermission: {
     resolve: (result: acp.RequestPermissionResponse) => void;
     options: acp.PermissionOption[];
@@ -70,6 +73,7 @@ export class AcpConnection extends EventEmitter {
   get isPrompting(): boolean { return this._isPrompting; }
   get promptingStartedAt(): number | null { return this._promptingStartedAt; }
   get currentSessionId(): string | null { return this.sessionId; }
+  get supportsImages(): boolean { return this.agentCapabilities?.promptCapabilities?.image ?? false; }
 
   async start(opts: AcpConnectionOptions): Promise<string> {
     await this.spawnAndConnect(opts);
@@ -258,20 +262,21 @@ export class AcpConnection extends EventEmitter {
 
     this.connection = new acp.ClientSideConnection((_agent) => client, stream);
 
-    await this.connection.initialize({
+    const initResult = await this.connection.initialize({
       protocolVersion: acp.PROTOCOL_VERSION,
       clientCapabilities: {},
     });
+    this.agentCapabilities = initResult.agentCapabilities ?? null;
   }
 
-  async prompt(text: string): Promise<{ stopReason: acp.StopReason; usage?: { inputTokens: number; outputTokens: number } }> {
+  async prompt(content: PromptContent): Promise<{ stopReason: acp.StopReason; usage?: { inputTokens: number; outputTokens: number } }> {
     if (!this.connection || !this.sessionId) {
       throw new Error('ACP connection not established');
     }
 
     // Queue if already prompting — will be sent when current prompt completes
     if (this._isPrompting) {
-      this.promptQueue.push(text);
+      this.promptQueue.push(content);
       return { stopReason: 'end_turn' as acp.StopReason };
     }
 
@@ -279,10 +284,14 @@ export class AcpConnection extends EventEmitter {
     this._promptingStartedAt = Date.now();
     this.emit('prompting', true);
 
+    const blocks: acp.ContentBlock[] = typeof content === 'string'
+      ? [{ type: 'text', text: content }]
+      : content;
+
     try {
       const result = await this.connection.prompt({
         sessionId: this.sessionId,
-        prompt: [{ type: 'text', text }],
+        prompt: blocks,
       });
 
       this._isPrompting = false;
@@ -313,9 +322,26 @@ export class AcpConnection extends EventEmitter {
 
   private drainQueue(): void {
     if (this.promptQueue.length > 0) {
-      const next = this.promptQueue.join('\n');
-      this.promptQueue.length = 0;
-      this.prompt(next).catch((err) => {
+      const items = this.promptQueue.splice(0);
+      // Merge queued items: concatenate consecutive strings, preserve block arrays
+      const merged: acp.ContentBlock[] = [];
+      const textParts: string[] = [];
+      const flushText = () => {
+        if (textParts.length > 0) {
+          merged.push({ type: 'text', text: textParts.join('\n') });
+          textParts.length = 0;
+        }
+      };
+      for (const item of items) {
+        if (typeof item === 'string') {
+          textParts.push(item);
+        } else {
+          flushText();
+          merged.push(...item);
+        }
+      }
+      flushText();
+      this.prompt(merged).catch((err) => {
         logger.error('acp', `Drained prompt failed: ${err?.message || err}`);
       });
     }
