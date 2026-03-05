@@ -43,6 +43,16 @@ export interface UndoEntry {
   ttl: number;
 }
 
+export interface Suggestion {
+  id: string;
+  label: string;
+  description?: string;
+  icon: string;
+  score: number;           // 0-1 relevance
+  command?: string;        // NL command to execute if clicked
+  action?: string;         // action type hint for frontend
+}
+
 // ── ID Generator ──────────────────────────────────────────────────
 
 function generateCommandId(): string {
@@ -344,6 +354,75 @@ export class NLCommandService {
   /** Get all registered command patterns */
   getPatterns(): NLPattern[] {
     return PATTERNS;
+  }
+
+  /** Generate context-aware suggestions based on current session state */
+  getSuggestions(leadId: string): Suggestion[] {
+    const suggestions: Suggestion[] = [];
+
+    // Pending decisions → suggest review
+    const pending = this.decisionLog.getNeedingConfirmation();
+    if (pending.length > 0) {
+      suggestions.push({
+        id: 'suggest-review-decisions',
+        label: `Review ${pending.length} pending decision${pending.length > 1 ? 's' : ''}`,
+        description: 'Approve or reject waiting decisions',
+        icon: '🎯',
+        score: 0.9,
+        command: 'show approvals',
+        action: 'navigate',
+      });
+    }
+
+    // High context agents → suggest compact
+    const agents = this.agentManager.getAll();
+    const criticalAgents = agents.filter((a: any) => {
+      if (!a.contextWindowSize || a.contextWindowSize === 0) return false;
+      return a.contextWindowUsed / a.contextWindowSize > 0.85;
+    });
+    if (criticalAgents.length > 0) {
+      const agent = criticalAgents[0] as any;
+      const pct = Math.round((agent.contextWindowUsed / agent.contextWindowSize) * 100);
+      suggestions.push({
+        id: `suggest-compact-${agent.id}`,
+        label: `${agent.role?.name ?? 'Agent'} at ${pct}% context`,
+        description: 'Compact to free context space',
+        icon: '⚠️',
+        score: 0.8,
+        command: `compact ${agent.role?.name?.toLowerCase() ?? agent.id}`,
+        action: 'compact',
+      });
+    }
+
+    // Idle agents → suggest reassignment
+    const idleAgents = agents.filter((a: any) => a.status === 'idle');
+    if (idleAgents.length >= 2) {
+      suggestions.push({
+        id: 'suggest-idle-agents',
+        label: `${idleAgents.length} agents idle`,
+        description: 'Assign work or reduce crew size',
+        icon: '💤',
+        score: 0.6,
+        command: "who's idle",
+        action: 'query',
+      });
+    }
+
+    // No agents running → suggest resume
+    const runningAgents = agents.filter((a: any) => a.status === 'running');
+    if (runningAgents.length === 0 && agents.length > 0) {
+      suggestions.push({
+        id: 'suggest-resume',
+        label: 'No agents running',
+        description: 'Resume agents to continue work',
+        icon: '▶️',
+        score: 0.85,
+        command: 'resume',
+        action: 'control',
+      });
+    }
+
+    return suggestions.sort((a, b) => b.score - a.score).slice(0, 5);
   }
 
   /** Match a query string to a command pattern */

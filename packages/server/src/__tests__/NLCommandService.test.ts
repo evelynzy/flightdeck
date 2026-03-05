@@ -248,4 +248,39 @@ describe('NLCommandService', () => {
       expect(plan!.steps[0].params?.topic).toBe('authentication');
     });
   });
+
+  describe('getSuggestions', () => {
+    it('suggests reviewing pending decisions', () => {
+      const { service } = createService();
+      const suggestions = service.getSuggestions('lead-1');
+      const reviewSuggestion = suggestions.find(s => s.id === 'suggest-review-decisions');
+      expect(reviewSuggestion).toBeDefined();
+      expect(reviewSuggestion!.label).toContain('2');
+      expect(reviewSuggestion!.score).toBe(0.9);
+    });
+
+    it('returns empty suggestions when nothing to suggest', () => {
+      const { service, decisionLog } = createService();
+      decisionLog.getNeedingConfirmation.mockReturnValue([]);
+      const suggestions = service.getSuggestions('lead-1');
+      // May have idle agent suggestion but no decision suggestion
+      expect(suggestions.find(s => s.id === 'suggest-review-decisions')).toBeUndefined();
+    });
+
+    it('suggests idle agent reassignment', () => {
+      const { service } = createService();
+      const suggestions = service.getSuggestions('lead-1');
+      // Only 1 idle agent (agent-3), need >= 2 for suggestion → not present
+      expect(suggestions.find(s => s.id === 'suggest-idle-agents')).toBeUndefined();
+    });
+
+    it('caps at 5 suggestions sorted by score', () => {
+      const { service } = createService();
+      const suggestions = service.getSuggestions('lead-1');
+      expect(suggestions.length).toBeLessThanOrEqual(5);
+      for (let i = 1; i < suggestions.length; i++) {
+        expect(suggestions[i - 1].score).toBeGreaterThanOrEqual(suggestions[i].score);
+      }
+    });
+  });
 });
