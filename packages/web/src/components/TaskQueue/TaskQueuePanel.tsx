@@ -13,6 +13,11 @@ interface Props {
   api: any;
 }
 
+/** Parse a SQLite datetime string, normalizing missing Z suffix to UTC */
+function parseDbTimestamp(ts: string): number {
+  return new Date(ts.endsWith('Z') ? ts : ts.replace(' ', 'T') + 'Z').getTime();
+}
+
 // ---------------------------------------------------------------------------
 // Progress summary for a lead session
 // ---------------------------------------------------------------------------
@@ -376,9 +381,9 @@ export function TaskQueuePanel({ api }: Props) {
                                : 'pending',
                 assignee:    t.role,
                 dependsOn:   t.dependsOn,
-                createdAt:   new Date(t.createdAt).getTime(),
-                startedAt:   t.startedAt ? new Date(t.startedAt).getTime() : undefined,
-                completedAt: t.completedAt ? new Date(t.completedAt).getTime() : undefined,
+                createdAt:   parseDbTimestamp(t.createdAt),
+                startedAt:   t.startedAt ? parseDbTimestamp(t.startedAt) : undefined,
+                completedAt: t.completedAt ? parseDbTimestamp(t.completedAt) : undefined,
               }));
 
               const viewIcon =

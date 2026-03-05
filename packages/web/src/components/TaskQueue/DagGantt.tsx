@@ -135,7 +135,7 @@ export function DagGantt({ tasks }: DagGanttProps) {
         aria-label="Gantt chart scrollable area"
         tabIndex={0}
       >
-        <div className="flex" style={{ height: totalH + 40, minWidth: '100%' }}>
+        <div className="flex pb-[30vh] pr-[200px]" style={{ height: totalH + 40, minWidth: '100%' }}>
           {/* Label column */}
           <div className="shrink-0 relative sticky left-0 z-10 bg-th-bg" style={{ width: LABEL_W }}>
             {tasks.map((task, i) => (
