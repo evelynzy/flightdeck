@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import type { AppContext } from './context.js';
-import type { DecisionCategory } from '../coordination/DecisionLog.js';
+import { DECISION_CATEGORIES, type DecisionCategory } from '../coordination/DecisionLog.js';
 
 export function decisionsRoutes(ctx: AppContext): Router {
   const { agentManager, decisionLog } = ctx;
@@ -143,9 +143,8 @@ export function decisionsRoutes(ctx: AppContext): Router {
 
   router.post('/intents', (req, res) => {
     const { category, source } = req.body ?? {};
-    const validCategories = ['style', 'architecture', 'tool_access', 'dependency', 'testing', 'general'];
-    if (!validCategories.includes(category)) {
-      return res.status(400).json({ error: `category must be one of: ${validCategories.join(', ')}` });
+    if (!DECISION_CATEGORIES.includes(category as DecisionCategory)) {
+      return res.status(400).json({ error: `category must be one of: ${DECISION_CATEGORIES.join(', ')}` });
     }
     const validSources = ['manual', 'teach_me'];
     const ruleSource = validSources.includes(source) ? source : 'manual';

@@ -55,30 +55,75 @@ describe('AlertEngine — Actionable Alerts', () => {
     expect(alert.actions).toBeUndefined();
   });
 
-  it('Dismiss action uses empty endpoint', () => {
+  it('Dismiss action uses dismiss actionType (client-side only)', () => {
     const dismiss: AlertAction = {
       label: 'Dismiss',
       description: 'Ignore this alert',
-      actionType: 'api_call',
+      actionType: 'dismiss',
       endpoint: '',
       method: 'POST',
       confidence: 10,
     };
 
-    expect(dismiss.endpoint).toBe('');
+    expect(dismiss.actionType).toBe('dismiss');
     expect(dismiss.confidence).toBe(10);
   });
 
   it('actions can be sorted by confidence descending', () => {
     const actions: AlertAction[] = [
-      { label: 'Dismiss', description: '', actionType: 'api_call', endpoint: '', method: 'POST', confidence: 10 },
-      { label: 'Compress', description: '', actionType: 'api_call', endpoint: '/restart', method: 'POST', confidence: 90 },
-      { label: 'Switch', description: '', actionType: 'api_call', endpoint: '/model', method: 'POST', confidence: 70 },
+      { label: 'Dismiss', description: '', actionType: 'dismiss', endpoint: '', method: 'POST', confidence: 10 },
+      { label: 'Compress', description: '', actionType: 'api_call', endpoint: '/api/restart', method: 'POST', confidence: 90 },
+      { label: 'Switch', description: '', actionType: 'api_call', endpoint: '/api/model', method: 'POST', confidence: 70 },
     ];
 
     const sorted = [...actions].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     expect(sorted[0].label).toBe('Compress');
     expect(sorted[1].label).toBe('Switch');
     expect(sorted[2].label).toBe('Dismiss');
+  });
+
+  it('AlertEngine attaches actions to context pressure alerts', () => {
+    const highPressureAgent = {
+      id: 'agent-high',
+      role: { id: 'developer', name: 'Developer' },
+      status: 'running',
+      contextWindowSize: 100_000,
+      contextWindowUsed: 90_000,
+      estimatedExhaustionMinutes: 5,
+      createdAt: new Date(Date.now() - 600_000),
+      isPrompting: false,
+      promptingStartedAt: null,
+    };
+
+    const mockAgentManager = { getAll: () => [highPressureAgent], getProjectIdForAgent: () => 'proj-1' };
+    const mockLockRegistry = { getAll: () => [] };
+    const mockDecisionLog = { getAll: () => [], getNeedingConfirmation: () => [] };
+    const mockActivityLedger = { on: vi.fn(), off: vi.fn() };
+    const mockTaskDAG = { getTasks: () => [] };
+
+    const engine = new AlertEngine(
+      mockAgentManager as any,
+      mockLockRegistry as any,
+      mockDecisionLog as any,
+      mockActivityLedger as any,
+      mockTaskDAG as any,
+    );
+
+    const emittedAlerts: Alert[] = [];
+    engine.on('alert', (alert: Alert) => emittedAlerts.push(alert));
+    engine.start();
+
+    // Find context_pressure alerts
+    const pressureAlerts = engine.getAlerts().filter(a => a.type === 'context_pressure');
+    expect(pressureAlerts.length).toBeGreaterThanOrEqual(1);
+
+    const alert = pressureAlerts[0];
+    expect(alert.actions).toBeDefined();
+    expect(alert.actions!.length).toBe(2);
+    expect(alert.actions![0].actionType).toBe('api_call');
+    expect(alert.actions![0].endpoint).toContain('/api/agents/');
+    expect(alert.actions![1].actionType).toBe('dismiss');
+
+    engine.stop();
   });
 });

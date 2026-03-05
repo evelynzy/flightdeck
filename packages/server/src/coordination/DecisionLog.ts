@@ -5,7 +5,8 @@ import { decisions } from '../db/schema.js';
 
 export type DecisionStatus = 'recorded' | 'confirmed' | 'rejected';
 
-export type DecisionCategory = 'style' | 'architecture' | 'tool_access' | 'dependency' | 'testing' | 'general';
+export const DECISION_CATEGORIES = ['style', 'architecture', 'tool_access', 'dependency', 'testing', 'general'] as const;
+export type DecisionCategory = (typeof DECISION_CATEGORIES)[number];
 
 export interface Decision {
   id: string;

@@ -3,7 +3,7 @@ import { WebSocketServer as WsServer, WebSocket } from 'ws';
 import type { AgentManager } from '../agents/AgentManager.js';
 import type { FileLockRegistry } from '../coordination/FileLockRegistry.js';
 import type { ActivityLedger } from '../coordination/ActivityLedger.js';
-import type { DecisionLog } from '../coordination/DecisionLog.js';
+import type { DecisionLog, Decision } from '../coordination/DecisionLog.js';
 import type { ChatGroupRegistry } from '../comms/ChatGroupRegistry.js';
 import { getAuthSecret } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
@@ -267,13 +267,13 @@ export class WebSocketServer {
       this.broadcastToProject({ type: 'decision:rejected', decision }, projectId);
     });
 
-    this.track(decisionLog, 'decisions:batch_confirmed', (decisions: any[]) => {
+    this.track(decisionLog, 'decisions:batch_confirmed', (decisions: Decision[]) => {
       if (decisions.length === 0) return;
       const projectId = decisions[0].projectId ?? this.resolveAgentProjectId(decisions[0].agentId);
       this.broadcastToProject({ type: 'decisions:batch', action: 'confirm', decisions }, projectId);
     });
 
-    this.track(decisionLog, 'decisions:batch_rejected', (decisions: any[]) => {
+    this.track(decisionLog, 'decisions:batch_rejected', (decisions: Decision[]) => {
       if (decisions.length === 0) return;
       const projectId = decisions[0].projectId ?? this.resolveAgentProjectId(decisions[0].agentId);
       this.broadcastToProject({ type: 'decisions:batch', action: 'reject', decisions }, projectId);

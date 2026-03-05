@@ -13,10 +13,13 @@ export type AlertSeverity = 'info' | 'warning' | 'critical';
 export interface AlertAction {
   label: string;
   description: string;
-  actionType: 'api_call';
+  /** 'api_call' triggers a fetch; 'dismiss' is handled client-side only */
+  actionType: 'api_call' | 'dismiss';
+  /** Must start with '/api/' for api_call actions. Empty for dismiss. */
   endpoint: string;
   method: 'POST' | 'DELETE';
   body?: Record<string, unknown>;
+  /** 0-100 display priority — higher means stronger recommendation. Frontend sorts descending. */
   confidence?: number;
 }
 
@@ -159,7 +162,7 @@ export class AlertEngine extends EventEmitter {
             {
               label: 'Dismiss',
               description: 'Ignore this alert',
-              actionType: 'api_call',
+              actionType: 'dismiss',
               endpoint: '',
               method: 'POST',
               confidence: 10,
