@@ -18,6 +18,7 @@ import { GroupChat } from './components/GroupChat/GroupChat';
 import { TimelinePage } from './components/Timeline';
 import { MissionControlPage } from './components/MissionControl';
 import { CanvasPage } from './components/Canvas';
+import { AnalyticsPage } from './components/Analytics';
 import { SearchDialog } from './components/SearchDialog/SearchDialog';
 import { Sidebar } from './components/Sidebar';
 import { ToastContainer, useToastStore } from './components/Toast';
@@ -238,6 +239,7 @@ export function App() {
             <Route path="/timeline" element={<TimelinePage api={api} ws={ws} />} />
             <Route path="/mission-control" element={<MissionControlPage />} />
             <Route path="/canvas" element={<CanvasPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </ErrorBoundary>
