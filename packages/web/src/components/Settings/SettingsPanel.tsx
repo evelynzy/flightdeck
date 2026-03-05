@@ -4,6 +4,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import type { ThemeMode } from '../../stores/settingsStore';
 import { Trash2, Plus, Sun, Moon, Monitor, Settings, Cpu, Users, Terminal, ChevronDown, ChevronRight, Zap, Volume2 } from 'lucide-react';
 import { DashboardCustomizer } from './DashboardCustomizer';
+import { PlaybookLibrary } from '../Playbooks';
 
 interface Props {
   api: any;
@@ -177,6 +178,11 @@ export function SettingsPanel({ api }: Props) {
 
       {/* Dashboard Layout */}
       <DashboardCustomizer />
+
+      {/* Playbooks */}
+      <section className="bg-surface-raised border border-th-border rounded-lg p-4 mb-6">
+        <PlaybookLibrary />
+      </section>
 
       {/* Roles */}
       <section className="mb-8">
