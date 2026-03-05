@@ -195,6 +195,9 @@ export function App() {
 
   return (
     <div className="flex h-screen bg-surface text-th-text-alt">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-accent focus:text-white focus:rounded-lg focus:text-sm">
+        Skip to content
+      </a>
       <Sidebar />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -246,6 +249,7 @@ export function App() {
           <div data-tour="pulse-strip"><PulseStrip /></div>
           <MobilePulse />
 
+          <main id="main-content" className="flex-1 overflow-hidden flex flex-col">
           <ErrorBoundary>
           <Suspense fallback={<RouteSpinner />}>
           <Routes>
@@ -267,6 +271,7 @@ export function App() {
           </Routes>
           </Suspense>
           </ErrorBoundary>
+          </main>
         </div>
 
         {selectedAgentId && (
