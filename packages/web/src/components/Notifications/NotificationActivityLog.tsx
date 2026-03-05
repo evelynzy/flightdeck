@@ -7,8 +7,8 @@ export function NotificationActivityLog() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch<{ entries: NotificationLogEntry[] }>('/notifications/log')
-      .then((data) => setEntries(data.entries ?? []))
+    apiFetch<NotificationLogEntry[] | { entries: NotificationLogEntry[] }>('/notifications/log')
+      .then((data) => setEntries(Array.isArray(data) ? data : data?.entries ?? []))
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
   }, []);
