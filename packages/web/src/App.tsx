@@ -27,6 +27,7 @@ import { Search, Pause, Play } from 'lucide-react';
 import { OnboardingWizard, useOnboarding } from './components/Onboarding/OnboardingWizard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { VersionBadge } from './components/VersionBadge';
+import { PulseStrip } from './components/Pulse';
 import { useLeadStore } from './stores/leadStore';
 import type { AcpTextChunk, Project } from './types';
 import { apiFetch } from './hooks/useApi';
@@ -196,6 +197,8 @@ export function App() {
               <span className="text-sm text-th-text-muted">{agents.length} agents</span>
             </div>
           </header>
+
+          <PulseStrip />
 
           <ErrorBoundary>
           <Routes>
