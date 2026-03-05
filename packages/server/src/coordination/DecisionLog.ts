@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { eq, asc, and, inArray } from 'drizzle-orm';
+import { eq, asc, and, inArray, lte } from 'drizzle-orm';
 import type { Database } from '../db/database.js';
 import { decisions } from '../db/schema.js';
 
@@ -417,5 +417,27 @@ export class DecisionLog extends EventEmitter {
     this.timersPaused = false;
     this.systemDecisionIds.clear();
     this.db.drizzle.delete(decisions).run();
+  }
+
+  /** Get decisions as they existed at a given timestamp (for replay) */
+  getDecisionsAt(leadId: string, timestamp: string): Decision[] {
+    const rows = this.db.drizzle
+      .select()
+      .from(decisions)
+      .where(and(
+        lte(decisions.createdAt, timestamp),
+        decisions.leadId ? eq(decisions.leadId, leadId) : undefined,
+      ))
+      .orderBy(asc(decisions.createdAt))
+      .all();
+
+    return rows.map(row => {
+      const d = rowToDecision(row);
+      // Reconstruct status at timestamp T: if confirmedAt > T, revert to 'recorded'
+      if (d.confirmedAt && d.confirmedAt > timestamp) {
+        return { ...d, status: 'recorded' as const, confirmedAt: null, autoApproved: false };
+      }
+      return d;
+    });
   }
 }

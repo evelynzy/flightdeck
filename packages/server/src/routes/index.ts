@@ -13,6 +13,7 @@ import { sessionsRoutes } from './sessions.js';
 import { dbRoutes } from './db.js';
 import { servicesRoutes } from './services.js';
 import { diffRoutes } from './diff.js';
+import { replayRoutes } from './replay.js';
 
 export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(agentsRoutes(ctx));
@@ -28,4 +29,5 @@ export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(dbRoutes(ctx));
   router.use(servicesRoutes(ctx));
   router.use(diffRoutes(ctx));
+  router.use(replayRoutes(ctx));
 }
