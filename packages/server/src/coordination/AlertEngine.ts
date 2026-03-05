@@ -40,9 +40,9 @@ const MAX_ALERTS = 100;
 const STUCK_AGENT_MS = 10 * 60 * 1000;       // 10 minutes
 const NEW_AGENT_GRACE_MS = 5 * 60 * 1000;   // 5 minutes grace for newly created agents
 const MAX_PROMPTING_MS = 30 * 60 * 1000;     // 30 minutes max before prompting is considered stuck
-const CONTEXT_WARN_THRESHOLD = 0.50;            // 50% — early warning
-const CONTEXT_ALERT_THRESHOLD = 0.70;           // 70% — action needed
-const CONTEXT_CRITICAL_THRESHOLD = 0.85;        // 85% — imminent exhaustion
+const CONTEXT_WARN_THRESHOLD = 0.70;            // 70% — first warning
+const CONTEXT_ALERT_THRESHOLD = 0.85;           // 85% — action needed
+const CONTEXT_CRITICAL_THRESHOLD = 0.95;        // 95% — imminent exhaustion
 const STALE_DECISION_MS = 10 * 60 * 1000;     // 10 minutes
 const CHECK_INTERVAL_MS = 60 * 1000;           // 1 minute
 
