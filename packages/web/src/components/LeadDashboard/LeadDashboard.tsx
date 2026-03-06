@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Crown, Send, Users, CheckCircle, AlertCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Pencil, Hand, Square, Filter, Download, Settings, Eye, EyeOff } from 'lucide-react';
+import { Crown, Send, Users, CheckCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Pencil, Square, Filter, Download, Settings, Eye, EyeOff, Zap } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useLeadStore } from '../../stores/leadStore';
 import { useTimerStore, selectActiveTimerCount } from '../../stores/timerStore';
@@ -1741,10 +1741,10 @@ export function LeadDashboard({ api, ws }: Props) {
                       }
                     }}
                     disabled={!isActive}
-                    title="Interrupt current work (Ctrl+Enter)"
+                    title="Interrupt agent (Ctrl+Enter)"
                     className="bg-red-700 hover:bg-red-600 disabled:bg-th-bg-hover text-white px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1"
                   >
-                    <AlertCircle className="w-3.5 h-3.5" />
+                    <Zap className="w-3.5 h-3.5" />
                     Interrupt
                   </button>
                 </div>
@@ -2218,9 +2218,9 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
                   <button
                     onClick={() => apiFetch(`/agents/${selectedAgent.id}/interrupt`, { method: 'POST' })}
                     className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-orange-600/20 text-orange-400 hover:bg-orange-600/40 transition-colors"
-                    title="Interrupt — cancel current work"
+                    title="Interrupt agent"
                   >
-                    <Hand size={12} /> Interrupt
+                    <Zap size={12} /> Interrupt
                   </button>
                   <button
                     onClick={() => {
@@ -2463,7 +2463,7 @@ function TeamStatusContent({ agents, delegations, comms, activity, allAgents, on
                     className="px-3 py-1.5 rounded bg-orange-600/80 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium flex items-center gap-1 transition-colors"
                     title="Interrupt agent (Ctrl+Enter)"
                   >
-                    <AlertCircle size={12} /> Interrupt
+                    <Zap size={12} /> Interrupt
                   </button>
                 </div>
               </div>

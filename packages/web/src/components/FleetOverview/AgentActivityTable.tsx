@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import type { AgentInfo } from '../../types';
 import type { FileLock } from './FleetOverview';
-import { Square, RefreshCw, Terminal, Hand, Check, Play } from 'lucide-react';
+import { Square, RefreshCw, Terminal, Zap, Check, Play } from 'lucide-react';
 import { TokenSparkline } from './TokenSparkline';
 import { EmptyState } from '../Shared';
 
@@ -392,9 +392,9 @@ export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props)
                           api.interruptAgent(agent.id);
                         }}
                         className="p-1 text-th-text-muted hover:text-orange-400"
-                        title="Interrupt — cancel current work"
+                        title="Interrupt agent"
                       >
-                        <Hand size={14} />
+                        <Zap size={14} />
                       </button>
                     )}
                     {isActive && (

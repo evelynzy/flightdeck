@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import type { AgentInfo } from '../../types';
-import { RefreshCw, Square, Terminal, Hand, Check, Play } from 'lucide-react';
+import { RefreshCw, Square, Terminal, Zap, Check, Play } from 'lucide-react';
 import { AgentIdBadge } from '../../utils/markdown';
 import { agentStatusText } from '../../utils/statusColors';
 import { DiffBadge } from '../DiffPreview';
@@ -92,9 +92,9 @@ export function AgentCard({ agent, api }: Props) {
                 api.interruptAgent(agent.id);
               }}
               className="p-1 text-th-text-muted hover:text-orange-400"
-              title="Interrupt — cancel current work"
+              title="Interrupt agent"
             >
-              <Hand size={14} />
+              <Zap size={14} />
             </button>
           )}
           {(agent.status === 'running' || agent.status === 'idle') && (
