@@ -12,7 +12,7 @@ export function replayRoutes(ctx: AppContext): Router {
     if (replay) return replay;
     const taskDAG = agentManager.getTaskDAG?.();
     if (!taskDAG || !activityLedger || !decisionLog || !lockRegistry) return null;
-    replay = new SessionReplay(activityLedger, taskDAG, decisionLog, lockRegistry);
+    replay = new SessionReplay(activityLedger, taskDAG, decisionLog, lockRegistry, agentManager);
     return replay;
   }
 
