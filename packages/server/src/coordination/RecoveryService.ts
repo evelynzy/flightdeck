@@ -40,7 +40,6 @@ export interface RecoveryEvent {
 export interface RecoverySettings {
   autoRestart: boolean;
   reviewHandoffs: boolean;
-  autoCompact: boolean;
   maxAttempts: number;
 }
 
@@ -56,7 +55,6 @@ export interface RecoveryMetrics {
 const DEFAULT_SETTINGS: RecoverySettings = {
   autoRestart: true,
   reviewHandoffs: false,
-  autoCompact: false,
   maxAttempts: 3,
 };
 
@@ -89,7 +87,6 @@ export class RecoveryService extends EventEmitter {
   updateSettings(updates: Partial<RecoverySettings>): RecoverySettings {
     if (updates.autoRestart !== undefined) this.settings.autoRestart = updates.autoRestart;
     if (updates.reviewHandoffs !== undefined) this.settings.reviewHandoffs = updates.reviewHandoffs;
-    if (updates.autoCompact !== undefined) this.settings.autoCompact = updates.autoCompact;
     if (updates.maxAttempts !== undefined) {
       this.settings.maxAttempts = Math.max(1, Math.min(10, updates.maxAttempts));
     }

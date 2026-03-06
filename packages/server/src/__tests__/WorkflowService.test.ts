@@ -175,12 +175,12 @@ describe('WorkflowService', () => {
 
   describe('Templates', () => {
     it('getTemplates returns 12 templates', () => {
-      expect(service.getTemplates()).toHaveLength(12);
+      expect(service.getTemplates()).toHaveLength(11);
     });
 
     it('getTemplatesByCategory filters correctly', () => {
       const context = service.getTemplatesByCategory('context');
-      expect(context).toHaveLength(3);
+      expect(context).toHaveLength(2);
       expect(context.every(t => t.category === 'context')).toBe(true);
 
       const cost = service.getTemplatesByCategory('cost');
@@ -194,19 +194,19 @@ describe('WorkflowService', () => {
     });
 
     it('createFromTemplate creates a rule from a template', () => {
-      const rule = service.createFromTemplate('auto-compact-critical');
+      const rule = service.createFromTemplate('alert-high-context');
       expect(rule).toBeDefined();
-      expect(rule!.name).toBe('Auto-Compact at Critical Context');
+      expect(rule!.name).toBe('Alert on High Context Usage');
       expect(rule!.metadata.source).toBe('template');
       expect(rule!.id).toMatch(/^wf-/);
     });
 
     it('createFromTemplate with overrides applies them', () => {
-      const rule = service.createFromTemplate('auto-compact-critical', {
-        name: 'Custom Compact',
+      const rule = service.createFromTemplate('alert-high-context', {
+        name: 'Custom Alert',
         cooldownMs: 999,
       });
-      expect(rule!.name).toBe('Custom Compact');
+      expect(rule!.name).toBe('Custom Alert');
       expect(rule!.cooldownMs).toBe(999);
     });
 

@@ -43,7 +43,6 @@ export interface RecoveryMetrics {
 export interface RecoverySettings {
   autoRestart: boolean;
   reviewHandoffs: boolean;
-  autoCompact: boolean;
   maxAttempts: number;
 }
 

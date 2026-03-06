@@ -158,24 +158,6 @@ const MAX_ACTIVITY = 500;
 const TEMPLATES: WorkflowTemplate[] = [
   // ── Context Management ──────────────────────────
   {
-    id: 'auto-compact-critical',
-    name: 'Auto-Compact at Critical Context',
-    description: 'Automatically compact an agent when context usage exceeds 90%',
-    category: 'context',
-    rule: {
-      name: 'Auto-Compact at Critical Context',
-      description: 'Automatically compact an agent when context usage exceeds 90%',
-      enabled: true,
-      trigger: { event: 'context_above_threshold' },
-      conditions: [{ field: 'contextUsage', operator: 'gt', value: 90 }],
-      actions: [{ type: 'compact_agent', params: {} }],
-      notifications: [],
-      cooldownMs: 5 * 60 * 1000,
-      maxFiresPerSession: null,
-      priority: 10,
-    },
-  },
-  {
     id: 'alert-high-context',
     name: 'Alert on High Context Usage',
     description: 'Send a pulse notification when any agent exceeds 80% context usage',

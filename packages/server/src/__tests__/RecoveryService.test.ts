@@ -25,7 +25,6 @@ describe('RecoveryService', () => {
       const settings = service.getSettings();
       expect(settings.autoRestart).toBe(true);
       expect(settings.reviewHandoffs).toBe(false);
-      expect(settings.autoCompact).toBe(false);
       expect(settings.maxAttempts).toBe(3);
     });
 

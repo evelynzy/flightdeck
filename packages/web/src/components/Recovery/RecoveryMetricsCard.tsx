@@ -92,9 +92,9 @@ export function RecoveryMetricsCard({ metrics: propMetrics, triggerBreakdown }: 
       {/* Insight */}
       <div className="text-[10px] text-th-text-muted bg-th-bg-alt border border-th-border rounded-md p-2">
         {metrics.successRate >= 100 ? (
-          <p>💡 All recovered agents completed their tasks. Consider enabling auto-compact to prevent context exhaustion crashes.</p>
+          <p>💡 All recovered agents completed their tasks successfully.</p>
         ) : (
-          <p>⚠️ {metrics.totalCrashes - metrics.totalRecoveries} recovery attempt(s) failed. Consider reducing agent context window size or enabling auto-compact.</p>
+          <p>⚠️ {metrics.totalCrashes - metrics.totalRecoveries} recovery attempt(s) failed. Consider reducing agent context window size.</p>
         )}
       </div>
     </div>

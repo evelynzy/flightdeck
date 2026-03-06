@@ -5,7 +5,6 @@ import type { RecoverySettings } from './types';
 const DEFAULTS: RecoverySettings = {
   autoRestart: true,
   reviewHandoffs: false,
-  autoCompact: false,
   maxAttempts: 3,
 };
 
@@ -60,13 +59,6 @@ export function RecoverySettingsPanel() {
         onChange={(v) => save({ reviewHandoffs: v })}
       />
 
-      <Toggle
-        label="Auto-compact on critical pressure"
-        description="Restart agents at 95% context with compressed briefing"
-        checked={settings.autoCompact}
-        onChange={(v) => save({ autoCompact: v })}
-      />
-
       <div>
         <label className="flex items-center justify-between">
           <div>
@@ -86,7 +78,7 @@ export function RecoverySettingsPanel() {
       </div>
 
       <div className="bg-th-bg-alt border border-th-border rounded-md p-3 text-[10px] text-th-text-muted">
-        ℹ️ Auto-restart is on by default. Handoff review and auto-compact require explicit opt-in.
+        ℹ️ Auto-restart is on by default. Handoff review requires explicit opt-in.
         You can always review handoffs retroactively in the Timeline.
       </div>
     </div>
