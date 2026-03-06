@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Crown, Send, Users, CheckCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Pencil, Square, Filter, Download, Settings, Eye, EyeOff, Zap } from 'lucide-react';
+import { Crown, Send, Users, CheckCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Pencil, Square, Filter, Download, Settings, Eye, EyeOff, Zap, AlertCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useLeadStore } from '../../stores/leadStore';
 import { useTimerStore, selectActiveTimerCount } from '../../stores/timerStore';
