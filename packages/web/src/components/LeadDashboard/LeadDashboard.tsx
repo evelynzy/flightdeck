@@ -6,6 +6,7 @@ import { useTimerStore, selectActiveTimerCount } from '../../stores/timerStore';
 import type { ActivityEvent, AgentComm, ProgressSnapshot, AgentReport } from '../../stores/leadStore';
 import type { AcpTextChunk, ChatGroup, GroupMessage, DagStatus, Project } from '../../types';
 import { useAppStore } from '../../stores/appStore';
+import { useHistoricalAgents } from '../../hooks/useHistoricalAgents';
 import { MentionText, MarkdownContent, InlineMarkdownWithMentions } from '../../utils/markdown';
 import { classifyMessage, tierPassesFilter, TIER_CONFIG, type TierFilter, type FeedItem } from '../../utils/messageTiers';
 import { TaskDagPanelContent } from './TaskDagPanel';
@@ -41,6 +42,7 @@ export function LeadDashboard({ api, ws }: Props) {
     useShallow((s) => ({ projects: s.projects, selectedLeadId: s.selectedLeadId, drafts: s.drafts }))
   );
   const agents = useAppStore((s) => s.agents);
+  const { agents: derivedAgents } = useHistoricalAgents(agents.length, selectedLeadId);
   const activeTimerCount = useTimerStore(selectActiveTimerCount);
   const input = selectedLeadId ? (drafts[selectedLeadId] ?? '') : '';
   const setInput = useCallback((text: string) => {
@@ -901,8 +903,9 @@ export function LeadDashboard({ api, ws }: Props) {
   const teamAgents = (() => {
     const live = agents.filter((a) => a.id === selectedLeadId || a.parentId === selectedLeadId);
     if (live.length > 0) return live;
-    // Fallback: use agent roster from REST progress endpoint
-    return progress?.teamAgents ?? [];
+    // Fallback: progress endpoint, then keyframe-derived agents
+    const progressTeam = progress?.teamAgents ?? [];
+    return progressTeam.length > 0 ? progressTeam : derivedAgents;
   })();
 
   return (

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
 import { apiFetch } from '../../hooks/useApi';
+import { deriveAgentsFromKeyframes } from '../../hooks/useHistoricalAgents';
 import { POLL_INTERVAL_MS } from '../../constants/timing';
 import { ProgressTimeline } from './ProgressTimeline';
 import { TaskBurndown } from './TaskBurndown';
@@ -92,35 +93,7 @@ export function OverviewPage(_props: Props) {
 
         // Derive agents from spawn keyframes when REST /agents returns empty
         if (resolvedAgents.length === 0 && kf.length > 0) {
-          const derivedMap = new Map<string, any>();
-          for (const frame of kf) {
-            if (frame.type === 'spawn') {
-              const roleMatch = frame.label.match(/^Spawned\s+(.+?):\s/);
-              const roleName = roleMatch?.[1] ?? 'Agent';
-              const agentId = `kf-${derivedMap.size}`;
-              derivedMap.set(agentId, {
-                id: agentId,
-                status: 'completed',
-                role: { id: roleName.toLowerCase().replace(/\s+/g, '-'), name: roleName },
-                inputTokens: 0,
-                outputTokens: 0,
-                createdAt: frame.timestamp,
-              });
-            }
-            if (frame.type === 'agent_exit') {
-              const exitMatch = frame.label.match(/^Terminated\s+(.+?)\s+\(([a-f0-9]+)\)/);
-              if (exitMatch) {
-                for (const [, agent] of derivedMap) {
-                  if (agent.role?.name === exitMatch[1] && agent.status !== 'terminated') {
-                    agent.status = 'terminated';
-                    agent.shortId = exitMatch[2];
-                    break;
-                  }
-                }
-              }
-            }
-          }
-          resolvedAgents = [...derivedMap.values()];
+          resolvedAgents = deriveAgentsFromKeyframes(kf);
         }
 
         if (mountedRef.current) setHistoricalAgents(resolvedAgents);
