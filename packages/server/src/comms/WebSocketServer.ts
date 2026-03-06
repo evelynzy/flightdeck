@@ -185,6 +185,12 @@ export class WebSocketServer {
       this.broadcastToProject({ type: 'agent:tool_call', ...data }, projectId);
     });
 
+    // Broadcast immediately (not batched) so it arrives before any text from the new turn
+    this.track(agentManager, 'agent:response_start', (data: any) => {
+      const projectId = this.resolveAgentProjectId(data.agentId);
+      this.broadcastToProject({ type: 'agent:response_start', ...data }, projectId);
+    });
+
     // WebSocket subscription architecture:
     // - Agent connections subscribe to specific agent IDs (project-scoped participants)
     // - UI connections subscribe to '*' (all agents) because the dashboard is an observer

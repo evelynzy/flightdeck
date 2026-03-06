@@ -38,6 +38,7 @@ export interface AgentManagerEvents {
   'agent:terminated': string;
   'agent:exit': { agentId: string; code: number };
   'agent:text': { agentId: string; text: string };
+  'agent:response_start': { agentId: string };
   'agent:tool_call': { agentId: string; toolCall: ToolCallInfo };
   'agent:content': { agentId: string; content: string };
   'agent:thinking': { agentId: string; text: string };
@@ -369,6 +370,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
 
     agent.onToolCall((info) => {
       this.emit('agent:tool_call', { agentId: agent.id, toolCall: info });
+    });
+
+    agent.onResponseStart(() => {
+      this.emit('agent:response_start', { agentId: agent.id });
     });
 
     agent.onContent((content) => {
