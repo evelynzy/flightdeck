@@ -1863,7 +1863,7 @@ export function LeadDashboard({ api, ws }: Props) {
                   <div className="flex flex-wrap border-b border-th-border shrink-0 items-center">
                     {(() => {
                       const allTabs: Record<string, { icon: React.ReactNode; label: string; badge?: number }> = {
-                        team: { icon: <Bot className="w-3 h-3" />, label: 'Team', badge: teamAgents.length },
+                        team: { icon: <Bot className="w-3 h-3" />, label: 'Team' },
                         comms: { icon: <MessageSquare className="w-3 h-3" />, label: 'Comms', badge: comms.length },
                         groups: { icon: <Users className="w-3 h-3" />, label: 'Groups', badge: groups.length },
                         dag: { icon: <Network className="w-3 h-3" />, label: 'DAG', badge: dagStatus?.tasks.length },
