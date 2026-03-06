@@ -34,7 +34,7 @@ export function ShareDropdown({ onShareLink, onExportHTML, onExportJSON, onHighl
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-56 bg-surface-raised border border-th-border rounded-lg shadow-xl z-50 overflow-hidden">
+        <div className="absolute right-0 bottom-full mb-1 w-56 bg-surface-raised border border-th-border rounded-lg shadow-xl z-50 overflow-hidden">
           <p className="px-3 py-2 text-[11px] font-medium text-th-text-muted border-b border-th-border/50">
             📎 Share Session Replay
           </p>
