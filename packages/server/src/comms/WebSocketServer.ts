@@ -304,6 +304,11 @@ export class WebSocketServer {
       this.broadcastToProject({ type: 'decision:rejected', decision }, projectId);
     });
 
+    this.track(decisionLog, 'decision:dismissed', (decision: any) => {
+      const projectId = decision.projectId ?? this.resolveAgentProjectId(decision.agentId);
+      this.broadcastToProject({ type: 'decision:dismissed', decision }, projectId);
+    });
+
     this.track(decisionLog, 'decisions:batch_confirmed', (decisions: Decision[]) => {
       if (decisions.length === 0) return;
       const projectId = decisions[0].projectId ?? this.resolveAgentProjectId(decisions[0].agentId);
@@ -314,6 +319,12 @@ export class WebSocketServer {
       if (decisions.length === 0) return;
       const projectId = decisions[0].projectId ?? this.resolveAgentProjectId(decisions[0].agentId);
       this.broadcastToProject({ type: 'decisions:batch', action: 'reject', decisions }, projectId);
+    });
+
+    this.track(decisionLog, 'decisions:batch_dismissed', (decisions: Decision[]) => {
+      if (decisions.length === 0) return;
+      const projectId = decisions[0].projectId ?? this.resolveAgentProjectId(decisions[0].agentId);
+      this.broadcastToProject({ type: 'decisions:batch', action: 'dismiss', decisions }, projectId);
     });
 
     this.track(decisionLog, 'intent:alert', (data: any) => {

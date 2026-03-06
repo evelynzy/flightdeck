@@ -911,6 +911,19 @@ export function LeadDashboard({ api, ws }: Props) {
     }
   }, [selectedLeadId]);
 
+  const handleDismissDecision = useCallback(async (decisionId: string) => {
+    if (!selectedLeadId) return;
+    useLeadStore.getState().updateDecision(selectedLeadId, decisionId, { status: 'dismissed', confirmedAt: new Date().toISOString() });
+    const resp = await fetch(`/api/decisions/${decisionId}/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (resp.ok) {
+      const decision = await resp.json();
+      useLeadStore.getState().updateDecision(selectedLeadId, decisionId, { status: decision.status, confirmedAt: decision.confirmedAt });
+    }
+  }, [selectedLeadId]);
+
   const handleOpenAgentChat = useCallback((agentId: string) => {
     useAppStore.getState().setSelectedAgent(agentId);
   }, []);
@@ -1529,6 +1542,7 @@ export function LeadDashboard({ api, ws }: Props) {
                           decisionId={d.id}
                           onConfirm={handleConfirmDecision}
                           onReject={handleRejectDecision}
+                          onDismiss={handleDismissDecision}
                         />
                       </div>
                     ))}
@@ -1834,7 +1848,7 @@ export function LeadDashboard({ api, ws }: Props) {
                     <span className="text-[10px] text-th-text-muted ml-auto">{decisions.length}</span>
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto">
-                    <DecisionPanelContent decisions={decisions} onConfirm={handleConfirmDecision} onReject={handleRejectDecision} />
+                    <DecisionPanelContent decisions={decisions} onConfirm={handleConfirmDecision} onReject={handleRejectDecision} onDismiss={handleDismissDecision} />
                   </div>
                   {/* Resize handle for decisions panel */}
                   <div

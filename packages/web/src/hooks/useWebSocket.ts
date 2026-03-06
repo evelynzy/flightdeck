@@ -341,7 +341,8 @@ export function useWebSocket() {
           break;
         }
         case 'decision:confirmed':
-        case 'decision:rejected': {
+        case 'decision:rejected':
+        case 'decision:dismissed': {
           const decisionId = msg.decisionId ?? msg.id;
           if (decisionId) {
             useAppStore.getState().removePendingDecision(decisionId);
