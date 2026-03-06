@@ -205,7 +205,17 @@ export class TaskDAG extends EventEmitter {
         linkedAutoTasks.push({ declaredId: task.taskId, autoId: autoMatch.id });
         inserted.push(this.getTask(leadId, autoMatch.id)!);
       } else {
-        const dagStatus = (task.dependsOn && task.dependsOn.length > 0) ? 'pending' : 'ready';
+        // Check if all dependencies are already satisfied at creation time.
+        // Without this, tasks added after their deps complete stay 'pending' forever
+        // because resolveReady() is only called reactively inside completeTask/skipTask.
+        let dagStatus: DagTaskStatus = 'ready';
+        if (task.dependsOn && task.dependsOn.length > 0) {
+          const allDepsSatisfied = task.dependsOn.every(depId => {
+            const dep = this.getTask(leadId, depId);
+            return !dep || dep.dagStatus === 'done' || dep.dagStatus === 'skipped';
+          });
+          dagStatus = allDepsSatisfied ? 'ready' : 'pending';
+        }
         this.db.drizzle.insert(dagTasks).values({
           id: task.taskId,
           leadId,
@@ -220,6 +230,17 @@ export class TaskDAG extends EventEmitter {
         }).run();
         inserted.push(this.getTask(leadId, task.taskId)!);
       }
+    }
+
+    // Promote any tasks whose deps are now satisfied (handles cross-batch resolution
+    // where a dep from a previous batch completed between batch declarations)
+    const newlyReady = this.resolveReady(leadId);
+    for (const t of newlyReady) {
+      this.db.drizzle
+        .update(dagTasks)
+        .set({ dagStatus: 'ready' })
+        .where(and(eq(dagTasks.id, t.id), eq(dagTasks.leadId, leadId), inArray(dagTasks.dagStatus, ['pending', 'blocked'])))
+        .run();
     }
 
     this.emit('dag:updated', { leadId });
@@ -747,6 +768,22 @@ export class TaskDAG extends EventEmitter {
     if (options.dagTaskId) {
       const task = this.getTask(leadId, options.dagTaskId);
       if (task && task.dagStatus === 'ready') return task;
+      // Auto-resolve: if task is pending but deps are already satisfied, promote to ready.
+      // This is a safety net for any code path that missed calling resolveReady().
+      if (task && task.dagStatus === 'pending') {
+        const allDepsSatisfied = task.dependsOn.every(depId => {
+          const dep = this.getTask(leadId, depId);
+          return !dep || dep.dagStatus === 'done' || dep.dagStatus === 'skipped';
+        });
+        if (allDepsSatisfied) {
+          this.db.drizzle.update(dagTasks)
+            .set({ dagStatus: 'ready' })
+            .where(and(eq(dagTasks.id, task.id), eq(dagTasks.leadId, leadId)))
+            .run();
+          this.emit('dag:updated', { leadId });
+          return { ...task, dagStatus: 'ready' };
+        }
+      }
       return null;
     }
 

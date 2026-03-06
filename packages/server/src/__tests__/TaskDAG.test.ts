@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { Database } from '../db/database.js';
+import { dagTasks } from '../db/schema.js';
 import { TaskDAG, VALID_TRANSITIONS, descriptionSimilarity } from '../tasks/TaskDAG.js';
 import type { DagTaskInput, DagTask } from '../tasks/TaskDAG.js';
 
@@ -1599,6 +1601,162 @@ describe('TaskDAG', () => {
       const result = dag.reopenTask('lead-1', 'b');
       expect(result).not.toBeNull();
       expect(result!.dagStatus).toBe('ready');
+    });
+  });
+
+  // ── Pre-satisfied dependency resolution tests ────────────────────────
+
+  describe('pre-satisfied dependency resolution', () => {
+    it('addTask after dependency is already done → should be ready immediately', () => {
+      // Create and complete task-a
+      dag.declareTaskBatch('lead-1', [{ taskId: 'task-a', role: 'Dev', description: 'First task' }]);
+      dag.startTask('lead-1', 'task-a', 'agent-1');
+      dag.completeTask('lead-1', 'task-a');
+
+      // Add task-b depending on already-done task-a
+      const taskB = dag.addTask('lead-1', {
+        taskId: 'task-b', role: 'Dev', description: 'Second task', dependsOn: ['task-a'],
+      });
+
+      // task-b should be 'ready' immediately, not stuck as 'pending'
+      expect(taskB.dagStatus).toBe('ready');
+    });
+
+    it('addTask after dependency is skipped → should be ready immediately', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'task-a', role: 'Dev' }]);
+      dag.skipTask('lead-1', 'task-a');
+
+      const taskB = dag.addTask('lead-1', {
+        taskId: 'task-b', role: 'Dev', dependsOn: ['task-a'],
+      });
+
+      expect(taskB.dagStatus).toBe('ready');
+    });
+
+    it('addTask with unsatisfied dependency → should be pending', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'task-a', role: 'Dev' }]);
+      // task-a is 'ready' but NOT 'done' or 'skipped'
+
+      const taskB = dag.addTask('lead-1', {
+        taskId: 'task-b', role: 'Dev', dependsOn: ['task-a'],
+      });
+
+      expect(taskB.dagStatus).toBe('pending');
+    });
+
+    it('addTask with mix of done and pending dependencies → should be pending', () => {
+      dag.declareTaskBatch('lead-1', [
+        { taskId: 'task-a', role: 'Dev' },
+        { taskId: 'task-b', role: 'Dev' },
+      ]);
+      dag.startTask('lead-1', 'task-a', 'agent-1');
+      dag.completeTask('lead-1', 'task-a');
+      // task-b is still 'ready' (not done)
+
+      const taskC = dag.addTask('lead-1', {
+        taskId: 'task-c', role: 'Dev', dependsOn: ['task-a', 'task-b'],
+      });
+
+      expect(taskC.dagStatus).toBe('pending');
+    });
+
+    it('declareTaskBatch with cross-batch pre-satisfied deps', () => {
+      // Batch 1: create and complete task-a
+      dag.declareTaskBatch('lead-1', [{ taskId: 'task-a', role: 'Dev' }]);
+      dag.startTask('lead-1', 'task-a', 'agent-1');
+      dag.completeTask('lead-1', 'task-a');
+
+      // Batch 2: task-b depends on task-a, task-c depends on task-b
+      const result = dag.declareTaskBatch('lead-1', [
+        { taskId: 'task-b', role: 'Dev', dependsOn: ['task-a'] },
+        { taskId: 'task-c', role: 'Dev', dependsOn: ['task-b'] },
+      ]);
+
+      // task-b should be ready (task-a is done)
+      expect(result.tasks[0].dagStatus).toBe('ready');
+      // task-c should be pending (task-b is not done yet)
+      expect(result.tasks[1].dagStatus).toBe('pending');
+    });
+
+    it('declareTaskBatch resolves tasks whose deps completed between batches', () => {
+      // Batch 1
+      dag.declareTaskBatch('lead-1', [
+        { taskId: 'task-a', role: 'Dev' },
+        { taskId: 'task-b', role: 'Dev', dependsOn: ['task-a'] },
+      ]);
+
+      // Complete task-a
+      dag.startTask('lead-1', 'task-a', 'agent-1');
+      dag.completeTask('lead-1', 'task-a');
+      // task-b should now be ready (completeTask calls resolveReady)
+      const taskBAfterComplete = dag.getTask('lead-1', 'task-b');
+      expect(taskBAfterComplete?.dagStatus).toBe('ready');
+
+      // Batch 2: add task-c depending on now-ready task-b — but task-b hasn't been started
+      // task-c should be pending (task-b is ready, not done)
+      const result = dag.declareTaskBatch('lead-1', [
+        { taskId: 'task-c', role: 'Dev', dependsOn: ['task-b'] },
+      ]);
+      expect(result.tasks[0].dagStatus).toBe('pending');
+    });
+  });
+
+  describe('findReadyTask with stuck pending tasks', () => {
+    it('auto-promotes pending task with satisfied deps when looked up by dagTaskId', () => {
+      // Simulate a task that somehow ended up as 'pending' despite deps being done.
+      // This can happen with auto-created tasks or race conditions.
+      dag.declareTaskBatch('lead-1', [
+        { taskId: 'task-a', role: 'Dev' },
+        { taskId: 'task-b', role: 'Dev', dependsOn: ['task-a'] },
+      ]);
+
+      // Complete task-a
+      dag.startTask('lead-1', 'task-a', 'agent-1');
+      dag.completeTask('lead-1', 'task-a');
+
+      // Verify task-b was promoted to ready by completeTask's resolveReady call
+      let taskB = dag.getTask('lead-1', 'task-b');
+      expect(taskB?.dagStatus).toBe('ready');
+
+      // Now force task-b back to 'pending' to simulate the stuck scenario
+      // (this would happen if resolveReady wasn't called)
+      db.drizzle
+        .update(dagTasks)
+        .set({ dagStatus: 'pending' })
+        .where(eq(dagTasks.id, 'task-b'))
+        .run();
+
+      taskB = dag.getTask('lead-1', 'task-b');
+      expect(taskB?.dagStatus).toBe('pending');
+
+      // findReadyTask should auto-promote and return it
+      const found = dag.findReadyTask('lead-1', { dagTaskId: 'task-b', role: 'Dev' });
+      expect(found).not.toBeNull();
+      expect(found!.dagStatus).toBe('ready');
+
+      // Verify the DB was updated too
+      const taskBAfter = dag.getTask('lead-1', 'task-b');
+      expect(taskBAfter?.dagStatus).toBe('ready');
+    });
+
+    it('does not promote pending task when deps are NOT satisfied', () => {
+      dag.declareTaskBatch('lead-1', [
+        { taskId: 'task-a', role: 'Dev' },
+        { taskId: 'task-b', role: 'Dev', dependsOn: ['task-a'] },
+      ]);
+      // task-a is 'ready' but NOT done
+
+      const found = dag.findReadyTask('lead-1', { dagTaskId: 'task-b', role: 'Dev' });
+      expect(found).toBeNull();
+
+      // task-b should still be pending
+      const taskB = dag.getTask('lead-1', 'task-b');
+      expect(taskB?.dagStatus).toBe('pending');
+    });
+
+    it('returns null for non-existent dagTaskId', () => {
+      const found = dag.findReadyTask('lead-1', { dagTaskId: 'nope', role: 'Dev' });
+      expect(found).toBeNull();
     });
   });
 });
