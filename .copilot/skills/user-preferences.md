@@ -67,4 +67,4 @@ Documented preferences from user feedback. Follow these when building new featur
 
 ## Release Process
 
-- **User creates git tags themselves** — do NOT create tags or push tags. Only prepare version bumps and CHANGELOG updates.
+- **User creates git tags themselves** — NEVER push git tags. User creates and pushes tags themselves. Only prepare version bumps and CHANGELOG updates. This is a hard rule — no exceptions.

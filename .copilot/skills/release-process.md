@@ -48,12 +48,8 @@ Step-by-step process for shipping a release, based on v0.3.0.
 ## Release
 
 ### 8. Tag & Push
-```bash
-git tag v0.3.0
-git push origin v0.3.0
-```
 
-Only push the tag AFTER QA sign-off.
+> **⛔ HARD RULE: NEVER push git tags. User creates and pushes tags themselves. Only prepare version bumps and CHANGELOG updates. No exceptions.**
 
 ## CHANGELOG Format
 
