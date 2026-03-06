@@ -36,6 +36,9 @@ interface CacheEntry {
 
 const CACHE_TTL_MS = 5_000;
 
+/** Maximum number of activity entries to query. Matches buildTimelineData in coordination.ts. */
+const ACTIVITY_QUERY_LIMIT = 10_000;
+
 // ── Keyframe event types ──────────────────────────────────────────
 
 const KEYFRAME_TYPES: Record<string, Keyframe['type']> = {
@@ -99,11 +102,11 @@ export class SessionReplay {
    *  3. If no team can be resolved, return [] — never unscoped data.
    */
   resolveActivities(leadId: string, timestamp: string, limit: number): ActivityEntry[] {
-    // 1. projectId-based filter (historical sessions with real project IDs)
+    // Tier 1: projectId-based SQL filter (historical sessions with real project UUIDs)
     const byProject = this.activityLedger.getUntil(timestamp, leadId, limit);
     if (byProject.length > 0) return byProject;
 
-    // 2. Resolve team membership from live agent roster
+    // Tier 2: Resolve team membership from live agent roster
     if (this.agentSource) {
       const teamIds = new Set<string>([leadId]);
       for (const agent of this.agentSource.getAll()) {
@@ -121,11 +124,22 @@ export class SessionReplay {
         );
       }
 
-      // Historical fallback: if leadId appears as an agentId in events,
-      // discover team from delegation chains
+      // Tier 3 — Historical replay without live agents: the lead was active
+      // in this session but has since disconnected. Discover the team from
+      // projectId references and delegation chains in the event log.
+      // First check if leadId appears as a projectId on any events
+      const projectEvents = allActivities.filter(a => a.projectId === leadId);
+      if (projectEvents.length > 0) {
+        const discoveredIds = new Set<string>();
+        for (const ev of projectEvents) discoveredIds.add(ev.agentId);
+        return allActivities.filter(
+          a => discoveredIds.has(a.agentId) || a.projectId === leadId,
+        );
+      }
+
+      // Fall back to delegation chain discovery from lead's own events
       const hasLeadEvents = allActivities.some(a => a.agentId === leadId);
       if (hasLeadEvents) {
-        // Seed with events from the lead itself
         const discoveredIds = new Set<string>([leadId]);
         for (const ev of allActivities) {
           if (ev.actionType === 'delegated' && discoveredIds.has(ev.agentId)) {
@@ -138,7 +152,7 @@ export class SessionReplay {
       }
     }
 
-    // 3. No agentSource and no projectId match → empty, NOT everything
+    // No agentSource and no projectId match → empty, NOT everything
     return [];
   }
 
@@ -151,7 +165,7 @@ export class SessionReplay {
     }
 
     // Try projectId filtering first, fall back to team-resolution for live agent IDs
-    const activities = this.resolveActivities(leadId, timestamp, 10_000);
+    const activities = this.resolveActivities(leadId, timestamp, ACTIVITY_QUERY_LIMIT);
     const dagTasks = this.taskDAG.getTasksAt(leadId, timestamp);
     const decisions = this.decisionLog.getDecisionsAt(leadId, timestamp);
     const locks = this.lockRegistry.getLocksAt(timestamp);
@@ -168,7 +182,7 @@ export class SessionReplay {
   /** Get significant moments for scrubber markers */
   getKeyframes(leadId: string): Keyframe[] {
     const activities = this.resolveActivities(
-      leadId, new Date().toISOString(), 10_000,
+      leadId, new Date().toISOString(), ACTIVITY_QUERY_LIMIT,
     );
 
     const keyframes: Keyframe[] = [];
@@ -196,7 +210,7 @@ export class SessionReplay {
 
   /** Get events in a time range, optionally filtered by type */
   getEventsInRange(leadId: string, from: string, to: string, types?: string[]): ActivityEntry[] {
-    const allActivities = this.resolveActivities(leadId, to, 10_000);
+    const allActivities = this.resolveActivities(leadId, to, ACTIVITY_QUERY_LIMIT);
     let filtered = allActivities.filter(a => a.timestamp >= from);
     if (types && types.length > 0) {
       filtered = filtered.filter(a => types.includes(a.actionType));

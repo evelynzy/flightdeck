@@ -237,6 +237,42 @@ describe('SessionReplay', () => {
       expect(keyframes[1].type).toBe('milestone');
       expect(keyframes[2].type).toBe('error');
     });
+
+    it('only emits keyframes for team members when using team resolution', () => {
+      const teamSpawn = makeActivity({
+        agentId: 'dev-1', actionType: 'sub_agent_spawned', projectId: '',
+        summary: 'Spawned dev', timestamp: T1,
+      });
+      const teamMilestone = makeActivity({
+        id: 2, agentId: 'dev-1', actionType: 'task_completed', projectId: '',
+        summary: 'Task done', timestamp: T2,
+      });
+      const foreignError = makeActivity({
+        id: 3, agentId: 'foreign-1', actionType: 'error', projectId: '',
+        summary: 'Foreign error', timestamp: T3,
+      });
+
+      const mocks = makeMocks({
+        agents: [
+          { id: 'lead-1', parentId: undefined },
+          { id: 'dev-1', parentId: 'lead-1' },
+          { id: 'foreign-1', parentId: 'other-lead' },
+        ],
+      });
+
+      // First call (projectId filter) → empty; second call (unfiltered) → all events
+      (mocks.activityLedger.getUntil as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce([])
+        .mockReturnValueOnce([teamSpawn, teamMilestone, foreignError]);
+
+      const replay = new SessionReplay(mocks.activityLedger, mocks.taskDAG, mocks.decisionLog, mocks.lockRegistry, mocks.agentSource);
+      const keyframes = replay.getKeyframes('lead-1');
+
+      // Should only have team keyframes (spawn + milestone), NOT the foreign error
+      expect(keyframes).toHaveLength(2);
+      expect(keyframes[0].type).toBe('spawn');
+      expect(keyframes[1].type).toBe('milestone');
+    });
   });
 
   describe('getEventsInRange', () => {
@@ -407,6 +443,35 @@ describe('SessionReplay', () => {
 
       expect(result).toHaveLength(3);
       expect(result.map(a => a.agentId).sort()).toEqual(['dev-1', 'dev-2', 'lead-1']);
+    });
+
+    it('discovers team via projectId references when lead has no events but events reference leadId as projectId', () => {
+      // Historical scenario: leadId matches projectId on events, but lead
+      // itself has no events in the log (only its children do).
+      const devEvent = makeActivity({
+        agentId: 'dev-1', projectId: 'lead-1', timestamp: T1,
+      });
+      const archEvent = makeActivity({
+        id: 2, agentId: 'arch-1', projectId: 'lead-1', timestamp: T2,
+      });
+      const foreignEvent = makeActivity({
+        id: 3, agentId: 'foreign-1', projectId: 'other-proj', timestamp: T3,
+      });
+
+      const mocks = makeMocks({
+        agents: [],  // No live agents
+      });
+
+      (mocks.activityLedger.getUntil as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce([])  // tier 1: projectId SQL filter
+        .mockReturnValueOnce([devEvent, archEvent, foreignEvent]);
+
+      const replay = new SessionReplay(mocks.activityLedger, mocks.taskDAG, mocks.decisionLog, mocks.lockRegistry, mocks.agentSource);
+      const result = replay.resolveActivities('lead-1', T3, 10_000);
+
+      // Should discover dev-1 and arch-1 via projectId='lead-1', exclude foreign-1
+      expect(result).toHaveLength(2);
+      expect(result.map(a => a.agentId).sort()).toEqual(['arch-1', 'dev-1']);
     });
 
     it('includes events matching projectId in team-filtered results', () => {
