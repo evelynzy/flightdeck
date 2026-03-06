@@ -19,12 +19,11 @@ import { useAppStore } from '../../stores/appStore';
 import { useLeadStore, type AgentComm } from '../../stores/leadStore';
 import { useCanvasLayout } from '../../hooks/useCanvasLayout';
 import { useCanvasGraph } from '../../hooks/useCanvasGraph';
-import { apiFetch } from '../../hooks/useApi';
+import { useHistoricalAgents } from '../../hooks/useHistoricalAgents';
 import { AgentNode } from './AgentNode';
 import { CommEdge } from './CommEdge';
 import { CanvasToolbar } from './CanvasToolbar';
 import { FocusPanel } from './FocusPanel';
-import type { Project } from '../../types';
 
 // ── Custom node/edge type maps ─────────────────────────────────────
 
@@ -44,50 +43,9 @@ function CanvasInner() {
   const comms = project?.comms ?? EMPTY_COMMS;
 
   // Historical data fallback: derive agents from keyframes when no live agents
-  const [historicalAgents, setHistoricalAgents] = useState<any[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { agents: historicalAgents, loading: loadingHistorical } = useHistoricalAgents(liveAgents.length, selectedLeadId);
 
-  useEffect(() => {
-    if (liveAgents.length > 0) return;
-    apiFetch<Project[]>('/projects')
-      .then((ps) => {
-        if (!Array.isArray(ps)) return;
-        const active = ps.filter((p) => p.status !== 'archived');
-        setProjects(active);
-        if (!selectedProjectId && active.length > 0) setSelectedProjectId(active[0].id);
-      })
-      .catch(() => {});
-  }, [liveAgents.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const effectiveId = selectedLeadId || selectedProjectId;
-
-  useEffect(() => {
-    if (liveAgents.length > 0 || !effectiveId) return;
-    apiFetch<{ keyframes: any[] }>(`/replay/${effectiveId}/keyframes`)
-      .then((data) => {
-        const kf = data?.keyframes ?? [];
-        const derived: any[] = [];
-        for (const frame of kf) {
-          if (frame.type === 'spawn') {
-            const roleMatch = frame.label?.match(/^Spawned\s+(.+?):\s/);
-            const roleName = roleMatch?.[1] ?? 'Agent';
-            derived.push({
-              id: `hist-${derived.length}`,
-              status: 'completed',
-              role: { id: roleName.toLowerCase().replace(/\s+/g, '-'), name: roleName },
-              model: undefined,
-              inputTokens: 0,
-              outputTokens: 0,
-            });
-          }
-        }
-        setHistoricalAgents(derived);
-      })
-      .catch(() => {});
-  }, [liveAgents.length, effectiveId]);
-
-  const agents = liveAgents.length > 0 ? liveAgents : historicalAgents;
+  const agents = liveAgents.length > 0 ? liveAgents : (historicalAgents as any[]);
 
   const [layout, updateLayout] = useCanvasLayout(selectedLeadId);
   const { nodes: graphNodes, edges: graphEdges } = useCanvasGraph(agents, comms, layout);
@@ -158,7 +116,7 @@ function CanvasInner() {
           <div className="text-4xl mb-3">🔗</div>
           <h2 className="text-lg font-semibold text-th-text-alt mb-1">Agent Canvas</h2>
           <p className="text-sm text-th-text-muted mb-3">
-            {projects.length > 0
+            {loadingHistorical
               ? 'Loading agent graph from historical data...'
               : 'Agents will appear here as nodes, with connections showing their communication. Thicker edges mean more messages between agents.'}
           </p>

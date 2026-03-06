@@ -80,6 +80,12 @@ vi.mock('../../stores/leadStore', () => ({
   }),
 }));
 
+// Mock useHistoricalAgents
+vi.mock('../../hooks/useHistoricalAgents', () => ({
+  useHistoricalAgents: () => ({ agents: [], loading: false }),
+  deriveAgentsFromKeyframes: () => [],
+}));
+
 import { CanvasPage } from '../Canvas';
 import { CanvasToolbar } from '../Canvas/CanvasToolbar';
 import { TaskPill } from '../Canvas/TaskPill';

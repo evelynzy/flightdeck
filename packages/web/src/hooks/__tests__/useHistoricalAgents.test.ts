@@ -22,7 +22,7 @@ describe('deriveAgentsFromKeyframes', () => {
     expect(agents[0].status).toBe('idle'); // not exited
   });
 
-  it('marks terminated agents as completed', () => {
+  it('marks exited agents as terminated', () => {
     const agents = deriveAgentsFromKeyframes([
       kf('spawn', 'Spawned Developer: task A'),
       kf('spawn', 'Spawned QA Tester: testing'),
@@ -30,7 +30,7 @@ describe('deriveAgentsFromKeyframes', () => {
     ]);
     expect(agents).toHaveLength(2);
     expect(agents[0].role.name).toBe('Developer');
-    expect(agents[0].status).toBe('completed'); // was terminated
+    expect(agents[0].status).toBe('terminated');
     expect(agents[1].role.name).toBe('QA Tester');
     expect(agents[1].status).toBe('idle'); // still alive
   });
@@ -64,8 +64,8 @@ describe('deriveAgentsFromKeyframes', () => {
       kf('agent_exit', 'Terminated Developer (aaa)'),
     ]);
     expect(agents).toHaveLength(2);
-    // First Developer gets marked completed, second stays idle
-    expect(agents[0].status).toBe('completed');
+    // First Developer gets marked terminated, second stays idle
+    expect(agents[0].status).toBe('terminated');
     expect(agents[1].status).toBe('idle');
   });
 });

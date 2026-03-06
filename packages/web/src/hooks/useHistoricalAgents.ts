@@ -15,6 +15,8 @@ export interface DerivedAgent {
   childIds: never[];
   contextWindowSize: number;
   contextWindowUsed: number;
+  outputPreview: string;
+  autopilot: boolean;
 }
 
 const ROLE_ICONS: Record<string, string> = {
@@ -113,6 +115,8 @@ function normalize(a: any): DerivedAgent {
     childIds: [],
     contextWindowSize: a.contextWindowSize ?? 0,
     contextWindowUsed: a.contextWindowUsed ?? 0,
+    outputPreview: a.outputPreview ?? '',
+    autopilot: a.autopilot ?? false,
   };
 }
 
@@ -140,7 +144,7 @@ export function deriveAgentsFromKeyframes(kf: ReplayKeyframe[]): DerivedAgent[] 
 
       // Check if this agent was later terminated
       const remainingExits = roleExitCounts.get(roleName) ?? 0;
-      const status = remainingExits > 0 ? 'completed' : 'idle';
+      const status = remainingExits > 0 ? 'terminated' : 'idle';
       if (remainingExits > 0) roleExitCounts.set(roleName, remainingExits - 1);
 
       agents.push({
@@ -154,6 +158,8 @@ export function deriveAgentsFromKeyframes(kf: ReplayKeyframe[]): DerivedAgent[] 
         childIds: [],
         contextWindowSize: 0,
         contextWindowUsed: 0,
+        outputPreview: '',
+        autopilot: false,
       });
     }
   }

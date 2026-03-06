@@ -242,6 +242,8 @@ export function MissionControlPage() {
             childIds: [] as never[],
             contextWindowSize: 0,
             contextWindowUsed: 0,
+            outputPreview: '',
+            autopilot: false,
           });
         }
         setHistoricalAgents(derived);
