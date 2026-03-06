@@ -67,6 +67,7 @@ export function OverviewPage(_props: Props) {
   const [totalTokens, setTotalTokens] = useState(0);
   const [totalTasks, setTotalTasks] = useState(0);
   const mountedRef = useRef(true);
+  const fetchIdRef = useRef(0);
 
   // Use live agents if available, otherwise fall back to API-fetched historical agents
   const displayAgents = agents.length > 0 ? agents : historicalAgents;
@@ -74,6 +75,7 @@ export function OverviewPage(_props: Props) {
   // ── Fetch overview data ────────────────────────────────────────
   const fetchData = useCallback(async () => {
     if (!effectiveId) return;
+    const requestId = ++fetchIdRef.current;
 
     try {
       // Fetch keyframes first — they drive all visualization panels
@@ -123,6 +125,9 @@ export function OverviewPage(_props: Props) {
 
         if (mountedRef.current) setHistoricalAgents(resolvedAgents);
       }
+
+      // Bail if a newer request was started (rapid project switching)
+      if (fetchIdRef.current !== requestId) return;
 
       // Use live agents if available, otherwise the resolved historical data
       const currentAgents = agents.length > 0 ? agents : resolvedAgents;
