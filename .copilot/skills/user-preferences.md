@@ -67,4 +67,4 @@ Documented preferences from user feedback. Follow these when building new featur
 
 ## Release Process
 
-- **User creates git tags themselves** — NEVER push git tags. User creates and pushes tags themselves. Only prepare version bumps and CHANGELOG updates. This is a hard rule — no exceptions.
+- **NEVER touch git tags** — no create, no delete, no push. Tags are 100% user-managed. Only do version bumps in package.json and CHANGELOG. This is a HARD RULE.

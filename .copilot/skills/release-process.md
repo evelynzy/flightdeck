@@ -49,7 +49,7 @@ Step-by-step process for shipping a release, based on v0.3.0.
 
 ### 8. Tag & Push
 
-> **⛔ HARD RULE: NEVER push git tags. User creates and pushes tags themselves. Only prepare version bumps and CHANGELOG updates. No exceptions.**
+> **⛔ HARD RULE: NEVER touch git tags — no create, no delete, no push. Tags are 100% user-managed. Only do version bumps in package.json and CHANGELOG. No exceptions.**
 
 ## CHANGELOG Format
 
