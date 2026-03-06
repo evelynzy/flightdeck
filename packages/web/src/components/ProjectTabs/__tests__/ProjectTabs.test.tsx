@@ -155,6 +155,24 @@ describe('ProjectTabs', () => {
     expect(onChange).toHaveBeenCalledWith('agent-uuid-1');
   });
 
+  it('falls back to lead.id when projectId is empty string (untitled project)', () => {
+    vi.mocked(useAppStore).mockImplementation((selector: any) =>
+      selector({
+        agents: [
+          { id: 'agent-uuid-1', projectId: '', role: { id: 'lead', name: 'Lead' }, parentId: null, projectName: '', status: 'running' },
+        ],
+      }),
+    );
+    vi.mocked(useProjects).mockReturnValue({ projects: [], loading: false });
+
+    render(<ProjectTabs activeId="agent-uuid-1" onChange={onChange} />);
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(1);
+    fireEvent.click(tabs[0]);
+    // Empty string projectId is falsy, so falls back to lead.id
+    expect(onChange).toHaveBeenCalledWith('agent-uuid-1');
+  });
+
   it('auto-selects first tab when activeId is null', () => {
     vi.mocked(useAppStore).mockImplementation((selector: any) =>
       selector({ agents: [] }),

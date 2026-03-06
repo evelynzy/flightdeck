@@ -41,7 +41,10 @@ export function OverviewPage(_props: Props) {
   // match the projectId stored in activity events.
   const effectiveId = useMemo(() => {
     if (selectedProjectId) return selectedProjectId;
-    if (selectedLeadId) return selectedLeadId;
+    if (selectedLeadId) {
+      const lead = agents.find((a) => a.id === selectedLeadId);
+      return lead?.projectId || selectedLeadId;
+    }
     const lead = agents.find((a) => a.role?.id === 'lead' && !a.parentId);
     if (lead) return lead.projectId || lead.id;
     return projects.length > 0 ? projects[0].id : null;
