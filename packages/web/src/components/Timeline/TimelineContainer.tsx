@@ -333,21 +333,27 @@ function TimelineContent({ data, width: containerWidth, liveMode, onLiveModeChan
   }, [visibleRange]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    // Ctrl+wheel or pinch = zoom
+    // Ctrl+wheel or pinch = zoom (time axis)
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       setZoomLevel((prev) => {
         const next = e.deltaY < 0 ? prev * 1.15 : prev / 1.15;
         return Math.max(1, Math.min(50, next));
       });
-    } else if (zoomLevel > 1) {
-      // Plain scroll pans horizontally when zoomed in (both deltaX and deltaY)
-      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      if (delta !== 0) {
+      return;
+    }
+
+    // Horizontal pan: Shift+wheel or trackpad horizontal gesture (deltaX)
+    if (zoomLevel > 1) {
+      const horizontalDelta = e.shiftKey ? e.deltaY : e.deltaX;
+      if (horizontalDelta !== 0) {
         e.preventDefault();
-        setPanOffset((prev) => Math.max(0, Math.min(1, prev + delta * 0.002)));
+        setPanOffset((prev) => Math.max(0, Math.min(1, prev + horizontalDelta * 0.002)));
+        return;
       }
     }
+
+    // Plain vertical scroll: let browser handle natively (no preventDefault)
   }, [zoomLevel]);
 
   // ── Drag-to-pan ──────────────────────────────────────────────────
@@ -393,7 +399,7 @@ function TimelineContent({ data, width: containerWidth, liveMode, onLiveModeChan
     isDraggingRef.current = true;
     dragStartXRef.current = e.clientX;
     dragStartOffsetRef.current = panOffset;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     e.preventDefault();
   }, [zoomLevel, panOffset]);
 
