@@ -207,11 +207,11 @@ export function OverviewPage(_props: Props) {
         <KeyStats agents={displayAgents} totalTokens={totalTokens} sessionStart={sessionStart} />
       </div>
 
-      {/* Agent Activity Heatmap */}
-      <AgentHeatmap agents={displayAgents} buckets={heatmapBuckets} />
-
       {/* Milestones */}
       <MilestoneTimeline keyframes={keyframes} />
+
+      {/* Agent Activity Heatmap */}
+      <AgentHeatmap agents={displayAgents} buckets={heatmapBuckets} />
       </div>
     </div>
   );
