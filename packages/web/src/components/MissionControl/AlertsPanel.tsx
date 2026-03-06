@@ -72,25 +72,7 @@ export function detectAlerts(
     }
   }
 
-  // 2. Stuck agents (running >10 min since creation with no indication of progress)
-  for (const agent of agents) {
-    if (agent.status === 'running' && agent.createdAt) {
-      const runningMs = now - new Date(agent.createdAt).getTime();
-      if (runningMs > 600_000) {
-        const roleName = typeof agent.role === 'object' ? agent.role.name : agent.role;
-        alerts.push({
-          id: `stuck-${agent.id}`,
-          severity: 'warning',
-          icon: '⏱️',
-          title: `${roleName} may be stuck`,
-          detail: `Running for ${Math.round(runningMs / 60000)} min with no completion.`,
-          timestamp: now,
-        });
-      }
-    }
-  }
-
-  // 3. Pending decisions (>3 min old)
+  // 2. Pending decisions (>3 min old)
   for (const decision of decisions) {
     if (decision.needsConfirmation && decision.status === 'recorded') {
       const age = now - new Date(decision.timestamp).getTime();
