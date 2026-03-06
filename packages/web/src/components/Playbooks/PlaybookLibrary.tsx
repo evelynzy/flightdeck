@@ -38,11 +38,9 @@ export function PlaybookLibrary() {
 
   const handleDuplicate = useCallback(async (pb: Playbook) => {
     try {
-      const resp = await apiFetch(`/api/playbooks/${pb.id}/duplicate`, { method: 'POST' });
-      if (resp.ok) {
-        add('success', `Duplicated "${pb.name}"`);
-        fetchUserPlaybooks();
-      }
+      await apiFetch(`/playbooks/${pb.id}/duplicate`, { method: 'POST' });
+      add('success', `Duplicated "${pb.name}"`);
+      fetchUserPlaybooks();
     } catch {
       add('error', 'Failed to duplicate playbook');
     }
@@ -50,11 +48,9 @@ export function PlaybookLibrary() {
 
   const handleDelete = useCallback(async (pb: Playbook) => {
     try {
-      const resp = await apiFetch(`/api/playbooks/${pb.id}`, { method: 'DELETE' });
-      if (resp.ok) {
-        setUserPlaybooks((prev) => prev.filter((p) => p.id !== pb.id));
-        add('success', `Deleted "${pb.name}"`);
-      }
+      await apiFetch(`/playbooks/${pb.id}`, { method: 'DELETE' });
+      setUserPlaybooks((prev) => prev.filter((p) => p.id !== pb.id));
+      add('success', `Deleted "${pb.name}"`);
     } catch {
       add('error', 'Failed to delete playbook');
     }

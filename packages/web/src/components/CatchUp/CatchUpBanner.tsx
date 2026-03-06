@@ -168,9 +168,7 @@ export function CatchUpBanner() {
     if (!since || !leadId) return;
 
     try {
-      const resp = await apiFetch(`/api/summary/${leadId}/since?t=${encodeURIComponent(since)}`);
-      if (!resp.ok) return;
-      const body: CatchUpResponse = await resp.json();
+      const body = await apiFetch<CatchUpResponse>(`/summary/${leadId}/since?t=${encodeURIComponent(since)}`);
 
       // Only show if there are meaningful events
       const s = body.summary;

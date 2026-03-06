@@ -55,9 +55,9 @@ export function OverviewPage(_props: Props) {
 
     try {
       // Fetch keyframes for milestones
-      const kfResp = await apiFetch(`/api/replay/${leadId}/keyframes`);
-      if (kfResp.ok && mountedRef.current) {
-        const kf: ReplayKeyframe[] = await kfResp.json();
+      const kfData = await apiFetch<{ keyframes: ReplayKeyframe[] }>(`/replay/${leadId}/keyframes`);
+      const kf: ReplayKeyframe[] = kfData.keyframes ?? [];
+      if (mountedRef.current) {
         setKeyframes(kf);
 
         // Derive timeline data from keyframes
