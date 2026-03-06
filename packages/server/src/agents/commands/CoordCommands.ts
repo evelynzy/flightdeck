@@ -33,15 +33,6 @@ const COMMIT_REGEX = /⟦⟦\s*COMMIT\s*(\{.*?\})\s*⟧⟧/s;
 
 // ── Handlers ──────────────────────────────────────────────────────────
 
-/** Extract package root from a file path (e.g. "packages/web" from "packages/web/src/utils/foo.ts"). */
-function getPackageRoot(filePath: string): string {
-  const parts = filePath.split(path.sep);
-  // packages/<name>/... → "packages/<name>"
-  if (parts[0] === 'packages' && parts.length > 1) return parts.slice(0, 2).join(path.sep);
-  // src/... or other top-level → first segment
-  return parts[0];
-}
-
 function handleLockRequest(ctx: CommandHandlerContext, agent: Agent, data: string): void {
   const match = data.match(LOCK_REQUEST_REGEX);
   if (!match) return;
@@ -237,38 +228,24 @@ async function handleCommit(ctx: CommandHandlerContext, agent: Agent, data: stri
     // Merge: locked files + any explicitly specified files (deduplicated)
     const allPaths = new Set([...lockedPaths, ...explicitFiles]);
 
-    // Auto-include untracked files in packages where agent has locked files.
-    // Uses package-root matching (e.g. packages/web/) rather than exact directories
-    // to catch new files in sibling directories (e.g. utils/ when hooks/ is locked).
+    // Report untracked and modified files so the agent can decide whether to include them.
+    // No assumptions about project layout — just list what git sees and let the agent decide.
     const cwd = agent.cwd || process.cwd();
     try {
-      const { stdout: untrackedOut } = await execFileAsync('git', ['ls-files', '--others', '--exclude-standard'], { cwd, timeout: 10_000 });
-      const untrackedFiles = untrackedOut.trim().split('\n').filter(Boolean);
-      const packageRoots = new Set([...allPaths].map(f => getPackageRoot(f)));
-      const relatedUntracked = untrackedFiles.filter(f => packageRoots.has(getPackageRoot(f)));
-      relatedUntracked.forEach(f => allPaths.add(f));
-      if (relatedUntracked.length > 0) {
-        agent.sendMessage(`[System] Auto-including ${relatedUntracked.length} new file(s): ${relatedUntracked.join(', ')}`);
+      const { stdout: statusOut } = await execFileAsync('git', ['status', '--porcelain'], { cwd, timeout: 10_000 });
+      const lines = statusOut.trimEnd().split('\n').filter(Boolean);
+      // Porcelain format: 'XY path' — extract path after the 3-char prefix (2 status chars + space)
+      const uncommitted = lines
+        .filter(l => l.startsWith('??') || l.startsWith(' M') || l.startsWith('M ') || l.startsWith('MM') || l.startsWith('A ') || l.startsWith(' A'))
+        .map(l => l.substring(3))
+        .filter(f => !allPaths.has(f));
+      if (uncommitted.length > 0) {
+        const listed = uncommitted.slice(0, 15).join(', ');
+        const more = uncommitted.length > 15 ? ` (and ${uncommitted.length - 15} more)` : '';
+        agent.sendMessage(`[System] ⚠ Warning: ${uncommitted.length} uncommitted file(s) not in this commit: ${listed}${more}. Use LOCK_FILE to include them, or specify them with {"files": [...]}.`);
       }
     } catch {
-      logger.debug('commit', `Untracked file detection failed for ${agent.id.slice(0, 8)}`);
-    }
-
-    // Warn about modified-but-unstaged files in related packages.
-    // These could be from the agent's work that wasn't locked — don't auto-include
-    // (could belong to another agent), but warn so the agent can review.
-    try {
-      const { stdout: modifiedOut } = await execFileAsync('git', ['diff', '--name-only'], { cwd, timeout: 10_000 });
-      const modifiedFiles = modifiedOut.trim().split('\n').filter(Boolean);
-      const packageRoots = new Set([...allPaths].map(f => getPackageRoot(f)));
-      const relatedModified = modifiedFiles.filter(f => !allPaths.has(f) && packageRoots.has(getPackageRoot(f)));
-      if (relatedModified.length > 0) {
-        const listed = relatedModified.slice(0, 10).join(', ');
-        const more = relatedModified.length > 10 ? ` (and ${relatedModified.length - 10} more)` : '';
-        agent.sendMessage(`[System] ⚠ Warning: ${relatedModified.length} modified file(s) in related packages not included in this commit: ${listed}${more}. Use LOCK_FILE to include them if they're part of your changes.`);
-      }
-    } catch {
-      logger.debug('commit', `Modified file detection failed for ${agent.id.slice(0, 8)}`);
+      logger.debug('commit', `Pre-commit status check failed for ${agent.id.slice(0, 8)}`);
     }
 
     const files = Array.from(allPaths);
