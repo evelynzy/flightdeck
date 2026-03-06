@@ -52,7 +52,7 @@ describe('TokenEconomics — burn rate display', () => {
     expect(screen.getByText('~8 min left')).toBeDefined();
   });
 
-  it('shows "Calculating..." when no burn rate data', () => {
+  it('shows agent with no burn rate — no burn label rendered', () => {
     useAppStore.getState().setAgents([
       makeAgent({
         inputTokens: 10_000,
@@ -62,7 +62,8 @@ describe('TokenEconomics — burn rate display', () => {
       }),
     ]);
     render(<TokenEconomics />);
-    expect(screen.getByText('Calculating…')).toBeDefined();
+    // Agent exists and is rendered, but no "Calculating..." since burn rate display was removed
+    expect(screen.queryByText('Calculating…')).toBeNull();
   });
 
   it('shows Burn Rate column header', () => {

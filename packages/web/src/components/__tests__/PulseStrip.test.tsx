@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { useAppStore } from '../../stores/appStore';
 import { PulseStrip } from '../Pulse/PulseStrip';
 import type { AgentInfo, Role } from '../../types';
@@ -42,7 +43,7 @@ beforeEach(() => {
 
 describe('PulseStrip', () => {
   it('renders nothing when no agents exist', () => {
-    const { container } = render(<PulseStrip />);
+    const { container } = render(<MemoryRouter><PulseStrip /></MemoryRouter>);
     expect(container.firstChild).toBeNull();
   });
 
@@ -51,7 +52,7 @@ describe('PulseStrip', () => {
       makeAgent({ inputTokens: 50_000, outputTokens: 10_000, status: 'running' }),
       makeAgent({ inputTokens: 30_000, outputTokens: 5_000, status: 'idle' }),
     ]);
-    render(<PulseStrip />);
+    render(<MemoryRouter><PulseStrip /></MemoryRouter>);
     // Token count: 50k + 10k + 30k + 5k = 95k
     expect(screen.getByText('~95k')).toBeDefined();
   });
@@ -73,7 +74,7 @@ describe('PulseStrip', () => {
         timestamp: new Date().toISOString(),
       },
     ]);
-    render(<PulseStrip />);
+    render(<MemoryRouter><PulseStrip /></MemoryRouter>);
     // 1 pending decision from appStore + 0 permission requests
     expect(screen.getByText('1')).toBeDefined();
     expect(screen.getByText('pending')).toBeDefined();
@@ -81,7 +82,7 @@ describe('PulseStrip', () => {
 
   it('shows zero pending when no decisions are waiting', () => {
     setAgents([makeAgent({ status: 'running' })]);
-    render(<PulseStrip />);
+    render(<MemoryRouter><PulseStrip /></MemoryRouter>);
     expect(screen.getByText('0')).toBeDefined();
   });
 
@@ -94,7 +95,7 @@ describe('PulseStrip', () => {
       makeAgent({ status: 'idle' }),
       makeAgent({ status: 'failed' }),
     ]);
-    render(<PulseStrip />);
+    render(<MemoryRouter><PulseStrip /></MemoryRouter>);
     // Running count (3 running agents)
     expect(screen.getByText('3')).toBeDefined();
     // Idle count (2 idle agents)
@@ -114,7 +115,7 @@ describe('PulseStrip', () => {
         contextWindowUsed: 40_000,
       }),
     ]);
-    const { container } = render(<PulseStrip />);
+    const { container } = render(<MemoryRouter><PulseStrip /></MemoryRouter>);
     // Should have pressure bars (mini bar elements)
     const bars = container.querySelectorAll('[class*="rounded-full"][class*="bg-"]');
     expect(bars.length).toBeGreaterThan(0);
@@ -122,7 +123,7 @@ describe('PulseStrip', () => {
 
   it('handles agents with no token data gracefully', () => {
     setAgents([makeAgent({ status: 'running' })]);
-    const { container } = render(<PulseStrip />);
+    const { container } = render(<MemoryRouter><PulseStrip /></MemoryRouter>);
     expect(container.firstChild).not.toBeNull();
   });
 });
