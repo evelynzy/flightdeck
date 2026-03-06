@@ -391,7 +391,7 @@ export class WebSocketServer {
           const agent = this.agentManager.get(msg.agentId);
           if (agent) {
             logger.info('ws', `Input → ${agent.role.name} (${msg.agentId.slice(0, 8)}): "${(msg.text || '').slice(0, 80)}"`);
-            agent.write(msg.text);
+            agent.write(msg.text, { priority: true });
           } else {
             logger.warn('ws', `Input for unknown agent ${msg.agentId.slice(0, 8)}`);
           }

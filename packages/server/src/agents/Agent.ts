@@ -375,12 +375,12 @@ When you discover something important about the codebase, a pattern, a gotcha, o
     return true;
   }
 
-  write(data: PromptContent): void {
+  write(data: PromptContent, opts?: { priority?: boolean }): void {
     if (this.terminated) return;
     if (this.acpConnection?.isConnected) {
       this.status = 'running';
       this.events.notifyStatus(this.status);
-      this.acpConnection.prompt(data).catch((err) => {
+      this.acpConnection.prompt(data, opts).catch((err) => {
         logger.error('agent', `Prompt failed for ${this.role.name} (${this.id.slice(0, 8)}): ${err?.message || err}`);
         // Reset status so agent doesn't get stuck as 'running'
         if (this.status === 'running') {
@@ -392,20 +392,28 @@ When you discover something important about the codebase, a pattern, a gotcha, o
   }
 
   /** Send a message to this agent (used for inter-agent communication and completion callbacks) */
-  sendMessage(message: PromptContent): void {
-    this.write(message);
+  sendMessage(message: PromptContent, opts?: { priority?: boolean }): void {
+    this.write(message, opts);
   }
 
   /** Queue a message — delivered after the agent finishes its current prompt */
-  queueMessage(message: PromptContent): void {
+  queueMessage(message: PromptContent, opts?: { priority?: boolean }): void {
     if (this.systemPaused) {
-      this.pendingMessages.push(message);
+      if (opts?.priority) {
+        this.pendingMessages.unshift(message);
+      } else {
+        this.pendingMessages.push(message);
+      }
       return;
     }
     if (this.status === 'idle') {
-      this.write(message);
+      this.write(message, opts);
     } else {
-      this.pendingMessages.push(message);
+      if (opts?.priority) {
+        this.pendingMessages.unshift(message);
+      } else {
+        this.pendingMessages.push(message);
+      }
     }
   }
 

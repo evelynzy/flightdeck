@@ -269,14 +269,18 @@ export class AcpConnection extends EventEmitter {
     this.agentCapabilities = initResult.agentCapabilities ?? null;
   }
 
-  async prompt(content: PromptContent): Promise<{ stopReason: acp.StopReason; usage?: { inputTokens: number; outputTokens: number } }> {
+  async prompt(content: PromptContent, opts?: { priority?: boolean }): Promise<{ stopReason: acp.StopReason; usage?: { inputTokens: number; outputTokens: number } }> {
     if (!this.connection || !this.sessionId) {
       throw new Error('ACP connection not established');
     }
 
     // Queue if already prompting — will be sent when current prompt completes
     if (this._isPrompting) {
-      this.promptQueue.push(content);
+      if (opts?.priority) {
+        this.promptQueue.unshift(content);
+      } else {
+        this.promptQueue.push(content);
+      }
       return { stopReason: 'end_turn' as acp.StopReason };
     }
 
