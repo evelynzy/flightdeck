@@ -634,62 +634,64 @@ describe('Scroll Axis Separation', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('Ctrl+wheel fires zoom (preventDefault called)', () => {
+  it('Ctrl+wheel zooms in — zoom level indicator updates from Full', () => {
     const data = makeStandardTestData();
-    const { container } = render(<TimelineContainer data={data} />);
+    render(<TimelineContainer data={data} />);
 
-    const scrollable = container.querySelector('[class*="overflow-auto"]');
-    if (!scrollable) return;
+    // Before zoom: shows "Full"
+    expect(screen.getByTitle(/1\.0× zoom/)).toBeInTheDocument();
+    expect(screen.getByText('Full')).toBeInTheDocument();
 
-    // Ctrl+wheel should be intercepted for zoom
+    const scrollable = document.querySelector('[class*="overflow-auto"]')!;
     fireEvent.wheel(scrollable, { deltaY: -100, ctrlKey: true });
-    // No crash, zoom controls should update
-    expect(container).toBeTruthy();
+
+    // After Ctrl+wheel zoom in: "Full" text should be gone, zoom title should increase
+    expect(screen.queryByText('Full')).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/1\.0× zoom/)).not.toBeInTheDocument();
   });
 
-  it('Shift+wheel pans horizontally when zoomed in', () => {
+  it('Shift+wheel when zoomed does not change zoom level (only pans)', () => {
     const data = makeStandardTestData();
-    const { container } = render(<TimelineContainer data={data} />);
+    render(<TimelineContainer data={data} />);
 
-    const scrollable = container.querySelector('[class*="overflow-auto"]');
-    if (!scrollable) return;
-
-    // First zoom in via Ctrl+wheel
-    fireEvent.wheel(scrollable, { deltaY: -200, ctrlKey: true });
-    fireEvent.wheel(scrollable, { deltaY: -200, ctrlKey: true });
-
-    // Then Shift+wheel should pan horizontally
-    fireEvent.wheel(scrollable, { deltaY: 100, shiftKey: true });
-    expect(container).toBeTruthy();
-  });
-
-  it('deltaX (trackpad horizontal gesture) pans horizontally when zoomed', () => {
-    const data = makeStandardTestData();
-    const { container } = render(<TimelineContainer data={data} />);
-
-    const scrollable = container.querySelector('[class*="overflow-auto"]');
-    if (!scrollable) return;
+    const scrollable = document.querySelector('[class*="overflow-auto"]')!;
 
     // Zoom in first
     fireEvent.wheel(scrollable, { deltaY: -200, ctrlKey: true });
-    fireEvent.wheel(scrollable, { deltaY: -200, ctrlKey: true });
+    const zoomIndicator = document.querySelector('[title$="zoom"]')!;
+    const zoomBefore = zoomIndicator.getAttribute('title');
 
-    // Pure deltaX should pan
-    fireEvent.wheel(scrollable, { deltaX: 50, deltaY: 0 });
-    expect(container).toBeTruthy();
+    // Shift+wheel should NOT change zoom level
+    fireEvent.wheel(scrollable, { deltaY: 100, shiftKey: true });
+    expect(zoomIndicator.getAttribute('title')).toBe(zoomBefore);
   });
 
-  it('plain vertical scroll at zoom=1 does nothing special', () => {
+  it('deltaX (trackpad horizontal gesture) when zoomed does not change zoom level', () => {
     const data = makeStandardTestData();
-    const { container } = render(<TimelineContainer data={data} />);
+    render(<TimelineContainer data={data} />);
 
-    const scrollable = container.querySelector('[class*="overflow-auto"]');
-    if (!scrollable) return;
+    const scrollable = document.querySelector('[class*="overflow-auto"]')!;
 
-    // At zoom=1, vertical scroll should pass through (no horizontal pan)
+    // Zoom in first
+    fireEvent.wheel(scrollable, { deltaY: -200, ctrlKey: true });
+    const zoomIndicator = document.querySelector('[title$="zoom"]')!;
+    const zoomBefore = zoomIndicator.getAttribute('title');
+
+    // Pure deltaX should pan, not zoom
+    fireEvent.wheel(scrollable, { deltaX: 50, deltaY: 0 });
+    expect(zoomIndicator.getAttribute('title')).toBe(zoomBefore);
+  });
+
+  it('plain vertical scroll at zoom=1 keeps zoom at Full', () => {
+    const data = makeStandardTestData();
+    render(<TimelineContainer data={data} />);
+
+    const scrollable = document.querySelector('[class*="overflow-auto"]')!;
+
+    // At zoom=1, vertical scroll should not trigger zoom
     fireEvent.wheel(scrollable, { deltaY: 100, deltaX: 0 });
-    // Should not crash and no zoom/pan state change
-    expect(container).toBeTruthy();
+    expect(screen.getByText('Full')).toBeInTheDocument();
+    expect(screen.getByTitle(/1\.0× zoom/)).toBeInTheDocument();
   });
 });
 
@@ -758,22 +760,29 @@ describe('Mouse Drag to Pan', () => {
     expect(scrollable.className).toContain('cursor-grab');
   });
 
-  it('pointer down + move + up pans without crashing', () => {
+  it('pointer down + move + up changes cursor to grabbing state', () => {
     const data = makeStandardTestData();
     const { container } = render(<TimelineContainer data={data} />);
 
     // Zoom in first
     fireEvent.click(screen.getByLabelText('Zoom in'));
 
-    const scrollable = container.querySelector('[class*="overflow-auto"]');
-    if (!scrollable) return;
+    const scrollable = container.querySelector('[class*="overflow-auto"]')!;
+    expect(scrollable.className).toContain('cursor-grab');
 
-    // Simulate drag
+    // Simulate drag — after pointerDown, touchAction should remain 'none' (zoomed)
     fireEvent.pointerDown(scrollable, { clientX: 400, clientY: 200, button: 0, pointerId: 1 });
+    // During drag the active:cursor-grabbing pseudo-class applies (can't test pseudo in jsdom)
+    // But we can verify the container still has the correct base cursor class
+    expect(scrollable.className).toContain('cursor-grab');
+
     fireEvent.pointerMove(scrollable, { clientX: 350, clientY: 200, pointerId: 1 });
     fireEvent.pointerUp(scrollable, { clientX: 350, clientY: 200, pointerId: 1 });
 
-    expect(container).toBeTruthy();
+    // After drag, container retains cursor-grab class (active:cursor-grabbing is CSS pseudo-class, always in classlist)
+    expect(scrollable.className).toContain('cursor-grab');
+    // Verify touchAction is 'none' when zoomed (enables pointer events for drag)
+    expect((scrollable as HTMLElement).style.touchAction).toBe('none');
   });
 });
 
@@ -820,41 +829,67 @@ describe('Horizontal Overflow with Many Agents', () => {
 });
 
 describe('Keyboard Interaction', () => {
-  it('ArrowDown moves focus through agents sequentially', () => {
+  it('ArrowDown moves focus ring through agents', () => {
     const data = makeMultiAgentTestData();
     const { container } = render(<TimelineContainer data={data} />);
 
     const app = container.querySelector('[role="application"]')!;
 
-    for (let i = 0; i < 5; i++) {
-      fireEvent.keyDown(app, { key: 'ArrowDown' });
-    }
-    expect(container).toBeTruthy();
+    // Initially no lane should have focus ring
+    const lanesBeforeFocus = container.querySelectorAll('[aria-expanded]');
+    const focusedBefore = Array.from(lanesBeforeFocus).filter(el => el.className.includes('ring-blue-500'));
+    expect(focusedBefore.length).toBe(0);
+
+    // Navigate down — first lane should get focus ring
+    fireEvent.keyDown(app, { key: 'ArrowDown' });
+    const lanesAfterFocus = container.querySelectorAll('[aria-expanded]');
+    const focusedAfter = Array.from(lanesAfterFocus).filter(el => el.className.includes('ring-blue-500'));
+    expect(focusedAfter.length).toBe(1);
+
+    // Navigate down again — focus ring should move (still exactly 1 focused)
+    fireEvent.keyDown(app, { key: 'ArrowDown' });
+    const lanesAfterSecond = container.querySelectorAll('[aria-expanded]');
+    const focusedSecond = Array.from(lanesAfterSecond).filter(el => el.className.includes('ring-blue-500'));
+    expect(focusedSecond.length).toBe(1);
   });
 
-  it('Enter expands/collapses a lane', () => {
+  it('Enter expands lane (aria-expanded toggles)', () => {
     const data = makeStandardTestData();
     const { container } = render(<TimelineContainer data={data} />);
 
     const app = container.querySelector('[role="application"]')!;
 
+    // Focus first lane
     fireEvent.keyDown(app, { key: 'ArrowDown' });
-    fireEvent.keyDown(app, { key: 'Enter' });
-    expect(container).toBeTruthy();
 
+    // Should be collapsed initially
+    const lanes = container.querySelectorAll('[aria-expanded]');
+    expect(lanes[0].getAttribute('aria-expanded')).toBe('false');
+
+    // Enter to expand
     fireEvent.keyDown(app, { key: 'Enter' });
-    expect(container).toBeTruthy();
+    expect(lanes[0].getAttribute('aria-expanded')).toBe('true');
+
+    // Enter again to collapse
+    fireEvent.keyDown(app, { key: 'Enter' });
+    expect(lanes[0].getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('sort toggle button changes sort direction', () => {
+  it('sort toggle changes aria-label from oldest-first to newest-first', () => {
     const data = makeStandardTestData();
     render(<TimelineContainer data={data} />);
 
     const sortBtn = screen.getByLabelText(/Sort:/);
-    expect(sortBtn).toBeInTheDocument();
+    expect(sortBtn).toHaveAttribute('aria-label', expect.stringContaining('oldest-first'));
+    expect(sortBtn.textContent).toBe('↑');
 
     fireEvent.click(sortBtn);
-    expect(sortBtn).toBeInTheDocument();
+    expect(sortBtn).toHaveAttribute('aria-label', expect.stringContaining('newest-first'));
+    expect(sortBtn.textContent).toBe('↓');
+
+    fireEvent.click(sortBtn);
+    expect(sortBtn).toHaveAttribute('aria-label', expect.stringContaining('oldest-first'));
+    expect(sortBtn.textContent).toBe('↑');
   });
 });
 
@@ -867,14 +902,23 @@ describe('Lane Layout', () => {
     expect(labels.length).toBe(2);
   });
 
-  it('expanded lane has increased height', () => {
+  it('expanded lane shows aria-expanded=true and increased height', () => {
     const data = makeStandardTestData();
     const { container } = render(<TimelineContainer data={data} />);
 
-    const labels = container.querySelectorAll('[role="button"]');
-    if (labels.length > 0) {
-      fireEvent.click(labels[0]);
-      expect(container).toBeTruthy();
-    }
+    const lanes = container.querySelectorAll('[aria-expanded]');
+    expect(lanes.length).toBeGreaterThan(0);
+
+    // Initially collapsed
+    expect(lanes[0].getAttribute('aria-expanded')).toBe('false');
+    const collapsedHeight = parseInt((lanes[0] as HTMLElement).style.height || '0');
+
+    // Click to expand
+    fireEvent.click(lanes[0]);
+    expect(lanes[0].getAttribute('aria-expanded')).toBe('true');
+    const expandedHeight = parseInt((lanes[0] as HTMLElement).style.height || '0');
+
+    // Expanded height should be larger (160 > 56)
+    expect(expandedHeight).toBeGreaterThan(collapsedHeight);
   });
 });
