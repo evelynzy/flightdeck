@@ -2,6 +2,8 @@
 
 Flightdeck's onboarding system has three layers designed to make new users productive in under 60 seconds while avoiding information overload.
 
+![New Project Dialog](/images/00-new-project-dialog.png)
+
 ## QuickStart
 
 On first launch, instead of showing an empty dashboard, Flightdeck presents a **playbook selection** screen. Users pick a template that matches their goal:
