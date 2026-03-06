@@ -165,8 +165,8 @@ export function TimelinePage({ api, ws }: Props) {
   const data = liveData ?? (effectiveLeadId ? getCachedData(effectiveLeadId) : null);
 
   // Session replay — lift state so we can filter timeline data during playback
-  const replayLeadId = (!liveMode && effectiveLeadId) ? effectiveLeadId : null;
-  const replay = useSessionReplay(replayLeadId);
+  // Always fetch keyframes so scrub bar works in both live and replay modes
+  const replay = useSessionReplay(effectiveLeadId);
 
   // Clear cached data and refetch fresh from SSE
   const handleClearTimeline = useCallback(() => {
@@ -460,10 +460,16 @@ export function TimelinePage({ api, ws }: Props) {
 
       </div>
 
-      {/* Session Replay Scrubber — sticky bottom, outside scrollable area */}
-      {effectiveLeadId && !liveMode && (
+      {/* Session Replay Scrubber — always visible, sticky bottom */}
+      {effectiveLeadId && (
         <div className="shrink-0 border-t border-th-border-muted bg-th-bg px-4 py-2">
-          <ReplayScrubber leadId={effectiveLeadId} replay={replay} />
+          <ReplayScrubber
+            leadId={effectiveLeadId}
+            replay={replay}
+            liveMode={liveMode}
+            onExitLive={() => setLiveMode(false)}
+            onGoLive={() => setLiveMode(true)}
+          />
         </div>
       )}
     </div>

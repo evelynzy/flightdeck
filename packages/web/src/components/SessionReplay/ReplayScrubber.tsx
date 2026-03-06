@@ -32,9 +32,15 @@ interface ReplayScrubberProps {
   leadId: string;
   /** Pre-created replay state — avoids duplicate hook calls when parent also needs replay state */
   replay?: UseSessionReplayResult;
+  /** Whether the timeline is in live mode */
+  liveMode?: boolean;
+  /** Called when user interacts with scrub bar during live mode — triggers switch to replay */
+  onExitLive?: () => void;
+  /** Called when user clicks 'Live' button to return to live mode */
+  onGoLive?: () => void;
 }
 
-export function ReplayScrubber({ leadId, replay: externalReplay }: ReplayScrubberProps) {
+export function ReplayScrubber({ leadId, replay: externalReplay, liveMode, onExitLive, onGoLive }: ReplayScrubberProps) {
   const internalReplay = useSessionReplay(externalReplay ? null : leadId);
   const {
     keyframes, worldState, playing, currentTime, duration,
@@ -68,12 +74,16 @@ export function ReplayScrubber({ leadId, replay: externalReplay }: ReplayScrubbe
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    // Auto-switch from live to replay mode on scrub interaction
+    if (liveMode && onExitLive) {
+      onExitLive();
+    }
     draggingRef.current = true;
     wasPlayingRef.current = playing;
     if (playing) pause();
     seekFromPointer(e.clientX);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [playing, pause, seekFromPointer]);
+  }, [playing, pause, seekFromPointer, liveMode, onExitLive]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!draggingRef.current) return;
@@ -120,47 +130,77 @@ export function ReplayScrubber({ leadId, replay: externalReplay }: ReplayScrubbe
     <div className="bg-surface border border-th-border rounded-lg overflow-hidden" data-testid="replay-scrubber">
       {/* Controls bar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-th-border">
-        <button onClick={skipBack} title="Back 5s" className="p-1 rounded text-th-text-muted hover:text-th-text transition-colors">
-          <SkipBack className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={playing ? pause : play}
-          title={playing ? 'Pause' : 'Play'}
-          className="p-1.5 rounded-full bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
-        >
-          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-        </button>
-        <button onClick={skipForward} title="Forward 5s" className="p-1 rounded text-th-text-muted hover:text-th-text transition-colors">
-          <SkipForward className="w-3.5 h-3.5" />
-        </button>
+        {liveMode ? (
+          <>
+            <span className="flex items-center gap-1.5 text-xs font-medium text-green-400">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              LIVE
+            </span>
+            <span className="text-xs text-th-text-muted ml-1">
+              {formatTime(duration)} elapsed
+            </span>
+          </>
+        ) : (
+          <>
+            <button onClick={skipBack} title="Back 5s" className="p-1 rounded text-th-text-muted hover:text-th-text transition-colors">
+              <SkipBack className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={playing ? pause : play}
+              title={playing ? 'Pause' : 'Play'}
+              className="p-1.5 rounded-full bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
+            >
+              {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            </button>
+            <button onClick={skipForward} title="Forward 5s" className="p-1 rounded text-th-text-muted hover:text-th-text transition-colors">
+              <SkipForward className="w-3.5 h-3.5" />
+            </button>
 
-        <span className="text-xs font-mono text-th-text-alt ml-1">
-          {formatTime(currentTime)}
-        </span>
-        <span className="text-xs text-th-text-muted">/</span>
-        <span className="text-xs font-mono text-th-text-muted">
-          {formatTime(duration)}
-        </span>
+            <span className="text-xs font-mono text-th-text-alt ml-1">
+              {formatTime(currentTime)}
+            </span>
+            <span className="text-xs text-th-text-muted">/</span>
+            <span className="text-xs font-mono text-th-text-muted">
+              {formatTime(duration)}
+            </span>
+          </>
+        )}
 
         <div className="flex-1" />
 
-        {/* Speed selector */}
-        <div className="flex items-center gap-1">
-          <Zap className="w-3 h-3 text-th-text-muted" />
-          {SPEED_OPTIONS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setSpeed(s)}
-              className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
-                speed === s
-                  ? 'bg-accent/20 text-accent font-medium'
-                  : 'text-th-text-muted hover:text-th-text-alt'
-              }`}
-            >
-              {s}×
-            </button>
-          ))}
-        </div>
+        {/* Go Live button (replay mode) / Speed selector */}
+        {liveMode ? (
+          <span className="text-[10px] text-th-text-muted">Click timeline to replay</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            {onGoLive && (
+              <button
+                onClick={() => { pause(); onGoLive(); }}
+                className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-colors"
+                title="Return to live view"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                Live
+              </button>
+            )}
+            <div className="flex items-center gap-1">
+              <Zap className="w-3 h-3 text-th-text-muted" />
+              {SPEED_OPTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSpeed(s)}
+                  className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                    speed === s
+                      ? 'bg-accent/20 text-accent font-medium'
+                      : 'text-th-text-muted hover:text-th-text-alt'
+                  }`}
+                >
+                  {s}×
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Scrubber track */}
@@ -179,8 +219,8 @@ export function ReplayScrubber({ leadId, replay: externalReplay }: ReplayScrubbe
       >
         {/* Progress fill */}
         <div
-          className={`absolute inset-y-0 left-0 bg-accent/15 ${draggingRef.current ? '' : 'transition-[width] duration-100'}`}
-          style={{ width: `${progressPct}%` }}
+          className={`absolute inset-y-0 left-0 ${liveMode ? 'bg-green-400/10' : 'bg-accent/15'} ${draggingRef.current ? '' : 'transition-[width] duration-100'}`}
+          style={{ width: liveMode ? '100%' : `${progressPct}%` }}
         />
 
         {/* Keyframe markers */}
@@ -195,8 +235,8 @@ export function ReplayScrubber({ leadId, replay: externalReplay }: ReplayScrubbe
 
         {/* Playhead */}
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-accent shadow-[0_0_4px_rgba(var(--accent-rgb),0.5)]"
-          style={{ left: `${progressPct}%`, transform: 'translateX(-50%)' }}
+          className={`absolute top-0 bottom-0 w-0.5 ${liveMode ? 'bg-green-400' : 'bg-accent'} shadow-[0_0_4px_rgba(var(--accent-rgb),0.5)]`}
+          style={{ left: liveMode ? '100%' : `${progressPct}%`, transform: 'translateX(-50%)' }}
         />
       </div>
 
