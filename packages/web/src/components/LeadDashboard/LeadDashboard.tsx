@@ -1854,7 +1854,6 @@ export function LeadDashboard({ api, ws }: Props) {
                         groups: { icon: <Users className="w-3 h-3" />, label: 'Groups', badge: groups.length },
                         dag: { icon: <Network className="w-3 h-3" />, label: 'DAG', badge: dagStatus?.tasks.length },
                         models: { icon: <Wrench className="w-3 h-3" />, label: 'Models' },
-                        tokens: { icon: <BarChart3 className="w-3 h-3" />, label: 'Tokens' },
                         costs: { icon: <BarChart3 className="w-3 h-3" />, label: 'Attribution' },
                         timers: { icon: <Clock className="w-3 h-3" />, label: 'Timers', badge: activeTimerCount || undefined },
                       };
