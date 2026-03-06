@@ -388,18 +388,8 @@ const TimelineRow = memo(function TimelineRow({ item }: { item: GroupedTimelineI
           <div className="rounded-lg px-3 py-2 bg-blue-600 text-white font-mono text-sm whitespace-pre-wrap">
             <MentionText text={rawText} agents={useAppStore.getState().agents} onClickAgent={(id) => useAppStore.getState().setSelectedAgent(id)} />
             {msg.attachments && msg.attachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2 border-t border-blue-500/40 pt-2">
-                {msg.attachments.map((att, ai) => (
-                  <div key={ai} className="rounded overflow-hidden border border-white/20">
-                    {att.thumbnailDataUrl ? (
-                      <img src={att.thumbnailDataUrl} alt={att.name} className="max-h-20 rounded" />
-                    ) : (
-                      <div className="px-2 py-1 bg-blue-700 text-xs text-blue-200 flex items-center gap-1">
-                        <span>📷</span> {att.name}
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="mt-1.5 text-xs text-blue-200 flex items-center gap-1">
+                <span>📷</span> {msg.attachments.length} image{msg.attachments.length > 1 ? 's' : ''} attached
               </div>
             )}
           </div>

@@ -119,7 +119,7 @@ export function ChatPanel({ agentId, ws }: Props) {
       }
     }
     const imgAttachments = attachments.length > 0
-      ? attachments.filter((a) => a.kind === 'image').map((a) => ({ name: a.name, mimeType: a.mimeType, thumbnailDataUrl: a.thumbnailDataUrl }))
+      ? attachments.filter((a) => a.kind === 'image').map((a) => ({ name: a.name, mimeType: a.mimeType }))
       : undefined;
     msgs.push({ type: 'text', text: inputText, sender: 'user', timestamp: Date.now(), ...(isAgentBusy && mode === 'queue' ? { queued: true } : {}), attachments: imgAttachments && imgAttachments.length > 0 ? imgAttachments : undefined });
     useAppStore.getState().updateAgent(agentId, { messages: msgs });
