@@ -3,6 +3,13 @@
 @import "./styles/chart-theme.css";
 @config "../tailwind.config.js";
 
+/* ── Font: JetBrains Mono for monospace ─────────────────────────────── */
+@theme {
+  --font-mono: 'JetBrains Mono', 'Noto Sans CJK SC', 'PingFang SC', 'Hiragino Sans',
+    'Microsoft YaHei', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+}
+
 /* ── Theme custom properties ──────────────────────────────────────────── */
 
 /* Light mode (default) */
