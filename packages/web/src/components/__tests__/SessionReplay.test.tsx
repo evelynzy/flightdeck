@@ -67,6 +67,30 @@ describe('useSessionReplay', () => {
     result.current.seek(999999999);
     await waitFor(() => expect(result.current.currentTime).toBe(dur));
   });
+
+  it('resets currentTime and playing when leadId changes', async () => {
+    mockApiFetch.mockResolvedValue(sampleKeyframes);
+    const { result, rerender } = renderHook(
+      ({ id }) => useSessionReplay(id),
+      { initialProps: { id: 'lead-1' as string | null } },
+    );
+    await waitFor(() => expect(result.current.duration).toBeGreaterThan(0));
+
+    // Seek forward and start playing
+    result.current.seek(5000);
+    await waitFor(() => expect(result.current.currentTime).toBe(5000));
+
+    // Switch to a different project
+    mockApiFetch.mockResolvedValue({ keyframes: [
+      { timestamp: '2026-03-06T12:00:00.000Z', label: 'Start', type: 'milestone' },
+      { timestamp: '2026-03-06T12:05:00.000Z', label: 'End', type: 'milestone' },
+    ] });
+    rerender({ id: 'lead-2' });
+
+    // State should reset immediately
+    await waitFor(() => expect(result.current.currentTime).toBe(0));
+    expect(result.current.playing).toBe(false);
+  });
 });
 
 describe('ReplayScrubber', () => {
@@ -104,17 +128,17 @@ describe('ReplayScrubber', () => {
     });
     // Time display
     expect(screen.getByText('0:00')).toBeDefined();
-    // Speed buttons
-    expect(screen.getByText('1×')).toBeDefined();
-    expect(screen.getByText('2×')).toBeDefined();
+    // Speed buttons (4× is default, 8× and 16× should be present)
+    expect(screen.getByText('4×')).toBeDefined();
+    expect(screen.getByText('8×')).toBeDefined();
   });
 
   it('has speed selector buttons', async () => {
     mockApiFetch.mockResolvedValue(sampleKeyframes);
     render(<ReplayScrubber leadId="lead-1" />);
     await waitFor(() => expect(screen.getByTestId('replay-scrubber')).toBeDefined());
-    expect(screen.getByText('0.5×')).toBeDefined();
     expect(screen.getByText('4×')).toBeDefined();
-    expect(screen.getByText('8×')).toBeDefined();
+    expect(screen.getByText('32×')).toBeDefined();
+    expect(screen.getByText('720×')).toBeDefined();
   });
 });

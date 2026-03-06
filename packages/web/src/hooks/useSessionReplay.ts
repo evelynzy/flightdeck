@@ -68,6 +68,13 @@ export function useSessionReplay(leadId: string | null): UseSessionReplayResult 
   // Load keyframes on mount / leadId change
   useEffect(() => {
     mountedRef.current = true;
+
+    // Reset playback state when switching projects
+    setCurrentTime(0);
+    setPlaying(false);
+    setWorldState(null);
+    sessionStartRef.current = 0;
+
     if (!leadId) {
       setKeyframes([]);
       setDuration(0);
