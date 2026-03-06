@@ -3,6 +3,7 @@ import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
 import { useShallow } from 'zustand/react/shallow';
 import { apiFetch } from '../../hooks/useApi';
+import { estimateCostUsd } from '../../constants/pricing';
 import { POLL_INTERVAL_MS } from '../../constants/timing';
 import { ProgressTimeline } from './ProgressTimeline';
 import { TaskBurndown } from './TaskBurndown';
@@ -62,12 +63,17 @@ export function OverviewPage(_props: Props) {
 
         // Derive timeline data from keyframes
         if (kf.length > 0) {
-          let completed = 0, inProgress = 0, agentCount = 0, cost = 0;
+          let completed = 0, inProgress = 0, agentCount = 0;
           const tPoints: TimelineDataPoint[] = [];
           const bPoints: BurndownPoint[] = [];
           const cPoints: CostPoint[] = [];
           const hBuckets: HeatmapBucket[] = [];
           let taskTotal = 0;
+
+          // Use real token-based cost from agents (same source as PulseStrip)
+          const totalInput = agents.reduce((s, a) => s + (a.inputTokens ?? 0), 0);
+          const totalOutput = agents.reduce((s, a) => s + (a.outputTokens ?? 0), 0);
+          const realCost = estimateCostUsd(totalInput, totalOutput);
 
           for (const frame of kf) {
             const t = new Date(frame.timestamp).getTime();
@@ -80,7 +86,9 @@ export function OverviewPage(_props: Props) {
             if (frame.type === 'delegation') { taskTotal++; inProgress++; }
             if (frame.type === 'milestone' || frame.type === 'task') { completed++; inProgress = Math.max(0, inProgress - 1); }
 
-            cost += 0.15; // Estimate per-event cost (real data from cost API when available)
+            // Distribute real cost proportionally across keyframes for the curve
+            const progress = (tPoints.length + 1) / kf.length;
+            cPoints.push({ time: t, cumulativeCost: realCost * progress });
 
             tPoints.push({
               time: t,
@@ -90,14 +98,13 @@ export function OverviewPage(_props: Props) {
               agentCount,
             });
             bPoints.push({ time: t, remaining: Math.max(0, taskTotal - completed) });
-            cPoints.push({ time: t, cumulativeCost: cost });
           }
 
           setTimelineData(tPoints);
           setBurndownData(bPoints);
           setCostData(cPoints);
           setHeatmapBuckets(hBuckets);
-          setTotalCost(cost);
+          setTotalCost(realCost);
           setTotalTasks(taskTotal);
         }
       }
