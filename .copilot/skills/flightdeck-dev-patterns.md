@@ -40,3 +40,21 @@
 - **Sticky bottom controls**: Use `shrink-0` on a sibling outside the scrollable `flex-1 min-h-0 overflow-auto` container. Never nest fixed controls inside a scrollable area.
 - **Horizontal overflow for dynamic lane counts**: Set `min-width` based on item count (e.g., `Math.max(600, agents.length * 80)`), let `overflow-auto` handle the rest.
 - Separate scroll axes: `deltaY` for vertical, `Shift+wheel` / `deltaX` for horizontal, `Ctrl+wheel` for zoom.
+
+## Virtualization
+
+- **`react-virtuoso`** for large lists (chat messages, activity feeds). Only renders visible items — keeps DOM small.
+- Mock Virtuoso in tests to render all items (jsdom has no layout measurements).
+- Extract `components.Header` / `components.Footer` to stable refs — inline definitions cause remounts on every scroll.
+
+## Data Hooks
+
+- **`useProjects()`** — fetches from `/projects`. Shared across all pages.
+- **`useHistoricalAgents(projectId)`** — derives agent list from keyframes when no live agents. Use as fallback.
+- **`groupTimeline(messages)`** — batches sequential messages from same sender. Preserves message integrity.
+
+## Fonts
+
+- Bundle fonts in `public/fonts/` with `@font-face` declarations. Never use CDN.
+- `font-feature-settings: 'liga' 1, 'calt' 1` on `.font-mono` for ligatures.
+- `font-display: swap` for performance.

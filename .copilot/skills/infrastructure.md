@@ -79,3 +79,23 @@ cd packages/web && npx tsc --noEmit # Type check only
 | `SERVER_PORT` | Express server port | 3006 |
 | `AUTH` | Auth mode (`none` to disable) | token-based |
 | `NODE_ENV` | Environment | development |
+
+## Test Suite
+
+- **Total: 3,662 tests** — 902 web + 2,760 server.
+- Run web: `cd packages/web && npx vitest run`
+- Run server: `cd packages/server && npx vitest run`
+- Add `// @vitest-environment jsdom` directive at top of test files that use DOM APIs.
+- Pre-existing failures (not your problem): CatchUpBanner (10), MentionText (2), 2 server integration tests.
+- When using `<Link>` from react-router-dom, wrap test renders in `<MemoryRouter>`.
+- When testing `react-virtuoso` components, mock Virtuoso to render all items (jsdom can't measure layout).
+
+## Production Build
+
+```bash
+npm run build          # Build all packages from root
+npm test               # Run all tests
+```
+
+- Build output: `packages/web/dist/`
+- Fonts copied from `public/fonts/` to `dist/fonts/` automatically by Vite.

@@ -50,3 +50,17 @@ Documented preferences from user feedback. Follow these when building new featur
 - Prefer showing real data with estimation disclaimers over showing "not available".
 - Curate what's shown — less noise is better than more data.
 - Consistent UX patterns everywhere — if one page uses tabs, all pages use tabs.
+
+## Typography
+
+- **JetBrains Mono** for all monospace text, with ligatures enabled (`liga` + `calt`).
+- Font stack: `'JetBrains Mono', ui-monospace, monospace` — `ui-monospace` handles CJK fallback natively.
+- **Always bundle fonts locally** — no CDN dependencies. Must work offline.
+
+## Removed / Unwanted Features
+
+- No predictions panel (agent stall/cost/context handled automatically).
+- No model effectiveness chart (can't compare models across varying task sizes).
+- No role contribution chart (not a meaningful metric).
+- No session score stars (subjective, not useful).
+- No monetary cost estimates — token counts only.

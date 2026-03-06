@@ -76,3 +76,39 @@ Bugs encountered during Flightdeck development. Check this list before debugging
 **Symptom**: Token tab shows "not available" for agents.
 **Cause**: Agent objects lack `inputTokens`/`outputTokens` (Copilot CLI doesn't provide them).
 **Fix**: Estimate from `outputPreview` length (~4 chars/token). Show with `~` prefix and `(est.)` suffix.
+
+## Overflow:Hidden Clipping Below-Fold Components
+
+**Symptom**: Component exists in DOM (DevTools shows it) but user can't see or interact with it.
+**Cause**: Parent container has `overflow: hidden` and the component renders below the visible area. Example: ReplayScrubber rendered after a 1000px Gantt chart inside a 713px container.
+**Fix**: Move the component outside the scrollable container as a sibling with `shrink-0`. Or use `position: sticky; bottom: 0` to pin it.
+
+## CDN Fonts Break Offline
+
+**Symptom**: Monospace text falls back to system font when offline or in restricted networks.
+**Cause**: Font loaded via Google Fonts CDN `<link>` tag — requires network.
+**Fix**: Always bundle fonts locally. Download woff2 files → `public/fonts/` → `@font-face` in CSS. Remove any CDN `<link>` and `preconnect` tags from `index.html`.
+
+## react-virtuoso Elements Not in DOM
+
+**Symptom**: Tests or Playwright can't find elements that should be in a list.
+**Cause**: `react-virtuoso` only renders visible items. Off-screen items are virtualized away and not in the DOM.
+**Fix**: In tests, mock Virtuoso to render all items. In production, use `Virtuoso`'s `scrollToIndex` API to bring items into view.
+
+## Virtuoso Inline Header/Footer Cause Remounts
+
+**Symptom**: Header or footer components inside Virtuoso flicker, lose state, or remount on every scroll.
+**Cause**: Passing inline component definitions to `components={{ Header: () => <div>...</div> }}` creates new component references on every render.
+**Fix**: Extract Header/Footer to stable refs or define them outside the render function.
+
+## Backend Pre-Truncating Labels
+
+**Symptom**: Milestone or keyframe labels cut off even though frontend has room.
+**Cause**: Backend applies `.slice(0, 80)` to labels before sending to frontend.
+**Fix**: Remove backend truncation. Let the frontend handle display with CSS (`line-clamp-2`, `title` tooltip).
+
+## Playwright Can't Simulate Complex Events on SVG
+
+**Symptom**: QA automation can't test Ctrl+wheel zoom, keyboard nav, or drag on SVG chart elements.
+**Cause**: Playwright's keyboard/mouse simulation doesn't reliably trigger React synthetic events on SVG elements, especially with modifier keys.
+**Fix**: Write unit tests with `fireEvent.wheel`/`fireEvent.keyDown` from `@testing-library/react` for interaction logic. Use Playwright only for visual/screenshot verification.
