@@ -85,7 +85,7 @@ export default defineConfig({
           ],
         },
         {
-          text: 'For Contributors',
+          text: 'Internal — Contributors Only',
           collapsed: true,
           items: [
             { text: 'REST API', link: '/reference/api' },

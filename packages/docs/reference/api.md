@@ -1,7 +1,7 @@
 # Flightdeck — REST API Reference
 
-::: info For Contributors
-This section is for project contributors and developers integrating with the Flightdeck API. If you're using Flightdeck to manage AI agent crews, see the [Guide](/guide/) instead.
+::: warning Internal — Contributors Only
+These API references are for Flightdeck contributors. They are not part of the public API and may change without notice. If you're using Flightdeck to manage AI agent crews, see the [Guide](/guide/) instead.
 :::
 
 > **Base URL**: `http://localhost:3001/api`  
