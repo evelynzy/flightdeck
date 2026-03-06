@@ -18,22 +18,22 @@ features:
   - icon: 🎯
     title: AI Project Lead
     details: An AI coordinator analyzes your task, picks the right specialists, delegates subtasks, reviews results, and synthesizes the final output.
-  - icon: 👥
-    title: 13 Specialist Roles
-    details: Developers, architects, code reviewers, designers, QA testers, and more — each running a different AI model for diverse perspectives.
-  - icon: 💬
-    title: Agents Talk to Each Other
-    details: Direct messages, broadcasts, and group chats. Agents debate approaches, challenge each other's ideas, and reach better solutions together.
+  - icon: ⌨️
+    title: "⌘K Command Palette"
+    details: "Fuzzy search across all entities, 30 natural language commands, AI-powered suggestions, and preview panel — all from one keyboard shortcut."
+  - icon: 🔮
+    title: Predictive Intelligence
+    details: Six prediction types (context exhaustion, cost overrun, agent stall, and more) with confidence scoring. Anticipate problems before they happen.
+  - icon: ⚡
+    title: Workflow Automation
+    details: "'When X then Y' rules with 12 triggers × 12 actions. Predictions feed workflow triggers — the anticipation→action loop that makes Away Mode work."
   - icon: 📊
-    title: Task DAG Visualization
-    details: See task dependencies as a live directed acyclic graph. Track what's done, what's running, and what's blocked — all in real time.
-  - icon: 🙋
-    title: Jump In Anytime
-    details: Message any agent at any time. Queue a note for later or interrupt their current work. You're always in control.
-  - icon: 🔒
-    title: Safe Coordination
-    details: File locking prevents conflicts. An activity ledger tracks every action. Decision logs capture the "why" behind every choice.
-  - icon: 🔄
-    title: Persistent Projects
-    details: Projects survive restarts. Resume where you left off with full context — tasks, decisions, and agent memories all preserved.
+    title: Canvas & Task DAG
+    details: Interactive node-graph of your agent crew with real-time status, communication edges, prediction overlays, and conflict indicators.
+  - icon: 📱
+    title: Mobile PWA
+    details: Full Progressive Web App with swipe-to-approve cards, bottom tab navigation, offline support, and mobile command sheet.
+  - icon: 🤝
+    title: Community Playbooks
+    details: Share and discover reusable session templates. Star ratings, reviews, fork & customize. Create custom agent roles with the visual Role Builder.
 ---

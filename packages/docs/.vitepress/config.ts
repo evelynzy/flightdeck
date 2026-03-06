@@ -9,6 +9,7 @@ export default defineConfig({
     logo: '/logo.svg',
     nav: [
       { text: 'Guide', link: '/guide/' },
+      { text: 'Features', link: '/guide/features' },
       { text: 'Reference', link: '/reference/api' },
       { text: 'GitHub', link: 'https://github.com/justinchuby/flightdeck' },
     ],
@@ -19,6 +20,8 @@ export default defineConfig({
           items: [
             { text: 'Introduction', link: '/guide/' },
             { text: 'Quick Start', link: '/guide/quickstart' },
+            { text: 'Features Overview', link: '/guide/features' },
+            { text: 'Smart Onboarding', link: '/guide/onboarding' },
           ],
         },
         {
@@ -49,8 +52,20 @@ export default defineConfig({
           items: [
             { text: 'Lead Dashboard', link: '/guide/dashboard-lead' },
             { text: 'Agents View', link: '/guide/dashboard-agents' },
+            { text: 'Canvas View', link: '/guide/canvas-view' },
             { text: 'Settings', link: '/guide/dashboard-settings' },
             { text: 'UI Design', link: '/guide/ui-design' },
+          ],
+        },
+        {
+          text: 'Features',
+          items: [
+            { text: 'Command Palette', link: '/guide/command-palette' },
+            { text: 'Predictive Intelligence', link: '/guide/predictions' },
+            { text: 'Workflow Automation', link: '/guide/workflows' },
+            { text: 'GitHub Integration', link: '/guide/github-integration' },
+            { text: 'Playbooks & Roles', link: '/guide/playbooks' },
+            { text: 'Mobile PWA', link: '/guide/mobile' },
           ],
         },
         {
@@ -61,15 +76,35 @@ export default defineConfig({
             { text: 'Architecture', link: '/guide/timeline-architecture' },
           ],
         },
+        {
+          text: 'Development',
+          items: [
+            { text: 'Developer Guide', link: '/guide/developer-guide' },
+          ],
+        },
       ],
       '/reference/': [
         {
-          text: 'Reference',
+          text: 'Core API',
           items: [
             { text: 'REST API', link: '/reference/api' },
             { text: 'WebSocket Events', link: '/reference/websocket' },
             { text: 'Timeline Components', link: '/reference/timeline-api' },
             { text: 'Database Schema', link: '/reference/database' },
+          ],
+        },
+        {
+          text: 'Feature APIs',
+          items: [
+            { text: 'NL Commands', link: '/reference/nl-api' },
+            { text: 'Predictions & Workflows', link: '/reference/predictions-api' },
+            { text: 'GitHub & Conflicts', link: '/reference/github-api' },
+            { text: 'Playbooks & Roles', link: '/reference/playbooks-api' },
+          ],
+        },
+        {
+          text: 'Architecture',
+          items: [
             { text: 'Configuration', link: '/reference/configuration' },
             { text: 'Architecture Decisions', link: '/reference/architecture-decisions' },
             { text: 'Design Decisions', link: '/reference/design-decisions' },
