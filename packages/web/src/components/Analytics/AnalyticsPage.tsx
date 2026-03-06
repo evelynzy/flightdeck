@@ -3,8 +3,6 @@ import { apiFetch } from '../../hooks/useApi';
 import { TimeWindowSelector } from './TimeWindowSelector';
 import { SessionOverviewCard } from './SessionOverviewCard';
 import { CostTrendChart } from './CostTrendChart';
-import { ModelEffectivenessChart } from './ModelEffectivenessChart';
-import { RoleContributionChart } from './RoleContributionChart';
 import { InsightsPanel } from './InsightsPanel';
 import { SessionHistoryTable } from './SessionHistoryTable';
 import { SessionComparisonView } from './SessionComparisonView';
@@ -151,12 +149,6 @@ export function AnalyticsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SessionOverviewCard overview={filteredOverview} />
         <CostTrendChart overview={filteredOverview} />
-      </div>
-
-      {/* Middle row: Model Effectiveness + Role Contribution */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ModelEffectivenessChart overview={filteredOverview} />
-        <RoleContributionChart overview={filteredOverview} />
       </div>
 
       {/* Insights */}

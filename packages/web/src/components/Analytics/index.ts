@@ -1,8 +1,6 @@
 export { AnalyticsPage } from './AnalyticsPage';
 export { SessionOverviewCard } from './SessionOverviewCard';
 export { CostTrendChart } from './CostTrendChart';
-export { ModelEffectivenessChart } from './ModelEffectivenessChart';
-export { RoleContributionChart } from './RoleContributionChart';
 export { InsightsPanel } from './InsightsPanel';
 export { InsightCard } from './InsightCard';
 export { SessionHistoryTable } from './SessionHistoryTable';
