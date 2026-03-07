@@ -51,7 +51,8 @@ function handleDeclareTasks(ctx: CommandHandlerContext, agent: Agent, data: stri
   try {
     const req = parseCommandPayload(agent, match[1], declareTasksSchema, 'DECLARE_TASKS');
     if (!req) return;
-    const { tasks, conflicts, linkedAutoTasks } = ctx.taskDAG.declareTaskBatch(agent.id, req.tasks as DagTaskInput[]);
+    const projectId = ctx.getProjectIdForAgent(agent.id);
+    const { tasks, conflicts, linkedAutoTasks } = ctx.taskDAG.declareTaskBatch(agent.id, req.tasks as DagTaskInput[], projectId);
     let msg = `[System] Task DAG declared: ${tasks.length} tasks added.`;
     if (linkedAutoTasks.length > 0) {
       msg += `\n🔗 Linked ${linkedAutoTasks.length} declared task(s) to existing auto-created tasks:`;
@@ -229,7 +230,8 @@ function handleAddTask(ctx: CommandHandlerContext, agent: Agent, data: string): 
   try {
     const req = parseCommandPayload(agent, match[1], addTaskSchema, 'ADD_TASK');
     if (!req) return;
-    const task = ctx.taskDAG.addTask(agent.id, req);
+    const projectId = ctx.getProjectIdForAgent(agent.id);
+    const task = ctx.taskDAG.addTask(agent.id, req, projectId);
     let msg = `[System] Task "${task.id}" added (${task.dagStatus}).`;
     if (task.dagStatus === 'ready') {
       msg += ` Ready for delegation — use DELEGATE or CREATE_AGENT to assign it.`;

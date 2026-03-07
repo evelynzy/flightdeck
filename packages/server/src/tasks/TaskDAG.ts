@@ -29,6 +29,7 @@ export interface InvalidTransitionError {
 export interface DagTask {
   id: string;
   leadId: string;
+  projectId?: string;
   role: string;
   title?: string;
   description: string;
@@ -117,6 +118,7 @@ function rowToTask(row: typeof dagTasks.$inferSelect): DagTask {
   return {
     id: row.id,
     leadId: row.leadId,
+    projectId: row.projectId || undefined,
     role: row.role,
     title: row.title || undefined,
     description: row.description,
@@ -141,7 +143,7 @@ export class TaskDAG extends EventEmitter {
   }
 
   /** Declare a batch of tasks for a lead. Validates deps and detects file conflicts. */
-  declareTaskBatch(leadId: string, tasks: DagTaskInput[]): { tasks: DagTask[]; conflicts: FileConflict[]; linkedAutoTasks: Array<{ declaredId: string; autoId: string }> } {
+  declareTaskBatch(leadId: string, tasks: DagTaskInput[], projectId?: string): { tasks: DagTask[]; conflicts: FileConflict[]; linkedAutoTasks: Array<{ declaredId: string; autoId: string }> } {
     // Validate: all dependsOn reference tasks in this batch or already existing
     const taskIds = new Set(tasks.map(t => t.taskId));
     const existingRows = this.db.drizzle
@@ -219,6 +221,7 @@ export class TaskDAG extends EventEmitter {
         this.db.drizzle.insert(dagTasks).values({
           id: task.taskId,
           leadId,
+          projectId: projectId || null,
           role: task.role,
           title: task.title || null,
           description: task.description || '',
@@ -587,8 +590,8 @@ export class TaskDAG extends EventEmitter {
   }
 
   /** Add a single task to an existing DAG */
-  addTask(leadId: string, task: DagTaskInput): DagTask {
-    const result = this.declareTaskBatch(leadId, [task]);
+  addTask(leadId: string, task: DagTaskInput, projectId?: string): DagTask {
+    const result = this.declareTaskBatch(leadId, [task], projectId);
     return result.tasks[0];
   }
 
@@ -649,6 +652,17 @@ export class TaskDAG extends EventEmitter {
       .select()
       .from(dagTasks)
       .where(eq(dagTasks.leadId, leadId))
+      .orderBy(desc(dagTasks.priority), asc(dagTasks.createdAt))
+      .all()
+      .map(rowToTask);
+  }
+
+  /** Get all tasks scoped to a project (across all leads in that project) */
+  getTasksByProject(projectId: string): DagTask[] {
+    return this.db.drizzle
+      .select()
+      .from(dagTasks)
+      .where(eq(dagTasks.projectId, projectId))
       .orderBy(desc(dagTasks.priority), asc(dagTasks.createdAt))
       .all()
       .map(rowToTask);

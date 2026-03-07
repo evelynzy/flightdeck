@@ -951,6 +951,39 @@ describe('TaskDAG', () => {
     });
   });
 
+  describe('projectId scoping', () => {
+    it('stores projectId on declared tasks', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }], 'proj-1');
+      const tasks = dag.getTasks('lead-1');
+      expect(tasks[0].projectId).toBe('proj-1');
+    });
+
+    it('projectId is undefined when not provided', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }]);
+      const tasks = dag.getTasks('lead-1');
+      expect(tasks[0].projectId).toBeUndefined();
+    });
+
+    it('getTasksByProject returns tasks from multiple leads in same project', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }], 'proj-1');
+      dag.declareTaskBatch('lead-2', [{ taskId: 'b', role: 'Dev' }], 'proj-1');
+      dag.declareTaskBatch('lead-3', [{ taskId: 'c', role: 'Dev' }], 'proj-2');
+      const proj1Tasks = dag.getTasksByProject('proj-1');
+      expect(proj1Tasks).toHaveLength(2);
+      expect(proj1Tasks.map(t => t.id).sort()).toEqual(['a', 'b']);
+    });
+
+    it('getTasksByProject returns empty for unknown project', () => {
+      dag.declareTaskBatch('lead-1', [{ taskId: 'a', role: 'Dev' }], 'proj-1');
+      expect(dag.getTasksByProject('proj-unknown')).toHaveLength(0);
+    });
+
+    it('addTask passes projectId through', () => {
+      const task = dag.addTask('lead-1', { taskId: 'x', role: 'Dev' }, 'proj-1');
+      expect(task.projectId).toBe('proj-1');
+    });
+  });
+
   describe('end-to-end: diamond dependency', () => {
     //     a
     //    / \

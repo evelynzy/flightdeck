@@ -34,6 +34,7 @@ function makeCtx(overrides: Record<string, any> = {}): CommandHandlerContext {
       getTask: vi.fn().mockReturnValue(null),
     },
     getAgent: vi.fn(),
+    getProjectIdForAgent: vi.fn().mockReturnValue('proj-1'),
     emit: vi.fn(),
     ...overrides,
   } as any;
@@ -140,7 +141,7 @@ describe('DECLARE_TASKS validation', () => {
     const agent = makeLeadAgent();
     const cmd = getDeclareHandler(ctx);
     cmd.handler(agent, '⟦⟦ DECLARE_TASKS {"tasks": [{"taskId": "t1", "role": "developer"}]} ⟧⟧');
-    expect(ctx.taskDAG.declareTaskBatch).toHaveBeenCalledWith(agent.id, [{ taskId: 't1', role: 'developer' }]);
+    expect(ctx.taskDAG.declareTaskBatch).toHaveBeenCalledWith(agent.id, [{ taskId: 't1', role: 'developer' }], 'proj-1');
   });
 });
 
