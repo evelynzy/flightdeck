@@ -1,5 +1,6 @@
 # R15: Hot-Reloadable Configuration — Implementation Spec
 
+**Status:** ✅ **Implemented** (2026-03-07)  
 **Inspired by:** Symphony's `WorkflowStore` (mtime+size+phash2 change detection), Squad's charter hot-reload  
 **Goal:** Configuration changes take effect without server restart, preserving all active agent state.
 

@@ -1,6 +1,6 @@
 # R3: Reorganize `coordination/` Directory — Implementation Spec
 
-**Status:** Ready for implementation
+**Status:** ✅ **Implemented** (2026-03-07)
 **Estimated effort:** 1–2 days + 1 day follow-up for skill/doc updates
 **Risk:** Medium (many import paths change; must be atomic to avoid broken builds)
 

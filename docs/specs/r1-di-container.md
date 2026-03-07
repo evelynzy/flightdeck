@@ -1,6 +1,6 @@
 # R1: DI Container for Server Bootstrap — Implementation Spec
 
-**Status**: Draft → Reviewed (updated per @e7f14c5e architectural review)
+**Status**: ✅ **Implemented** — Draft → Reviewed → Implemented (2026-03-07)
 **Author**: Architect (cc29bb0d)
 **Priority**: P1 (Highest — eliminates #1 maintainability risk)
 **Estimated Effort**: 2-3 days

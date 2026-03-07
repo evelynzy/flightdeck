@@ -3,7 +3,8 @@
 **Author:** Architect Agent (a77e1782)
 **Date:** 2026-03-07
 **Source Reports:** Paperclip, Symphony, Squad, Edict, Flightdeck (Flightdeck)
-**Revision:** v2 (definitive) — incorporates critical review feedback from bb14c13b
+**Revision:** v3 — 8 of 19 recommendations implemented (R1, R2, R3, R4, R5, R9, R12, R15)
+**Previous:** v2 (definitive) — incorporated critical review feedback from bb14c13b
 
 ---
 
@@ -13,7 +14,7 @@ After analyzing 4 external projects against our own codebase, the single most im
 
 Three projects independently converged on the same core patterns. That convergence is the signal we should follow.
 
-This definitive version incorporates critical review feedback that identified 7 missed patterns, 4 prioritization adjustments, 3 missing anti-patterns, and 4 cross-pollination opportunities. Recommendations are now expanded to 19 total, with corrected priority rankings.
+This definitive version incorporates critical review feedback that identified 7 missed patterns, 4 prioritization adjustments, 3 missing anti-patterns, and 4 cross-pollination opportunities. Recommendations are now expanded to 19 total, with corrected priority rankings. **8 of 19 recommendations have been implemented** (R1, R2, R3, R4, R5, R9, R12, R15).
 
 ---
 
@@ -145,21 +146,21 @@ This definitive version incorporates critical review feedback that identified 7 
 
 ### Priority 1 — High Impact, Addresses Known Weaknesses
 
-#### R1. Dependency Injection Container for Server Bootstrap
+#### R1. Dependency Injection Container for Server Bootstrap ✅ DONE
 **Inspired by:** Paperclip's factory-function services pattern
 **Problem:** Flightdeck's `index.ts` manually wires ~35 services with a function that takes 35+ positional parameters. This is the #1 maintainability risk identified in the self-analysis report.
 **Recommendation:** Create a `createContainer(config)` factory that builds all services in dependency order and returns an `AppContext` object. Paperclip's pattern: `goalService(db)` returns `{ list, getById, create, update, remove }` — each service is a pure function of its dependencies.
 **Impact:** Eliminates the 35-parameter god function. Makes testing trivial (inject mock services). Makes adding new services a 2-line change instead of threading through 3+ files.
 **Effort:** Medium (refactor, not rewrite — services already exist, just need a container).
 
-#### R2. Shared Types Package (`packages/shared`)
+#### R2. Shared Types Package (`packages/shared`) ✅ DONE
 **Inspired by:** Paperclip's `@paperclipai/shared` package, Squad's granular SDK exports
 **Problem:** The Flightdeck self-analysis identified type drift between server and client as a risk. WebSocket messages are string unions on the client but ad-hoc strings on the server.
 **Recommendation:** Extract a `packages/shared` with: (a) WebSocket protocol schema as Zod discriminated unions, (b) shared domain types (Agent, Role, Task, Decision), (c) API request/response types. Both server and client import from the same source of truth.
 **Impact:** Catches protocol drift at compile time. Eliminates duplicate type definitions. Makes adding new WS events type-safe by construction.
 **Effort:** Medium (extract existing types, add Zod schemas for WS protocol).
 
-#### R3. Reorganize `coordination/` Directory (47 Files → Domain Clusters)
+#### R3. Reorganize `coordination/` Directory (47 Files → Domain Clusters) ✅ DONE
 **Inspired by:** All projects using clear module boundaries
 **Problem:** The `coordination/` directory is a catch-all with 47 files covering ~15 distinct concerns. The self-analysis report specifically calls this out.
 **Recommendation:** Sub-organize as the self-analysis suggests:
@@ -188,7 +189,7 @@ coordination/
 
 ### Priority 2 — Significant Improvements, Moderate Effort
 
-#### R4. Hook-Based Governance Pipeline *(moved from Priority 1)*
+#### R4. Hook-Based Governance Pipeline *(moved from Priority 1)* ✅ DONE
 **Inspired by:** Squad's `PreToolUseContext → HookAction` pipeline
 **Problem:** Flightdeck enforces constraints through system prompts (fragile, bypassable) and file locking (reactive, not preventive). There's no way to programmatically block an agent from running dangerous commands, writing to protected files beyond locked ones, or exceeding rate limits.
 **Recommendation:** Implement a hook pipeline that intercepts agent actions:
@@ -205,7 +206,7 @@ Built-in hooks: file write guard (glob patterns), shell command blocklist, commi
 **Impact:** Programmatic, testable, composable governance. Catches violations that prompt-based rules miss.
 **Effort:** Medium (new subsystem, but well-scoped).
 
-#### R5. Structured Logging with Contextual Correlation *(enhanced)*
+#### R5. Structured Logging with Contextual Correlation *(enhanced)* ✅ DONE (Phases 1-2; Phases 3-4 in progress)
 **Inspired by:** Symphony's `:logger` metadata, Squad's OpenTelemetry-compatible traces
 **Problem:** Flightdeck's server uses `console.log` with ad-hoc formatting. When debugging agent behavior across concurrent sessions, there's no way to filter logs by session, agent, or task. The `ActivityLedger` captures structured events, but server-side operational logs are unstructured.
 **Recommendation:** Use **pino** with child loggers per request/agent/session context. Thread context via `AsyncLocalStorage`:
@@ -251,7 +252,7 @@ developer-task → [auto] review-task (blocking) → parent-task-close
 **Impact:** Ensures all code changes are reviewed. Uses existing infrastructure (DAG + reviewer roles).
 **Effort:** Medium (DAG automation rule, review task template, auto-assignment logic).
 
-#### R15. Hot-Reloadable Configuration (NEW)
+#### R15. Hot-Reloadable Configuration (NEW) ✅ DONE
 **Inspired by:** Symphony's WorkflowStore (mtime+size+phash2 change detection), Squad's charter hot-reload
 **Problem:** Changing Flightdeck configuration (role definitions, model settings, governance rules) requires a server restart. In a long-running multi-agent session, this means losing all active agent state.
 **Recommendation:** Implement a config watcher using Symphony's triple-check pattern: watch file mtime, compare size, then hash content only if mtime+size changed. Reload config in-place without restarting agents. Start with role definitions and model configuration — these are the most frequently changed during development.
@@ -296,7 +297,7 @@ Services check flags before initialization. Lazy-init services on first use when
 **Impact:** Safety net for configuration experimentation. Full audit trail. One-click rollback of bad changes.
 **Effort:** Low-medium (new table + service + API endpoint).
 
-#### R9. ACP Adapter Abstraction Layer
+#### R9. ACP Adapter Abstraction Layer ✅ DONE
 **Inspired by:** Squad's `CopilotSessionAdapter`, Paperclip's adapter plugin system
 **Problem:** `AcpConnection.ts` (397 LoC) directly uses `@agentclientprotocol/sdk` types throughout. The ACP SDK is at v0.14.x and changing rapidly.
 **Recommendation:** Create an `LLMAdapter` interface that `AcpConnection` implements. Define stable internal event types (`message_delta`, `tool_call`, `session_idle`, etc.) that don't change when the ACP SDK changes.
@@ -341,7 +342,7 @@ Integrate with `ModelSelector.ts`. On model failure, try next in chain. Enforce 
 **Impact:** Better availability during model outages. Cost predictability via tier ceilings.
 **Effort:** Low (enhance existing ModelSelector with chain + ceiling logic).
 
-#### R12. Secret/Sensitive Data Redaction in Logs *(enhanced)*
+#### R12. Secret/Sensitive Data Redaction in Logs *(enhanced)* ✅ DONE
 **Inspired by:** Paperclip's `redaction.ts` pattern-based detection
 **Problem:** Agent conversations and activity logs may contain API keys, tokens, or credentials that agents encounter during their work. No automatic redaction exists.
 **Recommendation:** Add a redaction layer that scans outgoing WebSocket messages and log entries for sensitive patterns. Specific patterns from Paperclip:
@@ -365,37 +366,37 @@ Apply to WS broadcast and log write paths. Replace matched values with `[REDACTE
 
 ### Quick Wins (< 1 day each)
 
-| # | Recommendation | Effort | Impact |
-|---|---------------|--------|--------|
-| R11 | Defensive re-validation before dispatch | Hours | Prevents wasted agent runs — highest reliability ROI |
-| R16 | Cost/budget enforcement with auto-pause | Hours | Prevents runaway spend |
-| R17 | LLM output sanitization | Hours | Cleaner data quality |
-| R18 | Ghost response retry | Hours | Fewer spurious failures |
-| R19 | Model fallback chains | Hours | Better availability |
-| R6 | Feature flag system | Hours | Cleaner startup, safer experiments |
-| R12 | Secret/sensitive data redaction | Half-day | Security defense-in-depth |
+| # | Recommendation | Effort | Impact | Status |
+|---|---------------|--------|--------|--------|
+| R11 | Defensive re-validation before dispatch | Hours | Prevents wasted agent runs — highest reliability ROI | |
+| R16 | Cost/budget enforcement with auto-pause | Hours | Prevents runaway spend | |
+| R17 | LLM output sanitization | Hours | Cleaner data quality | |
+| R18 | Ghost response retry | Hours | Fewer spurious failures | |
+| R19 | Model fallback chains | Hours | Better availability | |
+| R6 | Feature flag system | Hours | Cleaner startup, safer experiments | |
+| R12 | Secret/sensitive data redaction | Half-day | Security defense-in-depth | ✅ Done |
 
 ### Medium Investments (1-3 days each)
 
-| # | Recommendation | Effort | Impact |
-|---|---------------|--------|--------|
-| R2 | Shared types package | 2-3 days | Eliminates type drift permanently |
-| R1 | Dependency injection container | 2-3 days | Eliminates the #1 maintainability risk |
-| R3 | Reorganize `coordination/` directory | 1-2 days + followup | Major navigability improvement |
-| R5 | Structured logging (pino + AsyncLocalStorage) | 2 days | Transforms debugging experience |
-| R8 | Config revision tracking | 1-2 days | Safety net + audit trail |
-| R10 | Tiered response system | 2-3 days | Cost savings + faster responses |
+| # | Recommendation | Effort | Impact | Status |
+|---|---------------|--------|--------|--------|
+| R2 | Shared types package | 2-3 days | Eliminates type drift permanently | ✅ Done |
+| R1 | Dependency injection container | 2-3 days | Eliminates the #1 maintainability risk | ✅ Done |
+| R3 | Reorganize `coordination/` directory | 1-2 days + followup | Major navigability improvement | ✅ Done |
+| R5 | Structured logging (pino + AsyncLocalStorage) | 2 days | Transforms debugging experience | ✅ Phases 1-2 done |
+| R8 | Config revision tracking | 1-2 days | Safety net + audit trail | |
+| R10 | Tiered response system | 2-3 days | Cost savings + faster responses | |
 
 ### Deep Investments (1+ weeks)
 
-| # | Recommendation | Effort | Impact |
-|---|---------------|--------|--------|
-| R4 | Hook-based governance pipeline | 1 week | Programmatic, testable enforcement |
-| R13 | Multi-turn agent sessions | 1-2 weeks | Step-change in agent effectiveness |
-| R14 | Mandatory review gates in DAG | 1 week | Structural quality assurance |
-| R15 | Hot-reloadable configuration | 1 week | Faster development iteration |
-| R7 | Persistent knowledge / agent memory | 1 week | Multi-session knowledge compounding |
-| R9 | ACP adapter abstraction layer | 1 week | SDK-change resilience |
+| # | Recommendation | Effort | Impact | Status |
+|---|---------------|--------|--------|--------|
+| R4 | Hook-based governance pipeline | 1 week | Programmatic, testable enforcement | ✅ Done |
+| R13 | Multi-turn agent sessions | 1-2 weeks | Step-change in agent effectiveness | |
+| R14 | Mandatory review gates in DAG | 1 week | Structural quality assurance | |
+| R15 | Hot-reloadable configuration | 1 week | Faster development iteration | ✅ Done |
+| R7 | Persistent knowledge / agent memory | 1 week | Multi-session knowledge compounding | |
+| R9 | ACP adapter abstraction layer | 1 week | SDK-change resilience | ✅ Done |
 
 ### Not Recommended Now (Deep Investment, Lower ROI)
 
@@ -498,6 +499,6 @@ These are specific ways to combine strengths from multiple projects:
 
 ---
 
-*The highest-leverage sequence: Start with quick wins (R11, R16, R18, R19 — each takes hours). Then tackle the structural trio: R1 (DI container) + R2 (shared types) + R3 (directory reorg). These address root causes. Everything else builds on that foundation.*
+*The highest-leverage sequence: Start with quick wins (R11, R16, R18, R19 — each takes hours). Then tackle the structural trio: ~~R1 (DI container) + R2 (shared types) + R3 (directory reorg)~~ ✅ all done. The remaining 11 recommendations build on this foundation.*
 
-*Report reviewed and improved per critical feedback from @bb14c13b. Total: 19 recommendations, 9 anti-patterns, 8 cross-cutting themes and emerging patterns.*
+*Report reviewed and improved per critical feedback from @bb14c13b. Total: 19 recommendations (8 implemented, 11 remaining), 9 anti-patterns, 8 cross-cutting themes and emerging patterns.*

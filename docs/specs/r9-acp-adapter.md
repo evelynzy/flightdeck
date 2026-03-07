@@ -1,7 +1,7 @@
 # R9: ACP Adapter Abstraction Layer — Implementation Spec
 
 **Author:** Developer agent 903df314  
-**Status:** Draft  
+**Status:** ✅ **Implemented** (2026-03-07)
 **Inspired by:** Paperclip's multi-adapter plugin system, Squad's `CopilotSessionAdapter`
 
 ---

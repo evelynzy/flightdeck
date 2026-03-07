@@ -1,7 +1,7 @@
 # R4: Hook-Based Governance Pipeline — Implementation Spec
 
 > **Author**: Architect agent 5699527d
-> **Status**: Draft
+> **Status**: ✅ **Implemented** (2026-03-07)
 > **Inspired by**: Squad's `PreToolUseContext → HookAction` pipeline, Edict's mandatory review gates
 > **Estimated effort**: 1 week (3 days core pipeline + 2 days built-in hooks + tests)
 
