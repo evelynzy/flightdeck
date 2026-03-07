@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 import { validateBody, spawnAgentSchema, sendMessageSchema, agentInputSchema } from '../validation/schemas.js';
 import { spawnLimiter, messageLimiter } from './context.js';
 import type { AppContext } from './context.js';
-import type { ContentBlock } from '@agentclientprotocol/sdk';
+import type { ContentBlock } from '../adapters/types.js';
 
 /** Build ContentBlock array from text + optional attachments */
 function buildContentBlocks(text: string, attachments?: Array<{ name: string; mimeType: string; data: string }>, supportsImages = true): ContentBlock[] {

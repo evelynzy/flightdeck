@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { createHash } from 'crypto';
-import type { AcpConnection, ToolCallInfo, PlanEntry, PromptContent } from '../acp/AcpConnection.js';
+import type { AgentAdapter, ToolCallInfo, PlanEntry, PromptContent } from '../adapters/types.js';
 import type { Role } from './RoleRegistry.js';
 import type { ServerConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
@@ -120,7 +120,7 @@ export class Agent {
   /** When true, message delivery is halted — messages stay queued */
   public systemPaused = false;
 
-  private acpConnection: AcpConnection | null = null;
+  private acpConnection: AgentAdapter | null = null;
   private config: ServerConfig;
   private pendingMessages: PromptContent[] = [];
   private pendingPriorityCount = 0;
@@ -162,7 +162,7 @@ export class Agent {
   }
 
   // ── Internal methods used by AgentAcpBridge ─────────────────────────────
-  /** @internal */ _setAcpConnection(conn: AcpConnection): void { this.acpConnection = conn; }
+  /** @internal */ _setAcpConnection(conn: AgentAdapter): void { this.acpConnection = conn; }
   /** @internal */ _notifyData(data: string): void { this.events.notifyData(data); }
   /** @internal */ _notifyContent(content: any): void { this.events.notifyContent(content); }
   /** @internal */ _notifyThinking(text: string): void { this.events.notifyThinking(text); }

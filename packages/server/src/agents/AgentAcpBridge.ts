@@ -4,8 +4,8 @@
  */
 import { mkdirSync, existsSync, renameSync } from 'fs';
 import { join } from 'path';
-import { AcpConnection } from '../acp/AcpConnection.js';
-import type { ToolCallInfo, PlanEntry } from '../acp/AcpConnection.js';
+import { AcpAdapter } from '../adapters/AcpAdapter.js';
+import type { AgentAdapter, ToolCallInfo, PlanEntry } from '../adapters/types.js';
 import type { ServerConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { agentFlagForRole } from './agentFiles.js';
@@ -40,7 +40,7 @@ export function ensureSharedWorkspace(agent: Agent): void {
  * Wires all protocol events to the agent's state and listener arrays.
  */
 export function startAcp(agent: Agent, config: ServerConfig, initialPrompt?: string): void {
-  const conn = new AcpConnection({ autopilot: agent.autopilot });
+  const conn = new AcpAdapter({ autopilot: agent.autopilot });
   agent._setAcpConnection(conn);
   agent.status = 'running';
   wireAcpEvents(agent, conn);
@@ -79,7 +79,7 @@ export function startAcp(agent: Agent, config: ServerConfig, initialPrompt?: str
 }
 
 /** Wire ACP protocol events to Agent state and listeners. */
-function wireAcpEvents(agent: Agent, conn: AcpConnection): void {
+function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
   conn.on('text', (text: string) => {
     if (agent._isTerminated) return;
     agent.messages.push(text);

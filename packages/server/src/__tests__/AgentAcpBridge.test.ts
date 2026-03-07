@@ -16,13 +16,13 @@ vi.mock('../agents/agentFiles.js', () => ({
   agentFlagForRole: (roleId: string) => roleId,
 }));
 
-// ── Mock AcpConnection ───────────────────────────────────────────
+// ── Mock AcpAdapter ───────────────────────────────────────────
 const mockStart = vi.fn();
 const mockOn = vi.fn();
 
-vi.mock('../acp/AcpConnection.js', () => {
+vi.mock('../adapters/AcpAdapter.js', () => {
   return {
-    AcpConnection: class MockAcpConnection {
+    AcpAdapter: class MockAcpAdapter {
       start = mockStart;
       on = mockOn;
     },
