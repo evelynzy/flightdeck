@@ -9,6 +9,7 @@ import type { Agent } from '../Agent.js';
 import type { DagTaskInput } from '../../tasks/TaskDAG.js';
 import { TaskDAG } from '../../tasks/TaskDAG.js';
 import type { CommandEntry, CommandHandlerContext } from './types.js';
+import { formatNewlyReadyMessage } from './CompletionTracking.js';
 import {
   parseCommandPayload,
   declareTasksSchema,
@@ -87,7 +88,13 @@ function handleTaskStatus(ctx: CommandHandlerContext, agent: Agent, _data: strin
     agent.sendMessage('[System] No task DAG found.');
     return;
   }
-  const status = ctx.taskDAG.getStatus(leadId);
+
+  // Gather active child agents for coverage metric
+  const activeAgents = ctx.getAllAgents()
+    .filter(a => a.parentId === leadId && a.status !== 'terminated' && a.role.id !== 'secretary')
+    .map(a => ({ id: a.id, role: a.role.id }));
+
+  const status = ctx.taskDAG.getStatus(leadId, activeAgents);
   if (status.tasks.length === 0) {
     agent.sendMessage('[System] No task DAG declared. Use DECLARE_TASKS to create one.');
     return;
@@ -112,6 +119,13 @@ function handleTaskStatus(ctx: CommandHandlerContext, agent: Agent, _data: strin
     msg += '\n\nFile Lock Map:';
     for (const [file, info] of Object.entries(fileLockMap)) {
       msg += `\n  ${file} → ${info.taskId}${info.agentId ? ` (${info.agentId.slice(0, 8)})` : ''}`;
+    }
+  }
+  // Coverage metric
+  if (status.coverage && status.coverage.total > 0) {
+    msg += `\n\n📊 DAG Coverage: ${status.coverage.percentage}% (${status.coverage.tracked}/${status.coverage.total} active agents tracked)`;
+    if (status.coverage.untrackedAgents.length > 0) {
+      msg += `\n⚠️ Untracked agents: ${status.coverage.untrackedAgents.map(a => `${a.role} (${a.id.slice(0, 8)})`).join(', ')}`;
     }
   }
   agent.sendMessage(msg);
@@ -307,6 +321,10 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
 
         const error = ctx.taskDAG.getTransitionError(agent.parentId, taskId, 'complete');
         if (error) {
+          if (error.currentStatus === 'done') {
+            agent.sendMessage(`[System] Task "${taskId}" is already done (auto-completed from agent report). No action needed.`);
+            return;
+          }
           // Task not completable — still notify parent via message
           if (parent) {
             parent.sendMessage(`[Agent Report] ${agent.role.name} (${agent.id.slice(0, 8)}) completed task "${taskId}".\nStatus: ${status}\nSummary: ${summary}`);
@@ -325,8 +343,7 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
         // Notify parent with completion details and newly ready tasks
         let parentMsg = `[Agent Report] ${agent.role.name} (${agent.id.slice(0, 8)}) completed DAG task "${taskId}".\nStatus: ${status}\nSummary: ${summary}`;
         if (newlyReady && newlyReady.length > 0) {
-          const readyNames = newlyReady.map(d => d.id).join(', ');
-          parentMsg += `\nNewly ready tasks: ${readyNames}. Use DELEGATE or CREATE_AGENT to assign them.`;
+          parentMsg += '\n' + formatNewlyReadyMessage(ctx, agent.parentId!, taskId, newlyReady);
         }
         if (parent) {
           parent.sendMessage(parentMsg);
@@ -361,7 +378,11 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
     const summary = (req.summary || req.output || '').slice(0, 10_000) || undefined;
     const error = ctx.taskDAG.getTransitionError(agent.id, req.taskId, 'complete');
     if (error) {
-      agent.sendMessage(`[System] ${TaskDAG.formatTransitionError(error)}`);
+      if (error.currentStatus === 'done' && error.attemptedAction === 'complete') {
+        agent.sendMessage(`[System] Task "${req.taskId}" is already done (auto-completed from agent report). No action needed.`);
+      } else {
+        agent.sendMessage(`[System] ${TaskDAG.formatTransitionError(error)}`);
+      }
       return;
     }
     const newlyReady = ctx.taskDAG.completeTask(agent.id, req.taskId);
@@ -374,8 +395,7 @@ function handleCompleteTask(ctx: CommandHandlerContext, agent: Agent, data: stri
     let msg = `[System] Task "${req.taskId}" marked as done.`;
     if (summary) msg += ` Summary: ${summary}`;
     if (newlyReady && newlyReady.length > 0) {
-      const readyNames = newlyReady.map(d => d.id).join(', ');
-      msg += ` Newly ready tasks: ${readyNames}. Use DELEGATE or CREATE_AGENT to assign them.`;
+      msg += ' ' + formatNewlyReadyMessage(ctx, agent.id, req.taskId, newlyReady);
     }
     agent.sendMessage(msg);
   } catch (err: any) {

@@ -118,17 +118,23 @@ function handleCreateAgent(ctx: CommandHandlerContext, agent: Agent, data: strin
         } else {
           // Auto-create DAG task for untracked delegation
           const autoResult = autoCreateDagTask(ctx, agent.id, role.id, req.task, child.id, req.dependsOn);
+          // Warn that auto-linking is fragile — explicit dagTaskId is preferred
+          if (ctx.taskDAG.getTasks(agent.id).length > 0) {
+            const method = autoResult.linked ? 'fuzzy-matched' : autoResult.created ? 'auto-created' : 'failed to link';
+            logger.warn('delegation', `CREATE_AGENT without dagTaskId — ${method} for "${req.task.slice(0, 80)}". Prefer explicit dagTaskId.`);
+            dagNote += `\n💡 Tip: Add dagTaskId to CREATE_AGENT for reliable DAG tracking.`;
+          }
           if (autoResult.linked) {
-            dagNote = ` [DAG: linked to "${autoResult.taskId}" → running]`;
+            dagNote = ` [DAG: linked to "${autoResult.taskId}" → running]` + dagNote;
             child.dagTaskId = autoResult.taskId;
             logger.info('delegation', `DAG linked: task "${autoResult.taskId}" → agent ${child.id.slice(0, 8)}`);
           } else if (autoResult.created) {
-            dagNote = ` [DAG: auto-created "${autoResult.taskId}" → running]`;
+            dagNote = ` [DAG: auto-created "${autoResult.taskId}" → running]` + dagNote;
             if (autoResult.depNotes.length) dagNote += `\n  ${autoResult.depNotes.join('\n  ')}`;
             child.dagTaskId = autoResult.taskId;
             logger.info('delegation', `DAG auto-created: task "${autoResult.taskId}" → agent ${child.id.slice(0, 8)}`);
           } else if (autoResult.duplicate) {
-            dagNote = `\n⚠️ Similar DAG task exists: "${autoResult.duplicate}". Use dagTaskId: "${autoResult.duplicate}" to link explicitly.`;
+            dagNote = `\n⚠️ Similar DAG task exists: "${autoResult.duplicate}". Use dagTaskId: "${autoResult.duplicate}" to link explicitly.` + dagNote;
           }
         }
       }
@@ -266,17 +272,23 @@ function handleDelegate(ctx: CommandHandlerContext, agent: Agent, data: string):
       } else {
         // Auto-create DAG task for untracked delegation
         const autoResult = autoCreateDagTask(ctx, agent.id, child.role.id, req.task, child.id, req.dependsOn);
+        // Warn that auto-linking is fragile — explicit dagTaskId is preferred
+        if (ctx.taskDAG.getTasks(agent.id).length > 0) {
+          const method = autoResult.linked ? 'fuzzy-matched' : autoResult.created ? 'auto-created' : 'failed to link';
+          logger.warn('delegation', `DELEGATE without dagTaskId — ${method} for "${req.task.slice(0, 80)}". Prefer explicit dagTaskId.`);
+          dagNote += `\n💡 Tip: Add dagTaskId to DELEGATE for reliable DAG tracking.`;
+        }
         if (autoResult.linked) {
-          dagNote = ` [DAG: linked to "${autoResult.taskId}" → running]`;
+          dagNote = ` [DAG: linked to "${autoResult.taskId}" → running]` + dagNote;
           child.dagTaskId = autoResult.taskId;
           logger.info('delegation', `DAG linked: task "${autoResult.taskId}" → agent ${child.id.slice(0, 8)}`);
         } else if (autoResult.created) {
-          dagNote = ` [DAG: auto-created "${autoResult.taskId}" → running]`;
+          dagNote = ` [DAG: auto-created "${autoResult.taskId}" → running]` + dagNote;
           if (autoResult.depNotes.length) dagNote += `\n  ${autoResult.depNotes.join('\n  ')}`;
           child.dagTaskId = autoResult.taskId;
           logger.info('delegation', `DAG auto-created: task "${autoResult.taskId}" → agent ${child.id.slice(0, 8)}`);
         } else if (autoResult.duplicate) {
-          dagNote = `\n⚠️ Similar DAG task exists: "${autoResult.duplicate}". Use dagTaskId: "${autoResult.duplicate}" to link explicitly.`;
+          dagNote = `\n⚠️ Similar DAG task exists: "${autoResult.duplicate}". Use dagTaskId: "${autoResult.duplicate}" to link explicitly.` + dagNote;
         }
       }
     }
@@ -502,7 +514,7 @@ function findSimilarActiveDelegation(ctx: CommandHandlerContext, task: string, e
 // ── Auto-DAG helpers ──────────────────────────────────────────────────
 
 /** Threshold for near-duplicate detection (reuses descriptionSimilarity from TaskDAG) */
-const NEAR_DUPLICATE_THRESHOLD = 0.6;
+const NEAR_DUPLICATE_THRESHOLD = 0.8;
 
 interface AutoCreateResult {
   created: boolean;
@@ -534,22 +546,29 @@ function autoCreateDagTask(
   const nearDuplicate = existingTasks
     .filter(t => !['done', 'skipped', 'cancelled'].includes(t.dagStatus))
     .find(
-      t => descriptionSimilarity(taskText, t.description, t.title) > NEAR_DUPLICATE_THRESHOLD
+      t => t.role === role
+        && descriptionSimilarity(taskText, t.description, t.title) > NEAR_DUPLICATE_THRESHOLD
     );
   if (nearDuplicate) {
-    // Link to existing declared task instead of creating a duplicate
-    const linkableStatuses = ['ready', 'pending', 'blocked', 'paused', 'failed'];
-    if (linkableStatuses.includes(nearDuplicate.dagStatus)) {
-      // Try normal start first (works for 'ready'), then force-start for others
-      const started = ctx.taskDAG.startTask(leadId, nearDuplicate.id, agentId)
-        ?? ctx.taskDAG.forceStartTask(leadId, nearDuplicate.id, agentId);
-      if (started) {
-        logger.info('delegation', `DAG linked: delegation matched existing task "${nearDuplicate.id}" (was ${nearDuplicate.dagStatus})`);
-        return { created: false, taskId: nearDuplicate.id, linked: true, depNotes };
+    const score = descriptionSimilarity(taskText, nearDuplicate.description, nearDuplicate.title);
+    if (score > 0.95) {
+      // Very likely duplicate — link to existing, but warn
+      const linkableStatuses = ['ready', 'pending', 'blocked', 'paused', 'failed'];
+      if (linkableStatuses.includes(nearDuplicate.dagStatus)) {
+        const started = ctx.taskDAG.startTask(leadId, nearDuplicate.id, agentId)
+          ?? ctx.taskDAG.forceStartTask(leadId, nearDuplicate.id, agentId);
+        if (started) {
+          const lead = ctx.getAgent(leadId);
+          if (lead) lead.sendMessage(`[System] ℹ️ Linked delegation to existing task "${nearDuplicate.id}" (similarity: ${score.toFixed(2)}). If this is wrong, use ADD_TASK to create a separate entry.`);
+          logger.info('delegation', `DAG linked: delegation matched existing task "${nearDuplicate.id}" (was ${nearDuplicate.dagStatus})`);
+          return { created: false, taskId: nearDuplicate.id, linked: true, depNotes };
+        }
       }
+      return { created: false, taskId: '', duplicate: nearDuplicate.id, depNotes };
     }
-    // Already running or can't link — warn instead
-    return { created: false, taskId: '', duplicate: nearDuplicate.id, depNotes };
+    // Possible duplicate (0.8-0.95) — create anyway but warn
+    depNotes.push(`⚠️ Possible duplicate of "${nearDuplicate.id}" (similarity: ${score.toFixed(2)})`);
+    // Fall through to create the task
   }
 
   const autoId = generateAutoTaskId(role, taskText);
@@ -652,15 +671,27 @@ export function inferReviewDependencies(
   }
 
   // Strategy 3: Role reference (e.g., "review the developer's work")
-  if (deps.length === 0) {
-    const roleMatch = taskDesc.match(/(?:by|from)\s+(?:the\s+)?(\w+)/i);
-    if (roleMatch) {
-      const refRole = roleMatch[1].toLowerCase();
-      const task = allTasks
-        .filter(t => t.role === refRole && ['running', 'done'].includes(t.dagStatus))
-        .sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''))
-        [0];
-      if (task) deps.push(task.id);
+  // Run even if deps were found — there may be additional role-based deps
+  const roleMatches = [...taskDesc.matchAll(/(?:by|from|of)\s+(?:the\s+)?(?:all\s+)?(\w+?)(?:'s|s')?\b/gi)];
+  for (const roleMatch of roleMatches) {
+    const refRole = roleMatch[1].toLowerCase();
+    const roleTasks = allTasks.filter(t =>
+      t.role === refRole
+      && ['running', 'done'].includes(t.dagStatus)
+      && !deps.includes(t.id)
+    );
+    for (const task of roleTasks) {
+      deps.push(task.id);
+    }
+  }
+
+  // Strategy 4: "all" reference (e.g., "review all completed work")
+  if (deps.length === 0 && /\b(all|every|everything)\b/i.test(taskDesc)) {
+    const completedOrRunning = allTasks.filter(t =>
+      ['running', 'done'].includes(t.dagStatus) && !deps.includes(t.id)
+    );
+    for (const task of completedOrRunning) {
+      deps.push(task.id);
     }
   }
 
