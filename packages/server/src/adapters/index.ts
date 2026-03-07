@@ -32,6 +32,28 @@ export {
 } from './presets.js';
 export type { ProviderPreset, ProviderId, BinaryChecker } from './presets.js';
 
+export {
+  resolveModel,
+  isTierAlias,
+  getTierModels,
+  listTiers,
+  isValidModel,
+} from './ModelResolver.js';
+export type { ModelResolution, ModelTier } from './ModelResolver.js';
+
+export {
+  CopilotRoleFileWriter,
+  ClaudeRoleFileWriter,
+  GeminiRoleFileWriter,
+  CursorRoleFileWriter,
+  CodexRoleFileWriter,
+  OpenCodeRoleFileWriter,
+  createRoleFileWriter,
+  listRoleFileWriterProviders,
+  FLIGHTDECK_MARKER,
+} from './RoleFileWriter.js';
+export type { RoleDefinition, RoleFileWriter } from './RoleFileWriter.js';
+
 import { AcpAdapter } from './AcpAdapter.js';
 import { MockAdapter } from './MockAdapter.js';
 import type { AgentAdapter, AdapterFactoryOptions } from './types.js';
