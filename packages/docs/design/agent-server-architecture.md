@@ -2262,6 +2262,568 @@ Phase 2 (next):  WebSocketTransport — network separation, multi-team collabora
 
 This is the path from "local dev tool" to "team infrastructure" — and the transport interface makes it a clean addition, not a rewrite.
 
+## Team Management UI
+
+### Paradigm Shift: Agents as Persistent Team Members
+
+The current UI treats agents as ephemeral workers — they're spawned, do work, and disappear. The `/agents` dashboard shows a live fleet with transient state (status, current task, token usage). There's no continuity between sessions.
+
+The new model treats agents as **persistent team members** with identity, accumulated knowledge, specialization, and history that spans sessions. An architect agent that has learned your codebase over 50 sessions is fundamentally more valuable than a freshly spawned one. The UI must reflect this.
+
+```
+Current Mental Model:                   New Mental Model:
+┌──────────────────────────┐            ┌──────────────────────────┐
+│  Agent = disposable tool │            │  Agent = team member     │
+│  Spawn → work → discard  │     →      │  Hire → train → grow     │
+│  No memory between runs  │            │  Persistent memory       │
+│  Interchangeable         │            │  Unique specialization   │
+│  Status: running/idle    │            │  History, skills, trust  │
+└──────────────────────────┘            └──────────────────────────┘
+```
+
+### Navigation Integration
+
+New routes integrate into the existing sidebar as a **primary navigation group** (alongside Lead, Overview, Agents):
+
+```
+Sidebar Navigation:
+  ┌─ Primary ────────────────────────┐
+  │  🎯 Lead         (/)             │
+  │  📊 Overview     (/overview)     │
+  │  🤖 Agents       (/agents)       │  ← live fleet (real-time, current session)
+  │  👥 Team         (/team)         │  ← NEW: persistent roster
+  │  📋 Tasks        (/tasks)        │
+  │  📅 Timeline     (/timeline)     │
+  │  🎮 Mission      (/mission-ctrl) │
+  │  🎨 Canvas       (/canvas)       │
+  ├─ More ───────────────────────────┤
+  │  📁 Projects     (/projects)     │
+  │  🧠 Knowledge    (/knowledge)    │
+  │  ⚡ Daemon       (/daemon)       │  ← rename to "Agent Server"
+  │  📈 Analytics    (/analytics)    │
+  │  💬 Groups       (/groups)       │
+  │  🏗️ Org Chart    (/org)          │
+  │  🗄️ Data         (/data)         │
+  └──────────────────────────────────┘
+```
+
+**Key distinction:** `/agents` remains the **live fleet view** (real-time status, current session, operational). `/team` is the **persistent roster view** (history, identity, cross-session). They show different facets of the same agents — linked by `agentId`.
+
+### 1. Team Roster View (`/team`)
+
+The primary view: all persistent agents across all projects.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  👥 Team Roster                                    [+ New Agent]     │
+│                                                                      │
+│  Filter: [All Projects ▾] [All Roles ▾] [Status: Active ▾] 🔍      │
+│  Group by: [None ▾ | Project | Role | Specialization]                │
+│                                                                      │
+│  ┌─ Summary Cards ─────────────────────────────────────────────────┐ │
+│  │  Active: 8  │  Idle: 3  │  Stale: 1  │  Total Knowledge: 847  │ │
+│  │  Sessions: 142  │  Avg Uptime: 4.2h  │  Projects: 3           │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │ 🏗️ Arch-Alpha        Architect    acme-app       ●  Active     │ │
+│  │    Specialization: System design, API architecture              │ │
+│  │    Knowledge: 127 entries │ Sessions: 34 │ Since: Jan 15       │ │
+│  │    Current: "Designing payment service integration"             │ │
+│  ├─────────────────────────────────────────────────────────────────┤ │
+│  │ 💻 Dev-Bravo          Developer   acme-app       ●  Active     │ │
+│  │    Specialization: React frontend, TypeScript                   │ │
+│  │    Knowledge: 89 entries │ Sessions: 28 │ Since: Jan 20        │ │
+│  │    Current: "Implementing checkout flow"                        │ │
+│  ├─────────────────────────────────────────────────────────────────┤ │
+│  │ 🧪 QA-Charlie         QA Tester   acme-app       ○  Idle       │ │
+│  │    Specialization: E2E testing, Playwright                      │ │
+│  │    Knowledge: 56 entries │ Sessions: 19 │ Since: Feb 3         │ │
+│  │    Last active: 2h ago │ "Completed payment flow tests"        │ │
+│  ├─────────────────────────────────────────────────────────────────┤ │
+│  │ 💻 Dev-Delta          Developer   billing-svc    ⚠  Stale      │ │
+│  │    Specialization: Go microservices, gRPC                       │ │
+│  │    Knowledge: 34 entries │ Sessions: 8 │ Since: Feb 28         │ │
+│  │    Stale since: 6h ago │ Last: "Refactoring invoice handler"   │ │
+│  │    [Resume] [Retire] [Reassign]                                 │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Per-agent row data:**
+- **Identity:** Name (human-readable, persistent), role icon, role label
+- **Assignment:** Current project, current team
+- **Status:** Active (running now), idle (alive but not working), stale (process dead, state preserved), retired (archived)
+- **Specialization:** Learned domain tags from knowledge entries and task history
+- **Knowledge:** Entry count — how much this agent "knows"
+- **Experience:** Session count, first active date
+- **Current/Last task:** What they're doing or last did
+- **Actions:** Context-dependent (Resume for stale, Retire for idle, Reassign for any)
+
+### 2. Agent Profiles (`/team/:agentId`)
+
+Individual agent detail page — the "personnel file":
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ← Back to Roster                                                    │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────┐            │
+│  │  🏗️ Arch-Alpha                          ●  Active    │            │
+│  │  Role: Architect │ Team: alice-lead │ acme-app       │            │
+│  │  Since: Jan 15, 2026 │ 34 sessions │ 127 knowledge  │            │
+│  │  Model: claude-sonnet-4.5 │ Provider: claude         │            │
+│  │  [Message] [Reassign] [Retrain] [Retire]             │            │
+│  └──────────────────────────────────────────────────────┘            │
+│                                                                      │
+│  ┌─ Tabs ──────────────────────────────────────────────────────────┐ │
+│  │  [Overview] [Knowledge] [History] [Skills] [Contributions]      │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ── Overview Tab ──────────────────────────────────────────────────  │
+│                                                                      │
+│  Specialization Tags:                                                │
+│  [System Design] [API Architecture] [Database Modeling] [TypeScript] │
+│  [Microservices] [Event-Driven Architecture]                         │
+│                                                                      │
+│  Performance Summary:                                                │
+│  ┌─────────────┬────────────┬──────────────┬──────────────────────┐  │
+│  │ Tasks Done  │ Avg Rating │ Knowledge    │ Context Efficiency   │  │
+│  │ 89          │ 4.2/5      │ 127 entries  │ 72% (tokens/task)   │  │
+│  └─────────────┴────────────┴──────────────┴──────────────────────┘  │
+│                                                                      │
+│  Recent Activity:                                                    │
+│  • 10m ago  Completed "Design payment service API" ✅               │
+│  • 2h ago   Reviewed PR #142 — found 3 issues                      │
+│  • 5h ago   Updated knowledge: "billing uses Stripe Connect"        │
+│  • 1d ago   Session #33 — 4 tasks, 2h 15m active                   │
+│                                                                      │
+│  ── Knowledge Tab ─────────────────────────────────────────────────  │
+│                                                                      │
+│  Knowledge by Category:                                              │
+│  [Core: 12] [Procedural: 45] [Semantic: 58] [Episodic: 12]         │
+│                                                                      │
+│  High-Confidence Entries:                                            │
+│  • "acme-app uses Next.js 15 with app router" (conf: 0.95)         │
+│  • "Payment flow: Stripe → webhook → inventory update" (conf: 0.92)│
+│  • "All API routes require auth middleware" (conf: 0.90)            │
+│                                                                      │
+│  Recently Learned:                                                   │
+│  • "Invoice PDF generation uses @react-pdf" (2h ago, conf: 0.78)   │
+│  • "Rate limiting is per-tenant, not global" (5h ago, conf: 0.85)  │
+│                                                                      │
+│  Training History:                                                   │
+│  12 corrections received │ 8 positive feedback │ 2 negative         │
+│  Top correction tags: [naming-conventions] [test-coverage]           │
+│                                                                      │
+│  ── History Tab ───────────────────────────────────────────────────  │
+│                                                                      │
+│  Session Log (most recent first):                                    │
+│  #34 │ 2h 15m │ 4 tasks │ "Payment service design" │ Today         │
+│  #33 │ 1h 45m │ 3 tasks │ "API versioning strategy" │ Yesterday    │
+│  #32 │ 3h 20m │ 6 tasks │ "Database migration plan" │ Mar 5        │
+│  ...                                                                 │
+│                                                                      │
+│  ── Skills Tab ────────────────────────────────────────────────────  │
+│                                                                      │
+│  Skills are inferred from task history and knowledge:                │
+│  ████████████ System Design       (34 tasks, 89% success)           │
+│  █████████░░░ API Architecture    (28 tasks, 85% success)           │
+│  ███████░░░░░ Database Modeling   (19 tasks, 82% success)           │
+│  ████░░░░░░░░ Frontend Review     (8 tasks, 75% success)            │
+│                                                                      │
+│  ── Contributions Tab ─────────────────────────────────────────────  │
+│                                                                      │
+│  Files modified: 142 │ Commits: 67 │ PRs reviewed: 23               │
+│  Most-touched files:                                                 │
+│  • src/api/payments/   (34 changes)                                 │
+│  • src/db/migrations/  (22 changes)                                 │
+│  • docs/architecture/  (18 changes)                                 │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Data sources for the profile:**
+- **Identity & assignment** → `agentRoster` table + persisted agent config
+- **Knowledge** → `knowledge` table filtered by `metadata.source.agentId`
+- **Training** → KnowledgePanel's existing `TrainingSummary` API, scoped per agent
+- **Session history** → `projectSessions` + `activityLog` joined on agentId
+- **Skills** → derived from `dagTasks` (completed tasks by category) + `knowledge` entries
+- **Contributions** → `activityLog` events of type commit, file-edit, pr-review
+
+### 3. Team Composition (`/team/compose`)
+
+Manage team structure — assign agents to projects, create new persistent agents:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🏗️ Team Composition                                                │
+│                                                                      │
+│  ┌─ Project: acme-app ─────────────────────────────────────────────┐ │
+│  │                                                                  │ │
+│  │  Team: alice-lead              [+ Add Agent] [Auto-compose]     │ │
+│  │                                                                  │ │
+│  │  Assigned:                                                       │ │
+│  │  🏗️ Arch-Alpha (Architect)    ● Active    [Reassign] [Remove]  │ │
+│  │  💻 Dev-Bravo  (Developer)    ● Active    [Reassign] [Remove]  │ │
+│  │  💻 Dev-Echo   (Developer)    ○ Idle      [Reassign] [Remove]  │ │
+│  │  🧪 QA-Charlie (QA Tester)   ○ Idle      [Reassign] [Remove]  │ │
+│  │                                                                  │ │
+│  │  Available (unassigned):                                         │ │
+│  │  💻 Dev-Foxtrot (Developer)   — Unassigned  [Assign Here]      │ │
+│  │  📝 Writer-Golf (Tech Writer) — Unassigned  [Assign Here]      │ │
+│  │                                                                  │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Create New Agent ──────────────────────────────────────────────┐ │
+│  │  Name: [________________]  Role: [Architect ▾]                   │ │
+│  │  Model: [claude-sonnet-4.5 ▾]  Provider: [claude ▾]            │ │
+│  │  Specialization: [System design, API architecture      ]        │ │
+│  │  Initial Knowledge: [Import from project ▾] [Import from agent] │ │
+│  │  Assign to: [acme-app ▾]  Team: [alice-lead ▾]                 │ │
+│  │  [Create Agent]                                                  │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Key operations:**
+- **Assign/Reassign:** Move an agent from one project to another (or one team to another). The agent keeps its knowledge and identity. Knowledge portability: agent-level knowledge travels with the agent; project-level knowledge stays.
+- **Auto-compose:** Given a task description, suggest a team composition (roles, count, which existing agents to reuse vs. create new).
+- **Clone:** Create a new agent initialized with another agent's knowledge (fork an expert). The clone starts with the same knowledge entries but diverges from there.
+- **Import knowledge:** When creating an agent, optionally seed it with knowledge from a project or from another agent.
+
+### 4. Knowledge Management per Agent
+
+Extends the existing Knowledge Panel (`/knowledge`) with per-agent scoping. Accessible both from `/knowledge` (add agent filter) and from the agent profile's Knowledge tab.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🧠 Knowledge — Agent: Arch-Alpha                 [All Agents ▾]    │
+│                                                                      │
+│  ┌─ What This Agent Knows ─────────────────────────────────────────┐ │
+│  │                                                                  │ │
+│  │  127 entries │ Est. 45K tokens │ 4 categories                   │ │
+│  │                                                                  │ │
+│  │  Confidence Distribution:                                        │ │
+│  │  High (>0.85): ████████████████░░░░  68 entries (54%)           │ │
+│  │  Med (0.5-0.85):████████░░░░░░░░░░░  41 entries (32%)           │ │
+│  │  Low (<0.5):    ████░░░░░░░░░░░░░░░  18 entries (14%)           │ │
+│  │                                                                  │ │
+│  │  Knowledge Sources:                                              │ │
+│  │  Self-learned: 89 │ Taught by user: 23 │ Inherited: 15          │ │
+│  │                                                                  │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Knowledge Timeline ────────────────────────────────────────────┐ │
+│  │  ▊ ▊▊▊▊ ▊▊▊▊▊▊▊▊ ▊▊▊▊▊▊▊ ▊▊▊▊▊▊▊▊▊▊▊▊▊ ▊▊▊▊▊            │ │
+│  │  Jan     Feb        Mar (entries added over time)               │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  Actions: [Teach Agent] [Prune Low-Confidence] [Export] [Transfer]  │
+│                                                                      │
+│  Teach Agent: Send a correction or new knowledge directly            │
+│  Transfer: Copy selected entries to another agent                    │
+│  Prune: Remove entries below confidence threshold                    │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Per-agent knowledge tracking requires a schema extension:**
+
+```typescript
+// Extend knowledge metadata to track authoring agent
+interface KnowledgeMetadata {
+  source: {
+    agentId?: string;        // Which agent learned/wrote this
+    teamId?: string;         // Which team context
+    sessionId?: string;      // Which session
+    mechanism: 'self_learned' | 'taught' | 'inherited' | 'corrected';
+  };
+  confidence: number;        // 0.0-1.0
+  accessCount: number;       // How often this entry was retrieved
+  lastAccessedAt?: string;   // For staleness detection
+  tags: string[];            // Derived specialization tags
+}
+```
+
+This uses the existing `metadata` JSON column on the `knowledge` table — no schema migration needed, just structured JSON conventions.
+
+### 5. Team Health Dashboard (`/team/health`)
+
+Operational overview across all teams and projects:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  💊 Team Health                                                      │
+│                                                                      │
+│  ┌─ Agent Status ──────────────────────────────────────────────────┐ │
+│  │  ● Active: 8    ○ Idle: 3    ⚠ Stale: 1    ◼ Retired: 2      │ │
+│  │                                                                  │ │
+│  │  ●●●●●●●● ○○○ ⚠ ◼◼                                            │ │
+│  │  (status heatmap — one dot per agent)                            │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Resource Usage ────────────────────────────────────────────────┐ │
+│  │  Total Tokens Today:  1.2M input │ 340K output                  │ │
+│  │  API Costs Est.:      $14.20 (based on model pricing)           │ │
+│  │  Avg Context Fill:    68% (across active agents)                │ │
+│  │                                                                  │ │
+│  │  Per-Agent Burn Rate:                                            │ │
+│  │  Dev-Bravo:  ████████████░░░░  78% context │ ~45min to exhaust │ │
+│  │  Arch-Alpha: ████████░░░░░░░░  52% context │ ~2h to exhaust   │ │
+│  │  Dev-Echo:   ██░░░░░░░░░░░░░░  12% context │ idle              │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Uptime & Sessions ─────────────────────────────────────────────┐ │
+│  │  Agent Server: ● Running (uptime: 14h 23m)                      │ │
+│  │  Orchestration: ● Connected (restarts today: 3, zero-downtime)  │ │
+│  │  Active Sessions: 2 (acme-app, billing-svc)                     │ │
+│  │                                                                  │ │
+│  │  Session History (today):                                        │ │
+│  │  ──●──●──●─────────●──●──────●── (session start/end timeline)   │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Alerts ────────────────────────────────────────────────────────┐ │
+│  │  ⚠ Dev-Delta stale for 6h — [Resume] [Retire]                  │ │
+│  │  ⚠ Arch-Alpha context at 78% — consider session rotation       │ │
+│  │  ✅ No mass failures in last 24h                                │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Data sources:**
+- Agent status → `agentRoster` (agent server writes, orchestration reads)
+- Token usage → `AgentInfo.inputTokens/outputTokens` from WebSocket events
+- Context burn rate → `AgentInfo.contextBurnRate` / `estimatedExhaustionMinutes` (already in AgentInfo)
+- Uptime → Agent server health monitor (already designed in Error Handling section)
+- Alerts → derived from roster status + context thresholds + mass failure detector
+
+### 6. Cross-Project View (`/team/projects`)
+
+What the team is working on across all projects — a portfolio view:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🌐 Cross-Project Overview                                          │
+│                                                                      │
+│  ┌─ acme-app ──────────────────────────────────────────────────────┐ │
+│  │  Team: alice-lead │ 4 agents │ 12 tasks (8 done, 3 active, 1p) │ │
+│  │  Active: Arch-Alpha (designing), Dev-Bravo (implementing)       │ │
+│  │  Knowledge: 312 entries │ Last activity: 10m ago                 │ │
+│  │  Progress: ████████████████░░░░░░ 72%                           │ │
+│  ├──────────────────────────────────────────────────────────────────┤ │
+│  │  Team: bob-lead │ 3 agents │ 8 tasks (5 done, 2 active, 1p)    │ │
+│  │  Active: Dev-India (testing), Dev-Juliet (fixing)               │ │
+│  │  Knowledge: shared with alice-lead (312 entries)                 │ │
+│  │  Progress: ████████████░░░░░░░░░░ 58%                           │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ billing-svc ───────────────────────────────────────────────────┐ │
+│  │  Team: alice-lead │ 2 agents │ 5 tasks (3 done, 2 active)      │ │
+│  │  Active: Dev-Foxtrot (implementing invoice API)                  │ │
+│  │  Knowledge: 89 entries │ Last activity: 2h ago                   │ │
+│  │  Progress: ████████████████████░░ 90%                           │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Agent Allocation ──────────────────────────────────────────────┐ │
+│  │  Arch-Alpha:   acme-app ██████████░░░░░░░░░░ (active)          │ │
+│  │  Dev-Bravo:    acme-app ████████████████░░░░ (active)           │ │
+│  │  Dev-Foxtrot:  billing  ██████████████████░░ (active)           │ │
+│  │  QA-Charlie:   acme-app ░░░░░░░░░░░░░░░░░░░░ (idle)            │ │
+│  │  Dev-Delta:    —        ⚠ stale                                 │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 7. Agent Lifecycle Management
+
+Agents have a full lifecycle beyond spawn/terminate:
+
+```
+                    ┌──────────┐
+         Create ──→ │  Active  │ ←── Resume
+                    └────┬─────┘
+                         │
+              ┌──────────┼──────────┐
+              ▼          ▼          ▼
+         ┌────────┐ ┌────────┐ ┌────────┐
+         │  Idle  │ │ Stale  │ │ Failed │
+         └───┬────┘ └───┬────┘ └───┬────┘
+             │          │          │
+             ▼          ▼          ▼
+         ┌────────────────────────────┐
+         │         Retired            │
+         └────────────┬───────────────┘
+                      │
+                      ▼
+         ┌────────────────────────────┐
+         │         Archived           │  (data preserved, agent removed)
+         └────────────────────────────┘
+```
+
+**Lifecycle operations:**
+
+| Operation | From State | To State | Effect |
+|-----------|-----------|----------|--------|
+| **Create** | — | Active | New agent with optional knowledge seed |
+| **Idle** | Active | Idle | Agent process alive but no active task |
+| **Stale** | Active/Idle | Stale | Process died, state preserved in DB |
+| **Resume** | Stale/Idle | Active | Restart with SDK session resume + knowledge reload |
+| **Retire** | Any except Archived | Retired | Graceful shutdown, final state persisted, removed from active roster |
+| **Archive** | Retired | Archived | Move agent data to archive tables, free roster slot |
+| **Clone** | Any active/idle | New Active | Fork agent with copied knowledge, new identity |
+| **Reassign** | Active/Idle | Active/Idle | Change project/team, agent keeps knowledge |
+| **Retrain** | Active/Idle | Active | Inject new knowledge entries, reset low-confidence items |
+
+**Retire vs. Terminate:**
+- **Terminate** (existing) = kill the process, forget it existed. Current behavior.
+- **Retire** (new) = graceful shutdown, preserve all knowledge and history in the roster as "retired." The agent's knowledge persists and can be inherited by new agents or consulted for reference. Retirement is reversible — a retired agent can be resumed.
+
+**Archive** removes the agent from the active roster entirely but preserves data in archive tables for auditing and knowledge mining.
+
+### Data Model Extensions
+
+The persistent agent model requires extending `AgentInfo` and the roster schema:
+
+```typescript
+// Extended AgentInfo for persistent identity
+interface PersistentAgentInfo extends AgentInfo {
+  // Identity (persistent across sessions)
+  name: string;                     // Human-readable name (e.g., "Arch-Alpha")
+  specialization: string[];         // Learned domain tags
+  firstActiveAt: string;            // When this agent was first created
+  totalSessions: number;            // Lifetime session count
+  totalTasks: number;               // Lifetime tasks completed
+
+  // Knowledge summary
+  knowledgeCount: number;           // Total knowledge entries
+  highConfidenceCount: number;      // Entries with confidence > 0.85
+  lastLearnedAt?: string;           // When knowledge was last updated
+
+  // Performance
+  taskSuccessRate: number;          // Lifetime success rate (0-1)
+  avgTaskDuration?: number;         // Average task completion time (ms)
+  feedbackScore?: number;           // Aggregate user feedback
+
+  // Lifecycle
+  lifecycleStatus: 'active' | 'idle' | 'stale' | 'retired' | 'archived';
+  retiredAt?: string;
+  retiredReason?: string;
+
+  // Lineage
+  clonedFromId?: string;            // If cloned, the source agent
+  cloneIds: string[];               // Agents cloned from this one
+}
+```
+
+```sql
+-- Schema extensions for agent_roster
+ALTER TABLE agent_roster ADD COLUMN name TEXT;
+ALTER TABLE agent_roster ADD COLUMN specialization TEXT DEFAULT '[]';  -- JSON array
+ALTER TABLE agent_roster ADD COLUMN first_active_at TEXT;
+ALTER TABLE agent_roster ADD COLUMN total_sessions INTEGER DEFAULT 0;
+ALTER TABLE agent_roster ADD COLUMN total_tasks INTEGER DEFAULT 0;
+ALTER TABLE agent_roster ADD COLUMN task_success_rate REAL DEFAULT 0;
+ALTER TABLE agent_roster ADD COLUMN feedback_score REAL;
+ALTER TABLE agent_roster ADD COLUMN lifecycle_status TEXT DEFAULT 'active';
+ALTER TABLE agent_roster ADD COLUMN retired_at TEXT;
+ALTER TABLE agent_roster ADD COLUMN retired_reason TEXT;
+ALTER TABLE agent_roster ADD COLUMN cloned_from_id TEXT;
+```
+
+### WebSocket Events for Team Management
+
+New event types to support real-time team UI updates:
+
+```typescript
+type TeamWebSocketEvent =
+  | { type: 'team:agent_created'; agent: PersistentAgentInfo }
+  | { type: 'team:agent_updated'; agentId: string; changes: Partial<PersistentAgentInfo> }
+  | { type: 'team:agent_retired'; agentId: string; reason: string }
+  | { type: 'team:agent_resumed'; agentId: string }
+  | { type: 'team:agent_reassigned'; agentId: string; from: TeamContext; to: TeamContext }
+  | { type: 'team:agent_cloned'; sourceId: string; cloneId: string; clone: PersistentAgentInfo }
+  | { type: 'team:knowledge_changed'; agentId: string; delta: number; total: number }
+  | { type: 'team:health_alert'; alert: HealthAlert };
+
+interface HealthAlert {
+  severity: 'info' | 'warning' | 'critical';
+  agentId?: string;
+  message: string;
+  action?: { label: string; type: 'resume' | 'retire' | 'reassign' | 'rotate' };
+}
+```
+
+### Integration with Existing Panels
+
+| Existing Panel | Integration |
+|---------------|-------------|
+| **Agents** (`/agents`) | Remains the live operational view. Add a "View Profile" link per agent that navigates to `/team/:agentId`. Show `name` alongside `agentId` in the agent card. |
+| **Daemon** (`/daemon`) → renamed **Agent Server** | Shows infrastructure status (agent server health, transport, connection). The team view shows the human layer; this shows the machine layer. Add agent count per (projectId, teamId) to the daemon agent list. |
+| **Knowledge** (`/knowledge`) | Add an "Agent" filter dropdown. When an agent is selected, show only knowledge entries authored by or relevant to that agent. Link "View all" to the agent profile's Knowledge tab. |
+| **Projects** (`/projects`) | Add "Team" column to the project card showing which teams are working on each project. Link team names to the team roster filtered by that project. |
+| **Overview** (`/overview`) | Add a "Team Summary" card: active agents, total knowledge, stale agent alerts. Replace the anonymous agent heatmap with named agent tiles. |
+| **Tasks** (`/tasks`) | Show the assigned agent's `name` (not just agentId) in task rows. Link to agent profile. |
+| **Analytics** (`/analytics`) | Add per-agent analytics: token usage over time, task completion rates, knowledge growth curves. |
+| **ChatPanel** (sidebar) | Show the agent's `name` and `specialization` in the header. Add "View Profile" button. Show knowledge count badge. |
+
+### Zustand Store Extension
+
+```typescript
+// New store slice for persistent team state
+interface TeamStoreSlice {
+  // Roster
+  roster: Map<string, PersistentAgentInfo>;
+  rosterLoading: boolean;
+  rosterFilter: {
+    projectId?: string;
+    teamId?: string;
+    status?: string;
+    role?: string;
+  };
+
+  // Actions
+  fetchRoster: () => Promise<void>;
+  updateAgentProfile: (agentId: string, changes: Partial<PersistentAgentInfo>) => void;
+  retireAgent: (agentId: string, reason: string) => Promise<void>;
+  resumeAgent: (agentId: string) => Promise<void>;
+  reassignAgent: (agentId: string, to: TeamContext) => Promise<void>;
+  cloneAgent: (agentId: string, name: string) => Promise<string>;  // returns new agentId
+  createAgent: (config: CreateAgentConfig) => Promise<string>;
+
+  // Computed
+  activeCount: () => number;
+  staleCount: () => number;
+  totalKnowledge: () => number;
+  agentsByProject: () => Map<string, PersistentAgentInfo[]>;
+}
+```
+
+### API Endpoints
+
+New REST endpoints for team management (alongside existing WebSocket for real-time):
+
+```
+GET    /api/team/roster                    # List all persistent agents
+GET    /api/team/roster/:agentId           # Get agent profile
+PATCH  /api/team/roster/:agentId           # Update agent (name, specialization)
+POST   /api/team/roster                    # Create new persistent agent
+POST   /api/team/roster/:agentId/retire    # Retire agent
+POST   /api/team/roster/:agentId/resume    # Resume agent
+POST   /api/team/roster/:agentId/reassign  # Reassign to project/team
+POST   /api/team/roster/:agentId/clone     # Clone agent
+POST   /api/team/roster/:agentId/retrain   # Inject knowledge
+DELETE /api/team/roster/:agentId           # Archive agent
+
+GET    /api/team/roster/:agentId/knowledge # Agent's knowledge entries
+GET    /api/team/roster/:agentId/history   # Session history
+GET    /api/team/roster/:agentId/skills    # Derived skills
+GET    /api/team/roster/:agentId/contributions  # File/commit contributions
+
+GET    /api/team/health                    # Team health summary
+GET    /api/team/projects                  # Cross-project overview
+```
+
+These endpoints are served by the orchestration server, which reads from the shared DB (agent server writes roster, orchestration server reads it) and forwards commands to the agent server for lifecycle operations (resume, reassign require agent server coordination).
+
 ## Open Questions
 
 1. **TCP vs UDS for reconnection?** TCP localhost is simpler and cross-platform. UDS is marginally more secure (file permissions on the socket itself). Recommendation: TCP with token auth — simplicity wins, and the token provides equivalent security to UDS file permissions.
@@ -2271,3 +2833,7 @@ This is the path from "local dev tool" to "team infrastructure" — and the tran
 3. **In-process Claude SDK agents?** ClaudeSdkAdapter runs in-process (no subprocess). These agents die with the orchestration server, not the agent server. Should they move to the agent server? Probably yes — but that requires the agent server to have the Claude SDK dependency and API key. For now, in-process agents use SDK resume as their survival mechanism.
 
 4. **How does the agent server get config updates?** When the user changes `flightdeck.config.yaml`, the orchestration server's ConfigStore detects it. It should forward relevant config (provider presets, model overrides, mass failure thresholds) to the agent server via a `configure` message. The agent server doesn't watch config files itself.
+
+5. **Agent naming: auto-generated vs user-assigned?** Persistent agents need human-readable names (e.g., "Arch-Alpha"). Should names be auto-generated (role + NATO alphabet suffix), user-assigned at creation, or auto-generated with user-rename? Recommendation: auto-generated with rename — lowers friction for casual use while supporting personalization for long-lived agents.
+
+6. **Knowledge attribution granularity?** The `metadata.source.agentId` field on knowledge entries enables per-agent knowledge views. But existing entries (created before agent tracking) won't have this field. Backfill strategy: tag existing entries as `mechanism: 'legacy'` with no agent attribution, or attempt to infer from `activityLog`.
