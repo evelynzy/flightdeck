@@ -918,6 +918,106 @@ The countdown is written to a status file so `flightdeck daemon status` can disp
 
 The daemon also watches for its parent process (`dev.mjs`) — if the parent exits, the 12-hour countdown starts.
 
+#### Mass-Failure Detection
+
+*Inspired by Gastown's mass-death detection pattern.*
+
+When multiple agents crash in a short window, it usually signals a systemic issue (bad API key, rate limit, model outage, misconfigured environment) rather than individual agent bugs. The daemon detects this pattern and pauses spawning to prevent a crash loop that burns budget and produces no useful work.
+
+**Detection algorithm:**
+
+```typescript
+interface MassFailureDetector {
+  readonly threshold: number;   // Default: 3 agents
+  readonly windowMs: number;    // Default: 60_000 (60 seconds)
+  readonly cooldownMs: number;  // Default: 120_000 (2 minutes)
+
+  // Sliding window of recent exits
+  private recentExits: Array<{
+    agentId: string;
+    exitCode: number | null;
+    signal: string | null;
+    error: string | null;      // Last stderr line or crash reason
+    timestamp: number;
+  }>;
+
+  private paused: boolean;
+  private pausedAt: number | null;
+}
+```
+
+**Trigger logic:** On every agent exit event, the daemon:
+1. Records the exit in `recentExits` (capped at 50 entries, oldest dropped)
+2. Counts exits within the trailing `windowMs`
+3. If count ≥ `threshold` → enter **paused state**
+
+**Paused state behavior:**
+- New `spawn()` calls are rejected with error: `"Spawning paused: mass failure detected (3 agents exited in 47s). Auto-resumes in 1m 13s or use daemon.resumeSpawning()"`
+- Existing agents continue running (the issue may not affect all agents)
+- Daemon emits WebSocket event to server:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "daemon.massFailure",
+  "params": {
+    "exitCount": 3,
+    "windowSeconds": 47,
+    "recentExits": [
+      { "agentId": "agent-1", "exitCode": 1, "error": "Error: 401 Unauthorized" },
+      { "agentId": "agent-2", "exitCode": 1, "error": "Error: 401 Unauthorized" },
+      { "agentId": "agent-3", "exitCode": 1, "error": "Error: 401 Unauthorized" }
+    ],
+    "pausedUntil": "2026-03-07T17:52:00Z",
+    "likelyCause": "auth_failure"   // Heuristic from exit patterns
+  }
+}
+```
+
+**Cause heuristics:** The daemon inspects recent exit patterns to suggest a likely cause:
+
+| Pattern | `likelyCause` | UI Message |
+|---------|---------------|------------|
+| All exits have "401" or "Unauthorized" in error | `auth_failure` | "API key may be invalid or expired" |
+| All exits have "429" or "rate limit" in error | `rate_limit` | "API rate limit hit — waiting for cooldown" |
+| All exits have "503" or "unavailable" in error | `model_unavailable` | "Model provider may be down" |
+| Mixed exit codes / no clear pattern | `unknown` | "Multiple agents crashed — check logs" |
+| All exits are signal 9 (OOM) | `resource_exhaustion` | "Agents running out of memory" |
+
+**Server-side UI response:**
+
+The server receives `daemon.massFailure` and shows a dismissible alert banner:
+
+```
+⚠️ Multiple agents crashed — possible systemic issue
+   3 agents exited in 47s. Likely cause: API key may be invalid or expired.
+   Spawning paused. Auto-resumes in 1m 13s.
+   [View Details]  [Resume Spawning Now]  [Stop All Agents]
+```
+
+**[View Details]** expands to show the exit table (agent ID, exit code, error message, timestamp).
+
+**[Resume Spawning Now]** calls `daemon.resumeSpawning()` — clears the pause immediately.
+
+**[Stop All Agents]** calls `daemon.terminateAll()` — for when the user wants to fix the root cause first.
+
+**Auto-resume:** After `cooldownMs` elapses, the daemon automatically clears the paused state and allows spawning again. If agents immediately crash again, the detector re-triggers (preventing infinite crash loops — each cycle adds a 2-minute gap).
+
+**Configuration:**
+
+```yaml
+# flightdeck.config.yaml
+daemon:
+  massFailure:
+    threshold: 3          # Minimum exits to trigger (default: 3)
+    windowSeconds: 60     # Sliding window size (default: 60)
+    cooldownSeconds: 120  # Pause duration before auto-resume (default: 120)
+```
+
+Thresholds are also settable via daemon JSON-RPC: `daemon.configure({ massFailure: { threshold: 5 } })`.
+
+**Implementation note:** This is ~50-80 lines in the daemon core. The sliding window is a simple array filter on timestamps. The cause heuristic is a series of regex checks on the last stderr line. The WebSocket event uses the existing event channel — no new protocol needed.
+
 #### Reconnect State Strategy
 
 On server reconnect, the server needs to rebuild in-memory state (delegations, DAG task assignments, completion tracking, message queues). Two options were considered:
@@ -2077,9 +2177,10 @@ The daemon itself is ~300 lines, but the reconnect protocol (event buffering, re
 | Developer A | Event buffering — buffer during disconnect, replay on subscribe with lastSeenEventId |
 | Developer B | Orphaned mode — server disconnect detection, keep agents alive, visible countdown |
 | Developer C | Single-client enforcement — reject second connection, informative error, eviction on stale |
-| Developer D | Auto-shutdown timer — 5min/30min, visible in status file, parent process watch |
+| Developer D | Auto-shutdown timer — 12h rule, visible in status file, parent process watch |
 | Developer E | Zombie escalation — SIGTERM → 5s → SIGKILL → 2s → force roster removal |
-| Developer F | `AgentManager.ts` refactor — delegate to DaemonAdapter, handle daemon-not-available fallback |
+| Developer F | Mass-failure detection — sliding window, cause heuristics, pause/resume spawning |
+| Developer G | `AgentManager.ts` refactor — delegate to DaemonAdapter, handle daemon-not-available fallback |
 | QA Tester A | Integration: start daemon → start server → spawn agents → restart server → verify agents alive |
 | QA Tester B | Edge cases: daemon crash recovery, auth failure, split-brain, stale socket, emergency kill |
 
