@@ -8,7 +8,9 @@ import { fileURLToPath } from 'url';
 import { getConfig, updateConfig } from './config.js';
 import { originValidation } from './middleware/originValidation.js';
 import { authMiddleware, initAuth, getAuthSecret } from './middleware/auth.js';
-import { createContainer } from './container.js';
+import { requestContextMiddleware } from './middleware/requestContext.js';
+import { httpLoggerMiddleware } from './middleware/httpLogger.js';
+import { createContainer, wireHttpLayer } from './container.js';
 import { apiRouter } from './api.js';
 import { WebSocketServer } from './comms/WebSocketServer.js';
 
@@ -35,21 +37,17 @@ app.use(cors({
 app.use(helmet());
 app.use(originValidation);
 app.use(express.json({ limit: '10mb' }));
+app.use(requestContextMiddleware);
+app.use(httpLoggerMiddleware);
 
 const httpServer = createServer(app);
-container.httpServer = httpServer;
 
-// WebSocket server (needs httpServer, so created after container)
+// Wire HTTP layer (WebSocket server + alert→WS bridge)
 const wsServer = new WebSocketServer(
   httpServer, container.agentManager, container.lockRegistry,
   container.activityLedger, container.decisionLog, container.internal.chatGroupRegistry,
 );
-container.internal.wsServer = wsServer;
-
-// Wire alert → WS (deferred from container because wsServer needs httpServer)
-container.alertEngine?.on('alert:new', (alert: any) => {
-  wsServer.broadcastEvent({ type: 'alert:new', alert }, alert.projectId);
-});
+wireHttpLayer(container, httpServer, wsServer);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', agents: container.agentManager.getAll().length });

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { createContainer, type ServiceContainer, type ContainerConfig } from '../container.js';
+import { createContainer, createTestContainer, type ServiceContainer, type ContainerConfig } from '../container.js';
 import type { ServerConfig } from '../config.js';
 
 // Mock config module so container's updateConfig/getConfig don't affect global state
@@ -97,6 +97,9 @@ describe('createContainer', () => {
     expect(container.sessionExporter).toBeDefined();
     expect(container.performanceTracker).toBeDefined();
 
+    // costTracker available both publicly and internally
+    expect(container.costTracker).toBeDefined();
+
     // Internal services
     expect(container.internal.messageBus).toBeDefined();
     expect(container.internal.agentMemory).toBeDefined();
@@ -181,5 +184,51 @@ describe('createContainer', () => {
     container = await createContainer(createTestContainerConfig());
     expect(container.internal).toBeDefined();
     expect(typeof container.internal).toBe('object');
+  });
+
+  it('exposes costTracker in internal namespace', async () => {
+    container = await createContainer(createTestContainerConfig());
+    expect(container.internal.costTracker).toBeDefined();
+  });
+
+  it('shutdown is safe when called twice (no stopList mutation)', async () => {
+    container = await createContainer(createTestContainerConfig());
+
+    const schedulerSpy = vi.spyOn(container.internal.scheduler, 'stop');
+
+    // Simulate SIGTERM+SIGINT race: call shutdown twice rapidly
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await Promise.all([container.shutdown(), container.shutdown()]);
+    warnSpy.mockRestore();
+
+    // scheduler.stop should be called exactly twice (once per shutdown call)
+    // because [...stopList].reverse() creates a copy each time
+    expect(schedulerSpy).toHaveBeenCalledTimes(2);
+    container = null;
+  });
+});
+
+describe('createTestContainer', () => {
+  let container: ServiceContainer | null = null;
+
+  afterEach(async () => {
+    if (container) {
+      await container.shutdown();
+      container = null;
+    }
+  });
+
+  it('creates a container with in-memory database', async () => {
+    container = await createTestContainer();
+    expect(container.db).toBeDefined();
+    expect(container.agentManager).toBeDefined();
+    expect(container.config.dbPath).toBe(':memory:');
+  });
+
+  it('accepts repoRoot override', async () => {
+    container = await createTestContainer({
+      repoRoot: '/tmp/custom-repo',
+    });
+    expect(container.internal.worktreeManager).toBeDefined();
   });
 });

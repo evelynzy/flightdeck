@@ -9,56 +9,57 @@ import type { AppContext } from './routes/context.js';
 
 // ── Imports: Tier 0 (Config/DB) ────────────────────────────
 import { Database } from './db/database.js';
+import { ConfigStore } from './config/ConfigStore.js';
 
 // ── Imports: Tier 1 (Core Registries) ──────────────────────
-import { FileLockRegistry } from './coordination/FileLockRegistry.js';
-import { ActivityLedger } from './coordination/ActivityLedger.js';
+import { FileLockRegistry } from './coordination/files/FileLockRegistry.js';
+import { ActivityLedger } from './coordination/activity/ActivityLedger.js';
 import { RoleRegistry } from './agents/RoleRegistry.js';
-import { DecisionLog } from './coordination/DecisionLog.js';
+import { DecisionLog } from './coordination/decisions/DecisionLog.js';
 import { AgentMemory } from './agents/AgentMemory.js';
 import { ChatGroupRegistry } from './comms/ChatGroupRegistry.js';
 import { TaskDAG } from './tasks/TaskDAG.js';
 import { DeferredIssueRegistry } from './tasks/DeferredIssueRegistry.js';
 import { ProjectRegistry } from './projects/ProjectRegistry.js';
-import { TimerRegistry } from './coordination/TimerRegistry.js';
+import { TimerRegistry } from './coordination/scheduling/TimerRegistry.js';
 import { CostTracker } from './agents/CostTracker.js';
 
 // ── Imports: Tier 2 (Stateless Services) ───────────────────
 import { MessageBus } from './comms/MessageBus.js';
-import { EventPipeline, taskCompletedHandler, commitQualityGateHandler, delegationTracker } from './coordination/EventPipeline.js';
+import { EventPipeline, taskCompletedHandler, commitQualityGateHandler, delegationTracker } from './coordination/events/EventPipeline.js';
 import { TaskTemplateRegistry } from './tasks/TaskTemplates.js';
 import { CapabilityInjector } from './agents/capabilities/CapabilityInjector.js';
 import { RetryManager } from './agents/RetryManager.js';
 import { CrashForensics } from './agents/CrashForensics.js';
-import { NotificationManager } from './coordination/NotificationManager.js';
+import { NotificationManager } from './coordination/alerts/NotificationManager.js';
 import { ModelSelector } from './agents/ModelSelector.js';
 import { TokenBudgetOptimizer } from './agents/TokenBudgetOptimizer.js';
-import { ReportGenerator } from './coordination/ReportGenerator.js';
-import { ProjectTemplateRegistry } from './coordination/ProjectTemplates.js';
-import { KnowledgeTransfer } from './coordination/KnowledgeTransfer.js';
-import { DecisionRecordStore } from './coordination/DecisionRecords.js';
-import { CoverageTracker } from './coordination/CoverageTracker.js';
-import { ComplexityMonitor } from './coordination/ComplexityMonitor.js';
-import { DependencyScanner } from './coordination/DependencyScanner.js';
-import { WebhookManager } from './coordination/WebhookManager.js';
+import { ReportGenerator } from './coordination/reporting/ReportGenerator.js';
+import { ProjectTemplateRegistry } from './coordination/playbooks/ProjectTemplates.js';
+import { KnowledgeTransfer } from './coordination/knowledge/KnowledgeTransfer.js';
+import { DecisionRecordStore } from './coordination/decisions/DecisionRecords.js';
+import { CoverageTracker } from './coordination/code-quality/CoverageTracker.js';
+import { ComplexityMonitor } from './coordination/code-quality/ComplexityMonitor.js';
+import { DependencyScanner } from './coordination/files/DependencyScanner.js';
+import { WebhookManager } from './coordination/alerts/WebhookManager.js';
 
 // ── Imports: Tier 3 (Composed) ─────────────────────────────
 import { TaskDecomposer } from './tasks/TaskDecomposer.js';
-import { FileDependencyGraph } from './coordination/FileDependencyGraph.js';
-import { WorktreeManager } from './coordination/WorktreeManager.js';
-import { EscalationManager } from './coordination/EscalationManager.js';
+import { FileDependencyGraph } from './coordination/files/FileDependencyGraph.js';
+import { WorktreeManager } from './coordination/files/WorktreeManager.js';
+import { EscalationManager } from './coordination/alerts/EscalationManager.js';
 import { EagerScheduler } from './tasks/EagerScheduler.js';
-import { SearchEngine } from './coordination/SearchEngine.js';
+import { SearchEngine } from './coordination/knowledge/SearchEngine.js';
 
 // ── Imports: Tier 4-5 (AgentManager + dependents) ──────────
 import { AgentManager } from './agents/AgentManager.js';
-import { ContextRefresher } from './coordination/ContextRefresher.js';
-import { CapabilityRegistry } from './coordination/CapabilityRegistry.js';
-import { AlertEngine } from './coordination/AlertEngine.js';
-import { AgentMatcher } from './coordination/AgentMatcher.js';
-import { SessionRetro } from './coordination/SessionRetro.js';
-import { SessionExporter } from './coordination/SessionExporter.js';
-import { PerformanceTracker } from './coordination/PerformanceScorecard.js';
+import { ContextRefresher } from './coordination/agents/ContextRefresher.js';
+import { CapabilityRegistry } from './coordination/agents/CapabilityRegistry.js';
+import { AlertEngine } from './coordination/alerts/AlertEngine.js';
+import { AgentMatcher } from './coordination/agents/AgentMatcher.js';
+import { SessionRetro } from './coordination/sessions/SessionRetro.js';
+import { SessionExporter } from './coordination/sessions/SessionExporter.js';
+import { PerformanceTracker } from './coordination/reporting/PerformanceScorecard.js';
 
 // ── Imports: Tier 6 (HTTP/WS) ──────────────────────────────
 import { WebSocketServer } from './comms/WebSocketServer.js';
@@ -75,8 +76,8 @@ export interface ServiceContainer extends AppContext {
   /** Shuts down all services with lifecycle methods, in reverse registration order. */
   shutdown(): Promise<void>;
 
-  /** The raw HTTP server instance (set after Express app creation). */
-  httpServer: HttpServer;
+  /** The raw HTTP server instance. Null until wireHttpLayer() is called. */
+  httpServer: HttpServer | null;
 
   /** Services needed for wiring but not exposed to routes. */
   internal: {
@@ -87,9 +88,12 @@ export interface ServiceContainer extends AppContext {
     deferredIssueRegistry: DeferredIssueRegistry;
     contextRefresher: ContextRefresher;
     scheduler: Scheduler;
-    wsServer: WebSocketServer;
+    /** Null until wireHttpLayer() is called. */
+    wsServer: WebSocketServer | null;
     worktreeManager: WorktreeManager;
     timerRegistry: TimerRegistry;
+    costTracker: CostTracker;
+    configStore: ConfigStore;
   };
 }
 
@@ -117,6 +121,12 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   }
   // Re-read config so all services see restored values
   const effectiveConfig = getConfig();
+
+  // ConfigStore: hot-reloadable config from YAML file (Tier 0 — no service deps)
+  const configFilePath = process.env.FLIGHTDECK_CONFIG
+    || (repoRoot ? `${repoRoot}/flightdeck.config.yaml` : './flightdeck.config.yaml');
+  const configStore = new ConfigStore(configFilePath);
+  onShutdown('configStore', () => configStore.stop());
 
   // ── Tier 1: Core Registries ────────────────────────────
   const lockRegistry = new FileLockRegistry(db);
@@ -258,18 +268,19 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
     projectTemplateRegistry,
     knowledgeTransfer,
     eventPipeline,
+    costTracker,
 
     // Lifecycle
     async shutdown() {
-      for (const { name, fn } of stopList.reverse()) {
+      for (const { name, fn } of [...stopList].reverse()) {
         try { fn(); } catch (err) {
           console.warn(`[container] ${name} shutdown failed:`, err);
         }
       }
     },
 
-    // HTTP server — set by caller after Express app creation
-    httpServer: null as unknown as HttpServer,
+    // HTTP server and WS server — set via wireHttpLayer() after Express app creation
+    httpServer: null,
 
     // Internal services (not exposed to routes)
     internal: {
@@ -280,9 +291,11 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
       deferredIssueRegistry,
       contextRefresher,
       scheduler,
-      wsServer: null as unknown as WebSocketServer,
+      wsServer: null,
       worktreeManager,
       timerRegistry,
+      costTracker,
+      configStore,
     },
   };
 
@@ -290,6 +303,26 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   wireEvents(container);
 
   return container;
+}
+
+/**
+ * Two-stage construction: wires the HTTP server and WebSocket server into
+ * the container after Express app creation. This avoids scattering the
+ * HTTP-layer setup across index.ts by providing a single call site.
+ */
+export function wireHttpLayer(
+  container: ServiceContainer,
+  httpServer: HttpServer,
+  wsServer: WebSocketServer,
+): void {
+  container.httpServer = httpServer;
+  container.internal.wsServer = wsServer;
+
+  // Wire alert → WS broadcast (deferred from createContainer because
+  // wsServer needs httpServer which needs the Express app)
+  container.alertEngine?.on('alert:new', (alert: any) => {
+    wsServer.broadcastEvent({ type: 'alert:new', alert }, alert.projectId);
+  });
 }
 
 // ── Event Wiring ───────────────────────────────────────────
@@ -300,7 +333,7 @@ function wireEvents(c: ServiceContainer): void {
     alertEngine, eagerScheduler, agentManager, webhookManager,
     capabilityRegistry, decisionRecordStore,
   } = c;
-  const { taskDAG, timerRegistry } = c.internal;
+  const { taskDAG, timerRegistry, configStore } = c.internal;
 
   // EventPipeline handlers
   eventPipeline!.register(taskCompletedHandler);
@@ -363,5 +396,45 @@ function wireEvents(c: ServiceContainer): void {
     decisionRecordStore!.createFromDecision(decision);
   });
 
-  // Alert engine → WS broadcast (deferred — wsServer set after HTTP server creation in index.ts)
+  // ── ConfigStore hot-reload consumers ───────────────────
+  configStore.on('config:server:changed', ({ config: serverCfg }: any) => {
+    if (serverCfg.maxConcurrentAgents != null) {
+      agentManager.setMaxConcurrent(serverCfg.maxConcurrentAgents);
+      updateConfig({ maxConcurrentAgents: serverCfg.maxConcurrentAgents });
+    }
+  });
+
+  configStore.on('config:reloaded', () => {
+    c.internal.wsServer?.broadcastEvent({ type: 'config:reloaded' });
+  });
+
+  // Start the watcher (safe to call here — watcher uses polling + fs.watch)
+  configStore.start();
+
+  // Alert engine → WS broadcast is wired in wireHttpLayer() after HTTP server creation
+}
+
+// ── Test Helper ────────────────────────────────────────────
+
+/**
+ * Creates a container with an in-memory database for testing.
+ * Returns a fully-wired ServiceContainer that should be shut down after use.
+ * Useful for integration tests that need real services without file I/O.
+ */
+export async function createTestContainer(
+  overrides: Partial<ContainerConfig> = {},
+): Promise<ServiceContainer> {
+  const testConfig: ContainerConfig = {
+    config: {
+      port: 0,
+      host: '127.0.0.1',
+      cliCommand: 'copilot',
+      cliArgs: [],
+      maxConcurrentAgents: 10,
+      dbPath: ':memory:',
+      ...overrides.config,
+    } as ServerConfig,
+    repoRoot: overrides.repoRoot ?? process.cwd(),
+  };
+  return createContainer(testConfig);
 }
