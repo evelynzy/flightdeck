@@ -1,10 +1,13 @@
-import { eq, and, lt, isNull, asc } from 'drizzle-orm';
+import { eq, and, lt, sql, asc, count as drizzleCount } from 'drizzle-orm';
 import type { Database } from '../db/database.js';
 import { messageQueue, utcNow } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
 
 export type MessageType = 'agent_message' | 'delegation_result' | 'broadcast' | 'system';
 export type MessageStatus = 'queued' | 'delivered' | 'expired';
+
+/** Max delivery attempts before a message is auto-expired */
+const MAX_ATTEMPTS = 10;
 
 export interface QueuedMessage {
   id: number;
@@ -64,21 +67,35 @@ export class MessageQueueStore {
       .run();
   }
 
-  /** Increment the attempt counter (for retry tracking). */
-  retry(id: number): void {
+  /**
+   * Increment the attempt counter atomically (for retry tracking).
+   * Returns false if the message was expired due to exceeding MAX_ATTEMPTS.
+   */
+  retry(id: number): boolean {
+    // Atomic increment: SET attempts = attempts + 1
+    this.db.drizzle
+      .update(messageQueue)
+      .set({ attempts: sql`${messageQueue.attempts} + 1` })
+      .where(eq(messageQueue.id, id))
+      .run();
+
+    // Check if max attempts exceeded → auto-expire
     const row = this.db.drizzle
       .select({ attempts: messageQueue.attempts })
       .from(messageQueue)
       .where(eq(messageQueue.id, id))
       .get();
 
-    if (row) {
+    if (row && row.attempts >= MAX_ATTEMPTS) {
       this.db.drizzle
         .update(messageQueue)
-        .set({ attempts: row.attempts + 1 })
+        .set({ status: 'expired' })
         .where(eq(messageQueue.id, id))
         .run();
+      logger.warn({ module: 'comms', msg: 'Message expired after max attempts', mqId: id, attempts: row.attempts, maxAttempts: MAX_ATTEMPTS });
+      return false;
     }
+    return true;
   }
 
   /** Get all pending (undelivered) messages for a specific agent, ordered FIFO. */
@@ -104,17 +121,17 @@ export class MessageQueueStore {
       .all() as QueuedMessage[];
   }
 
-  /** Count of pending messages (for diagnostics). */
+  /** Count of pending messages (for diagnostics). Uses SQL COUNT for efficiency. */
   getPendingCount(targetAgentId?: string): number {
     const conditions = [eq(messageQueue.status, 'queued')];
     if (targetAgentId) conditions.push(eq(messageQueue.targetAgentId, targetAgentId));
 
-    const rows = this.db.drizzle
-      .select({ id: messageQueue.id })
+    const row = this.db.drizzle
+      .select({ total: drizzleCount() })
       .from(messageQueue)
       .where(and(...conditions))
-      .all();
-    return rows.length;
+      .get();
+    return row?.total ?? 0;
   }
 
   /** Delete delivered messages older than N days (housekeeping). */

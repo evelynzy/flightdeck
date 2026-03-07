@@ -71,7 +71,7 @@ describe('MessageQueueStore', () => {
   });
 
   describe('retry', () => {
-    it('increments the attempts counter', () => {
+    it('increments the attempts counter atomically', () => {
       const id = store.enqueue('agent-1', 'agent_message', '{}');
       store.retry(id);
       store.retry(id);
@@ -82,6 +82,17 @@ describe('MessageQueueStore', () => {
     it('does nothing for non-existent ID', () => {
       // Should not throw
       store.retry(99999);
+    });
+
+    it('auto-expires message after MAX_ATTEMPTS (10)', () => {
+      const id = store.enqueue('agent-1', 'agent_message', '{}');
+      for (let i = 0; i < 9; i++) {
+        expect(store.retry(id)).toBe(true);
+      }
+      // 10th retry should expire it
+      expect(store.retry(id)).toBe(false);
+      // Message should no longer be pending
+      expect(store.getPending('agent-1')).toHaveLength(0);
     });
   });
 
