@@ -51,7 +51,6 @@ export class TimerRegistry extends EventEmitter {
 
   start(): void {
     if (this.interval) return;
-    this.cancelOrphaned();
     this.cleanupOld();
     this.loadPending();
     this.interval = setInterval(() => this.tick(), CHECK_INTERVAL_MS);
@@ -65,27 +64,15 @@ export class TimerRegistry extends EventEmitter {
     }
   }
 
-  /** Load all pending timers from DB into memory */
+  /** Load all pending timers from DB into memory, merging with any already in the map */
   private loadPending(): void {
     const rows = this.db.select().from(schema.timers)
       .where(eq(schema.timers.status, 'pending'))
       .all();
-    this.pending.clear();
     for (const row of rows) {
-      this.pending.set(row.id, this.rowToTimer(row));
-    }
-  }
-
-  /** Cancel all pending timers on startup — no agents are running yet, so any
-   *  surviving pending timers are orphaned from previous server runs. Agents
-   *  re-create timers when they need them. */
-  private cancelOrphaned(): void {
-    const result = this.db.update(schema.timers)
-      .set({ status: 'cancelled' })
-      .where(eq(schema.timers.status, 'pending'))
-      .run();
-    if (result.changes > 0) {
-      logger.info('timer', `Cancelled ${result.changes} orphaned pending timer(s) from previous run`);
+      if (!this.pending.has(row.id)) {
+        this.pending.set(row.id, this.rowToTimer(row));
+      }
     }
   }
 
