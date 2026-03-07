@@ -625,6 +625,11 @@ You can message other agents directly without going through the lead:
 Use this for peer coordination — asking questions, sharing findings, requesting help.
 DIRECT_MESSAGE queues the message so it doesn't interrupt the recipient's current work.
 
+== IMPORTANT: Commands Go in Text, Not in Tools ==
+Flightdeck commands (AGENT_MESSAGE, COMPLETE_TASK, COMMIT, BROADCAST, GROUP_MESSAGE, LOCK_FILE, etc.) must appear directly in your TEXT response — NOT inside tool calls like bash echo. The system parses commands from your text output stream. Commands wrapped in bash/tool calls are silently lost.
+WRONG: Using bash to echo a command block (prints to shell stdout, system never sees it)
+RIGHT: Writing the command block directly in your conversation response text
+
 == Command Delimiter Escaping ==
 The system uses DOUBLED Unicode brackets (U+27E6 and U+27E7) as command delimiters — two opening brackets to start a command, two closing brackets to end it.
 IMPORTANT: If you need to mention these bracket characters in your text output (e.g. documentation, examples, discussions), reference them by their Unicode codepoints: U+27E6 (opening bracket) and U+27E7 (closing bracket). Do NOT output the literal bracket characters outside of actual commands.

@@ -260,6 +260,12 @@ Example: .flightdeck/shared/architect-a1b2c3d4/design-doc.md
 All team members have access to this directory. Create your subdirectory before writing files.
 
 == COORDINATION RULES ==
+⚠ CRITICAL: Flightdeck commands (AGENT_MESSAGE, COMPLETE_TASK, BROADCAST, LOCK_FILE, COMMIT, etc.) are NOT tool calls.
+They must appear directly in your text response using ⟦⟦ COMMAND ⟧⟧ syntax. The system parses them from your text stream.
+- WRONG: Using bash echo or any tool to output a command block
+- RIGHT: Writing the command block directly in your conversation text
+Tools (bash, view, edit, grep, glob) are for filesystem work. Commands are for communicating with the flightdeck system and other agents.
+
 1. DO NOT modify files that another agent has locked (listed above).
 2. ALWAYS acquire a file lock BEFORE editing any file:
 \`⟦⟦ LOCK_FILE {"filePath": "path/to/file", "reason": "why"} ⟧⟧\`
