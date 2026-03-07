@@ -13,11 +13,10 @@ import { logContext, type LogContext } from '../utils/logger.js';
  * Express middleware that wraps each request in an AsyncLocalStorage context.
  * All logger calls within the request automatically include requestId, method, path.
  */
-export function requestContextMiddleware(req: Request, _res: Response, next: NextFunction): void {
+export function requestContextMiddleware(_req: Request, _res: Response, next: NextFunction): void {
   const ctx: LogContext = {
     requestId: randomUUID(),
-    // Extract agentId from route params if present (e.g., /api/agents/:id/...)
-    agentId: typeof req.params?.id === 'string' ? req.params.id : undefined,
+    // agentId is populated later by route handlers via runWithAgentContext()
   };
   logContext.run(ctx, () => next());
 }

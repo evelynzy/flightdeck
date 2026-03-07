@@ -39,18 +39,23 @@ function createPinoLogger(): pino.Logger {
   const level = process.env.LOG_LEVEL || (isTest ? 'silent' : 'debug');
 
   if (isDev) {
-    return pino({
-      level,
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'HH:MM:ss.l',
-          ignore: 'pid,hostname',
-          messageFormat: '[{module}] {msg}',
+    try {
+      return pino({
+        level,
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'HH:MM:ss.l',
+            ignore: 'pid,hostname',
+            messageFormat: '[{module}] {msg}',
+          },
         },
-      },
-    });
+      });
+    } catch {
+      // pino-pretty not installed (e.g., production install) — fall back to JSON
+      return pino({ level });
+    }
   }
 
   // Production & test: plain JSON to stdout (test uses 'silent' level)
