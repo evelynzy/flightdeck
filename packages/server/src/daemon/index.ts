@@ -28,6 +28,7 @@ export {
   type DaemonEvent,
   type DaemonEventType,
   type DaemonAgentStatus,
+  type DaemonLifecycleMode,
   type AgentDescriptor,
   type MassFailureData,
   // Param types

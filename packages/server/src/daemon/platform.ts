@@ -208,13 +208,21 @@ class UnixTransport implements TransportAdapter {
 
     return new Promise<'clean' | 'live-daemon'>((resolve, reject) => {
       const probe = connect(address);
+      const timeout = setTimeout(() => {
+        probe.destroy();
+        // Socket exists but no response — treat as stale
+        try { unlinkSync(address); } catch { /* ignore */ }
+        resolve('clean');
+      }, 2000);
 
       probe.on('connect', () => {
+        clearTimeout(timeout);
         probe.destroy();
         resolve('live-daemon');
       });
 
       probe.on('error', (err: NodeJS.ErrnoException) => {
+        clearTimeout(timeout);
         if (err.code === 'ECONNREFUSED' || err.code === 'ENOTSOCK') {
           // Stale socket or non-socket file occupying the path — clean up
           try { unlinkSync(address); } catch { /* ignore */ }

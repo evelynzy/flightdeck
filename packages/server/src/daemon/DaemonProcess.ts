@@ -6,30 +6,29 @@
  * commands. Buffers events when the server is disconnected and replays them
  * on reconnect.
  *
+ * Supports two lifecycle modes:
+ * - production: daemon shuts down when the server disconnects (no orphans)
+ * - development: daemon persists, agents survive for hot-reload iteration
+ *
  * Design: packages/docs/design/hot-reload-agent-preservation.md
  */
 import { createServer, type Server, type Socket } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import {
-  mkdirSync,
-  existsSync,
-  unlinkSync,
   openSync,
   writeSync,
   closeSync,
   fdatasyncSync,
   writeFileSync,
   readFileSync,
-  statSync,
 } from 'node:fs';
-import { join } from 'node:path';
 import { logger } from '../utils/logger.js';
 import { EventBuffer } from './EventBuffer.js';
 import {
-  type JsonRpcMessage,
   type JsonRpcRequest,
   type DaemonEvent,
   type DaemonAgentStatus,
+  type DaemonLifecycleMode,
   type AgentDescriptor,
   type AuthParams,
   type SpawnParams,
@@ -46,8 +45,16 @@ import {
   createErrorResponse,
   createNotification,
   isRequest,
-  getSocketDir,
 } from './DaemonProtocol.js';
+import { createTransport, type TransportAdapter } from './platform.js';
+
+// ── Constants ───────────────────────────────────────────────────────
+
+/** Maximum NDJSON buffer size (1 MB) to prevent unbounded memory from malformed input. */
+const MAX_NDJSON_LINE_LENGTH = 1_048_576;
+
+/** Maximum number of exited/crashed agents to retain in the map for status queries. */
+const MAX_DEAD_AGENTS = 200;
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -56,8 +63,14 @@ export interface DaemonProcessOptions {
   socketDir?: string;
   /** Override socket filename (for testing). */
   socketName?: string;
-  /** Auto-shutdown timeout when orphaned in ms (default: 12h). */
+  /** Lifecycle mode: 'production' (default) or 'development'. */
+  mode?: DaemonLifecycleMode;
+  /** Auto-shutdown timeout when orphaned in ms (default: 12h). Dev mode only. */
   orphanTimeoutMs?: number;
+  /** Grace period before production shutdown on disconnect in ms (default: 5000). */
+  productionGracePeriodMs?: number;
+  /** Orphan warning intervals in ms (default: [1h, 6h, 11h]). Dev mode only. */
+  orphanWarningIntervalsMs?: number[];
   /** Mass failure detector settings. */
   massFailure?: {
     threshold?: number;
@@ -103,7 +116,6 @@ class MassFailureDetector {
 
   recordExit(record: ExitRecord): MassFailureData | null {
     this.recentExits.push(record);
-    // Cap at 50 entries
     if (this.recentExits.length > 50) this.recentExits.shift();
 
     if (this.paused) return null;
@@ -197,16 +209,33 @@ export class DaemonProcess {
   private socketDir: string;
   private startedAt: number = 0;
   private orphanTimer: ReturnType<typeof setTimeout> | null = null;
+  private orphanWarningTimers: ReturnType<typeof setTimeout>[] = [];
   private disposed = false;
+  private signalCleanup: (() => void) | null = null;
+  private _mode: DaemonLifecycleMode;
+  private lastShutdownReason: string | null = null;
+
+  /** Cross-platform transport adapter for IPC, permissions, and signal handling. */
+  readonly transport: TransportAdapter;
 
   private readonly orphanTimeoutMs: number;
+  private readonly productionGracePeriodMs: number;
+  private readonly orphanWarningIntervalsMs: number[];
   private readonly socketName: string;
 
   constructor(options: DaemonProcessOptions = {}) {
-    this.socketDir = options.socketDir ?? getSocketDir();
+    this.transport = createTransport(options.socketDir);
+    this.socketDir = options.socketDir ?? this.transport.getSocketDir();
     this.socketName = options.socketName ?? 'agent-host.sock';
-    this.socketPath = join(this.socketDir, this.socketName);
+    this.socketPath = this.transport.getAddress(this.socketName);
+    this._mode = options.mode ?? DaemonProcess.detectMode();
     this.orphanTimeoutMs = options.orphanTimeoutMs ?? 12 * 60 * 60 * 1000;
+    this.productionGracePeriodMs = options.productionGracePeriodMs ?? 5000;
+    this.orphanWarningIntervalsMs = options.orphanWarningIntervalsMs ?? [
+      1 * 60 * 60 * 1000,   // 1h
+      6 * 60 * 60 * 1000,   // 6h
+      11 * 60 * 60 * 1000,  // 11h
+    ];
 
     this.eventBuffer = new EventBuffer();
 
@@ -218,7 +247,23 @@ export class DaemonProcess {
     );
   }
 
-  /** The UDS socket path. */
+  /**
+   * Detect lifecycle mode from environment.
+   * Dev mode if tsx watch, ts-node-dev, nodemon, or NODE_ENV=development.
+   */
+  static detectMode(): DaemonLifecycleMode {
+    if (
+      process.env.TSX_WATCH ||
+      process.env.TS_NODE_DEV ||
+      process.env.NODEMON ||
+      process.env.NODE_ENV === 'development'
+    ) {
+      return 'development';
+    }
+    return 'production';
+  }
+
+  /** The IPC address (socket path on Unix, pipe name on Windows). */
   get path(): string {
     return this.socketPath;
   }
@@ -243,6 +288,20 @@ export class DaemonProcess {
     return this.massFailureDetector.isPaused;
   }
 
+  /** Current lifecycle mode. */
+  get mode(): DaemonLifecycleMode {
+    return this._mode;
+  }
+
+  /** Switch lifecycle mode at runtime. */
+  setMode(mode: DaemonLifecycleMode): void {
+    const previous = this._mode;
+    this._mode = mode;
+    if (previous !== mode) {
+      logger.info({ module: 'daemon', msg: 'Lifecycle mode changed', from: previous, to: mode });
+    }
+  }
+
   // ── Startup ─────────────────────────────────────────────────────
 
   /** Start the daemon: create socket, generate token, begin listening. */
@@ -252,14 +311,17 @@ export class DaemonProcess {
 
     this.startedAt = Date.now();
 
-    // Create socket directory with owner-only access
-    mkdirSync(this.socketDir, { recursive: true, mode: 0o700 });
+    // Create socket directory with platform-appropriate permissions
+    this.transport.ensureSocketDir();
 
-    // Verify directory ownership
-    this.verifyDirectoryOwnership();
+    // Verify directory ownership (Unix: uid check, Windows: DACL)
+    this.transport.verifyDirectoryOwnership();
 
-    // Clean up stale socket
-    await this.cleanStaleSocket();
+    // Clean up stale socket/pipe
+    const staleResult = await this.transport.cleanupStale(this.socketPath);
+    if (staleResult === 'live-daemon') {
+      throw new Error(`Another daemon is already running at ${this.socketPath}`);
+    }
 
     // Generate session token
     this.sessionToken = randomBytes(32).toString('hex');
@@ -270,46 +332,55 @@ export class DaemonProcess {
     // Write PID file (informational only)
     this.writePidFile();
 
-    // Create UDS server with restrictive umask
+    // Create IPC server with platform-appropriate security
     await this.createServer();
+
+    // Register cross-platform signal handlers
+    this.signalCleanup = this.transport.setupSignalHandlers((signal) => {
+      logger.info({ module: 'daemon', msg: 'Received signal', signal });
+      this.stop({ persist: signal !== 'SIGKILL', reason: `signal-${signal}` }).catch(err => {
+        logger.error({ module: 'daemon', msg: 'Signal-triggered shutdown failed', err: String(err) });
+      });
+    });
 
     logger.info({
       module: 'daemon',
       msg: 'Daemon started',
+      platform: this.transport.platform,
       socketPath: this.socketPath,
       pid: process.pid,
+      mode: this._mode,
     });
   }
 
   // ── Shutdown ────────────────────────────────────────────────────
 
   /** Graceful shutdown: terminate agents, close connections, clean up files. */
-  async stop(options: { persist?: boolean; timeoutMs?: number } = {}): Promise<void> {
+  async stop(options: { persist?: boolean; timeoutMs?: number; reason?: string } = {}): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
 
-    const { persist = false, timeoutMs = 5000 } = options;
+    const { persist = false, timeoutMs = 5000, reason = 'manual' } = options;
+    this.lastShutdownReason = reason;
 
-    logger.info({ module: 'daemon', msg: 'Shutting down', persist, timeoutMs });
+    logger.info({ module: 'daemon', msg: 'Shutting down', persist, timeoutMs, reason, mode: this._mode });
 
     // Notify connected client
     if (this.client) {
       this.sendNotification('daemon.event', {
-        event: EventBuffer.createEvent('daemon:shutting_down', { persist }),
+        event: EventBuffer.createEvent('daemon:shutting_down', { persist, reason }),
       });
     }
 
-    // Cancel orphan timer
-    if (this.orphanTimer) {
-      clearTimeout(this.orphanTimer);
-      this.orphanTimer = null;
-    }
+    // Cancel all timers
+    this.clearOrphanTimers();
+
+    // Always write manifest for resume (includes agent state)
+    this.writeShutdownManifest(reason);
 
     // Terminate agents (unless persisting)
     if (!persist) {
       await this.terminateAllAgents(timeoutMs);
-    } else {
-      this.writeShutdownManifest();
     }
 
     // Disconnect client
@@ -328,6 +399,12 @@ export class DaemonProcess {
 
     // Clean up files
     this.cleanupFiles();
+
+    // Remove signal handlers to prevent listener leaks
+    if (this.signalCleanup) {
+      this.signalCleanup();
+      this.signalCleanup = null;
+    }
 
     this.massFailureDetector.dispose();
 
@@ -381,8 +458,7 @@ export class DaemonProcess {
   }
 
   /**
-   * Record an agent exit. Removes the agent from active management
-   * and checks for mass failure.
+   * Record an agent exit. Updates status and checks for mass failure.
    */
   recordAgentExit(
     agentId: string,
@@ -438,6 +514,33 @@ export class DaemonProcess {
     return this.agents.get(agentId)?.descriptor;
   }
 
+  /**
+   * Remove dead agents (exited/crashed) when the map exceeds MAX_DEAD_AGENTS.
+   * Keeps the most recently exited agents for status queries.
+   */
+  private pruneDeadAgents(): void {
+    const deadStatuses = new Set(['exited', 'crashed']);
+    const deadEntries: [string, ManagedAgent][] = [];
+
+    for (const [id, managed] of this.agents) {
+      if (deadStatuses.has(managed.descriptor.status)) {
+        deadEntries.push([id, managed]);
+      }
+    }
+
+    if (deadEntries.length <= MAX_DEAD_AGENTS) return;
+
+    // Sort by lastEventId ascending (oldest first) and remove excess
+    deadEntries.sort((a, b) =>
+      (a[1].descriptor.lastEventId ?? '').localeCompare(b[1].descriptor.lastEventId ?? ''),
+    );
+
+    const toRemove = deadEntries.length - MAX_DEAD_AGENTS;
+    for (let i = 0; i < toRemove; i++) {
+      this.agents.delete(deadEntries[i][0]);
+    }
+  }
+
   // ── Connection Handling ───────────────────────────────────────
 
   private async createServer(): Promise<void> {
@@ -449,11 +552,11 @@ export class DaemonProcess {
         reject(err);
       });
 
-      // Set restrictive umask BEFORE listen() so socket is born with 0600
-      const previousUmask = process.umask(0o177);
+      // Apply platform-specific security before listen()
+      const restoreUmask = this.transport.secureBefore();
 
       this.server.listen(this.socketPath, () => {
-        process.umask(previousUmask);
+        restoreUmask();
         resolve();
       });
     });
@@ -465,7 +568,6 @@ export class DaemonProcess {
     let buffer = '';
     let authenticated = false;
 
-    // First message must be auth — 5s timeout
     const authTimeout = setTimeout(() => {
       if (!authenticated) {
         logger.warn({ module: 'daemon', msg: 'Auth timeout — disconnecting' });
@@ -475,12 +577,19 @@ export class DaemonProcess {
 
     socket.on('data', (data) => {
       buffer += data.toString();
+
+      // Guard against unbounded memory from malformed input (no newlines)
+      if (buffer.length > MAX_NDJSON_LINE_LENGTH) {
+        logger.warn({ module: 'daemon', msg: 'NDJSON buffer exceeded 1MB limit — disconnecting', bufferLength: buffer.length });
+        socket.destroy();
+        return;
+      }
+
       const [messages, remaining] = parseNdjsonBuffer(buffer);
       buffer = remaining;
 
       for (const msg of messages) {
         if (!authenticated) {
-          // First message must be auth
           if (isRequest(msg) && msg.method === 'auth') {
             clearTimeout(authTimeout);
             authenticated = this.handleAuth(socket, msg);
@@ -497,7 +606,6 @@ export class DaemonProcess {
           return;
         }
 
-        // Authenticated — dispatch
         if (isRequest(msg)) {
           this.handleRequest(msg);
         }
@@ -530,7 +638,6 @@ export class DaemonProcess {
       return false;
     }
 
-    // Timing-safe token comparison
     const provided = Buffer.from(params.token);
     const expected = Buffer.from(this.sessionToken);
 
@@ -542,7 +649,6 @@ export class DaemonProcess {
       return false;
     }
 
-    // Single-client: reject if another client is connected
     if (this.client) {
       const elapsed = Math.round((Date.now() - this.client.connectedAt) / 1000);
       socket.write(serializeMessage(
@@ -556,7 +662,6 @@ export class DaemonProcess {
       return false;
     }
 
-    // Accept client
     this.client = {
       socket,
       pid: params.pid ?? 0,
@@ -564,21 +669,17 @@ export class DaemonProcess {
       buffer: '',
     };
 
-    // Cancel orphan timer
-    if (this.orphanTimer) {
-      clearTimeout(this.orphanTimer);
-      this.orphanTimer = null;
-    }
+    // Cancel orphan timers (including warnings) on reconnect
+    this.clearOrphanTimers();
 
-    // Stop event buffering
     this.eventBuffer.stopBuffering();
 
-    // Send auth success
     socket.write(serializeMessage(
       createResponse(request.id, {
         daemonPid: process.pid,
         uptime: Math.round((Date.now() - this.startedAt) / 1000),
         agentCount: this.agents.size,
+        mode: this._mode,
       }),
     ));
 
@@ -587,9 +688,9 @@ export class DaemonProcess {
       msg: 'Client authenticated',
       clientPid: params.pid,
       agentCount: this.agents.size,
+      mode: this._mode,
     });
 
-    // Emit connection event
     const event = EventBuffer.createEvent('daemon:client_connected', {
       clientPid: params.pid,
     });
@@ -598,36 +699,99 @@ export class DaemonProcess {
     return true;
   }
 
+  // ── Client Disconnect: Mode-Aware ─────────────────────────────
+
   private handleClientDisconnect(): void {
     const clientPid = this.client?.pid;
     this.client = null;
 
-    logger.info({
-      module: 'daemon',
-      msg: 'Client disconnected — entering orphaned mode',
-      clientPid,
-    });
-
-    // Start event buffering
+    // Start event buffering (both modes)
     this.eventBuffer.startBuffering();
-
-    // Start orphan auto-shutdown timer
-    if (this.orphanTimeoutMs > 0) {
-      this.orphanTimer = setTimeout(() => {
-        logger.warn({
-          module: 'daemon',
-          msg: 'Orphan timeout — shutting down',
-          timeoutMs: this.orphanTimeoutMs,
-        });
-        this.stop().catch(err => {
-          logger.error({ module: 'daemon', msg: 'Shutdown failed', err: String(err) });
-        });
-      }, this.orphanTimeoutMs);
-    }
-
-    // Emit disconnection event (buffered)
-    const event = EventBuffer.createEvent('daemon:client_disconnected', { clientPid });
+    const event = EventBuffer.createEvent('daemon:client_disconnected', { clientPid, mode: this._mode });
     this.emitEvent(event);
+
+    if (this._mode === 'production') {
+      // Production: shut down after brief grace period (handles race with tsx watch restart)
+      logger.info({
+        module: 'daemon',
+        msg: 'Client disconnected in production mode — shutting down',
+        clientPid,
+        gracePeriodMs: this.productionGracePeriodMs,
+      });
+
+      this.orphanTimer = setTimeout(() => {
+        this.stop({ persist: false, reason: 'production-disconnect' }).catch(err => {
+          logger.error({ module: 'daemon', msg: 'Production shutdown failed', err: String(err) });
+        });
+      }, this.productionGracePeriodMs);
+
+    } else {
+      // Dev mode: enter orphaned mode, agents survive for hot-reload
+      logger.info({
+        module: 'daemon',
+        msg: 'Client disconnected in dev mode — entering orphaned mode',
+        clientPid,
+        orphanTimeoutMs: this.orphanTimeoutMs,
+      });
+
+      // Start orphan warning timers
+      this.startOrphanWarnings();
+
+      // Start orphan auto-shutdown timer (12h default)
+      if (this.orphanTimeoutMs > 0) {
+        this.orphanTimer = setTimeout(() => {
+          logger.warn({
+            module: 'daemon',
+            msg: 'Orphan timeout — no server reconnected, shutting down',
+            timeoutMs: this.orphanTimeoutMs,
+            agentCount: this.agents.size,
+          });
+          this.stop({ persist: true, reason: '12h-timeout' }).catch(err => {
+            logger.error({ module: 'daemon', msg: 'Orphan shutdown failed', err: String(err) });
+          });
+        }, this.orphanTimeoutMs);
+      }
+    }
+  }
+
+  // ── Orphan Warning Timers ─────────────────────────────────────
+
+  private startOrphanWarnings(): void {
+    for (const intervalMs of this.orphanWarningIntervalsMs) {
+      if (intervalMs < this.orphanTimeoutMs) {
+        const timer = setTimeout(() => {
+          const hours = Math.round(intervalMs / (60 * 60 * 1000));
+          const remaining = Math.round((this.orphanTimeoutMs - intervalMs) / (60 * 60 * 1000));
+          logger.warn({
+            module: 'daemon',
+            msg: `Orphaned for ${hours}h — no server reconnected`,
+            orphanedHours: hours,
+            remainingHours: remaining,
+            agentCount: this.agents.size,
+          });
+
+          const event = EventBuffer.createEvent('daemon:error', {
+            level: 'warning',
+            message: `Daemon orphaned for ${hours}h. Auto-shutdown in ${remaining}h.`,
+            agentCount: this.agents.size,
+          });
+          this.emitEvent(event);
+        }, intervalMs);
+
+        this.orphanWarningTimers.push(timer);
+      }
+    }
+  }
+
+  private clearOrphanTimers(): void {
+    if (this.orphanTimer) {
+      clearTimeout(this.orphanTimer);
+      this.orphanTimer = null;
+    }
+    for (const timer of this.orphanWarningTimers) {
+      clearTimeout(timer);
+    }
+    this.orphanWarningTimers = [];
   }
 
   // ── Request Dispatch ──────────────────────────────────────────
@@ -638,40 +802,35 @@ export class DaemonProcess {
         case 'ping':
           this.sendResponse(request.id, { pong: true, timestamp: Date.now() });
           break;
-
         case 'list':
           this.sendResponse(request.id, { agents: this.listAgents() });
           break;
-
         case 'spawn':
           this.handleSpawn(request);
           break;
-
         case 'terminate':
-          this.handleTerminate(request);
+          // handleTerminate is async — catch unhandled rejections
+          this.handleTerminate(request).catch((err) => {
+            logger.error({ module: 'daemon', msg: 'handleTerminate failed', err: String(err) });
+            this.sendError(request.id, RPC_ERRORS.INTERNAL_ERROR, `Terminate failed: ${String(err)}`);
+          });
           break;
-
         case 'send':
           this.handleSend(request);
           break;
-
         case 'subscribe':
           this.handleSubscribe(request);
           break;
-
         case 'shutdown':
           this.handleShutdown(request);
           break;
-
         case 'configure':
           this.handleConfigure(request);
           break;
-
         case 'resumeSpawning':
           this.massFailureDetector.resume();
           this.sendResponse(request.id, { resumed: true });
           break;
-
         default:
           this.sendError(request.id, RPC_ERRORS.METHOD_NOT_FOUND, `Unknown method: ${request.method}`);
       }
@@ -697,7 +856,6 @@ export class DaemonProcess {
       return;
     }
 
-    // Create the agent descriptor — actual process spawning is external
     const descriptor: AgentDescriptor = {
       agentId: params.agentId,
       pid: null,
@@ -768,12 +926,10 @@ export class DaemonProcess {
       params?.lastSeenEventId,
     );
 
-    // If fromStart, also include current agent descriptors
     if (params?.fromStart) {
       const agents = params.agentId
         ? [this.getAgent(params.agentId)].filter(Boolean)
         : this.listAgents();
-
       this.sendResponse(request.id, { agents, bufferedEvents: events });
     } else {
       this.sendResponse(request.id, { bufferedEvents: events });
@@ -784,11 +940,11 @@ export class DaemonProcess {
     const params = request.params as unknown as ShutdownParams | undefined;
     this.sendResponse(request.id, { acknowledged: true });
 
-    // Schedule shutdown after response is sent
     setImmediate(() => {
       this.stop({
         persist: params?.persist,
         timeoutMs: params?.timeoutMs,
+        reason: 'client-shutdown',
       }).catch(err => {
         logger.error({ module: 'daemon', msg: 'Shutdown failed', err: String(err) });
       });
@@ -798,6 +954,10 @@ export class DaemonProcess {
   private handleConfigure(request: JsonRpcRequest): void {
     const params = request.params as unknown as ConfigureParams | undefined;
 
+    if (params?.mode) {
+      this.setMode(params.mode);
+    }
+
     if (params?.massFailure) {
       this.massFailureDetector.configure({
         threshold: params.massFailure.threshold,
@@ -806,16 +966,14 @@ export class DaemonProcess {
       });
     }
 
-    this.sendResponse(request.id, { configured: true });
+    this.sendResponse(request.id, { configured: true, mode: this._mode });
   }
 
   // ── Event Emission ────────────────────────────────────────────
 
   private emitEvent(event: DaemonEvent): void {
-    // Buffer if no client
     this.eventBuffer.push(event);
 
-    // Send to connected client
     if (this.client) {
       try {
         this.client.socket.write(serializeMessage(
@@ -874,72 +1032,33 @@ export class DaemonProcess {
 
   // ── File Management ───────────────────────────────────────────
 
-  private verifyDirectoryOwnership(): void {
-    try {
-      const stat = statSync(this.socketDir);
-      const uid = process.getuid?.();
-      if (uid !== undefined && stat.uid !== uid) {
-        throw new Error(
-          `Socket directory ${this.socketDir} is owned by uid ${stat.uid}, ` +
-          `but daemon is running as uid ${uid}. ` +
-          `This usually means a previous run used sudo. Fix: sudo rm -rf ${this.socketDir}`,
-        );
-      }
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw err;
-      }
-    }
-  }
-
-  private async cleanStaleSocket(): Promise<void> {
-    if (!existsSync(this.socketPath)) return;
-
-    return new Promise<void>((resolve) => {
-      const { connect } = require('node:net') as typeof import('node:net');
-      const probe = connect(this.socketPath);
-
-      probe.on('connect', () => {
-        // Live daemon already running
-        probe.destroy();
-        throw new Error(`Another daemon is already running at ${this.socketPath}`);
-      });
-
-      probe.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'ECONNREFUSED') {
-          // Stale socket — clean up
-          try { unlinkSync(this.socketPath); } catch { /* ignore */ }
-          resolve();
-        } else {
-          throw new Error(`Cannot probe daemon socket: ${err.code} — ${err.message}`);
-        }
-      });
-    });
-  }
-
   private writeTokenFile(): void {
-    const tokenPath = join(this.socketDir, 'agent-host.token');
+    const tokenPath = this.transport.getTokenPath();
     const fd = openSync(tokenPath, 'w', 0o600);
     writeSync(fd, this.sessionToken);
     fdatasyncSync(fd);
     closeSync(fd);
+    this.transport.secureFile(tokenPath);
   }
 
   private writePidFile(): void {
-    const pidPath = join(this.socketDir, 'agent-host.pid');
+    const pidPath = this.transport.getPidPath();
     writeFileSync(pidPath, String(process.pid), { mode: 0o644 });
   }
 
-  private writeShutdownManifest(): void {
-    const manifestPath = join(this.socketDir, 'daemon-manifest.json');
+  private writeShutdownManifest(reason?: string): void {
+    const manifestPath = this.transport.getManifestPath();
     const manifest = {
       version: '1.0.0',
       shutdownAt: new Date().toISOString(),
-      shutdownReason: 'graceful',
+      shutdownReason: reason ?? this.lastShutdownReason ?? 'unknown',
+      mode: this._mode,
+      platform: this.transport.platform,
       agents: this.listAgents(),
     };
     try {
       writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), { mode: 0o600 });
+      this.transport.secureFile(manifestPath);
     } catch (err) {
       logger.warn({ module: 'daemon', msg: 'Failed to write manifest', err: String(err) });
     }
@@ -948,18 +1067,21 @@ export class DaemonProcess {
   private cleanupFiles(): void {
     const files = [
       this.socketPath,
-      join(this.socketDir, 'agent-host.token'),
-      join(this.socketDir, 'agent-host.pid'),
+      this.transport.getTokenPath(),
+      this.transport.getPidPath(),
     ];
-    for (const f of files) {
-      try { unlinkSync(f); } catch { /* ignore */ }
-    }
+    this.transport.cleanupFiles(files);
   }
 
   /** Read an existing shutdown manifest (for resume). */
-  static readManifest(socketDir?: string): { agents: AgentDescriptor[]; shutdownAt: string } | null {
-    const dir = socketDir ?? getSocketDir();
-    const manifestPath = join(dir, 'daemon-manifest.json');
+  static readManifest(socketDir?: string): {
+    agents: AgentDescriptor[];
+    shutdownAt: string;
+    shutdownReason?: string;
+    mode?: DaemonLifecycleMode;
+  } | null {
+    const transport = createTransport(socketDir);
+    const manifestPath = transport.getManifestPath();
     try {
       const data = readFileSync(manifestPath, 'utf-8');
       return JSON.parse(data);

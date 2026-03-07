@@ -71,6 +71,13 @@ export interface AgentDescriptor {
 
 export type DaemonAgentStatus = 'starting' | 'running' | 'idle' | 'stopping' | 'exited' | 'crashed';
 
+/**
+ * Daemon lifecycle mode determines behavior on client disconnect.
+ * - production: daemon shuts down when the server disconnects (no orphans)
+ * - development: daemon persists, agents survive for hot-reload
+ */
+export type DaemonLifecycleMode = 'production' | 'development';
+
 // ── Request Parameter Types ─────────────────────────────────────────
 
 export interface AuthParams {
@@ -112,6 +119,7 @@ export interface ShutdownParams {
 }
 
 export interface ConfigureParams {
+  mode?: DaemonLifecycleMode;
   massFailure?: {
     threshold?: number;
     windowSeconds?: number;
@@ -125,6 +133,7 @@ export interface AuthResult {
   daemonPid: number;
   uptime: number;
   agentCount: number;
+  mode?: DaemonLifecycleMode;
 }
 
 export interface SpawnResult {
@@ -246,22 +255,12 @@ export function isNotification(msg: JsonRpcMessage): msg is JsonRpcNotification 
 // ── Socket Directory Resolution ─────────────────────────────────────
 
 /**
- * Resolve the daemon socket directory using the XDG fallback chain:
- * 1. $XDG_RUNTIME_DIR/flightdeck/
- * 2. $TMPDIR/flightdeck-$UID/
- * 3. ~/.flightdeck/run/
+ * Resolve the daemon socket directory using the platform-aware fallback chain.
+ *
+ * @deprecated Use `getSocketDir` from `./platform.js` instead, which provides
+ * full cross-platform support (Unix domain sockets on Linux/macOS, named pipes
+ * on Windows, TCP fallback elsewhere).
+ *
+ * Re-exported from platform.ts for backward compatibility.
  */
-export function getSocketDir(): string {
-  const { env } = process;
-
-  if (env.XDG_RUNTIME_DIR) {
-    return `${env.XDG_RUNTIME_DIR}/flightdeck`;
-  }
-
-  if (env.TMPDIR) {
-    return `${env.TMPDIR}/flightdeck-${process.getuid?.() ?? 'unknown'}`;
-  }
-
-  const home = env.HOME || env.USERPROFILE || '~';
-  return `${home}/.flightdeck/run`;
-}
+export { getSocketDir } from './platform.js';
