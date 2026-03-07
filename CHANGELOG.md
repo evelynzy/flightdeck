@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-03-07
+
+### Fixed
+
+- **DAG duplicate detection** — Raised similarity thresholds (0.6→0.8, 0.7→0.85), added role filter to prevent false positives when agents share domain vocabulary. Borderline matches (0.8–0.95) now create tasks with a warning instead of silently linking.
+- **DAG "already done" UX** — `COMPLETE_TASK` on an already-completed task now returns a friendly message instead of an error.
+- **DAG dependency inference** — Review tasks now find ALL matching-role dependencies (not just the most recent). Added "review all" pattern and plural role name normalization.
+- **DAG coverage metric** — `TASK_STATUS` now shows what percentage of active agents have corresponding DAG tasks, with warnings for untracked agents.
+- **DAG idle agent info** — "Newly ready" notifications now include available idle agents with matching roles.
+- **dagTaskId warning** — `DELEGATE`/`CREATE_AGENT` without explicit `dagTaskId` now warns when auto-linker has to guess.
+- **Live indicator contrast** — Timeline Live button now readable in light mode with proper Tailwind dark: variants.
+- **Database purge** — Fixed 7 missing tables in cleanup, sub-agent conversation orphaning, and "All data" date filter bypass.
+
 ## [0.3.1] - 2026-03-06
 
 ### Added
