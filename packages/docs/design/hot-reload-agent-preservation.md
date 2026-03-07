@@ -1103,6 +1103,11 @@ This is the same recovery path as "daemon crash → Phase 1 fallback" but with b
 
 ```
 ~/.flightdeck/
+  projects/
+    flightdeck-a3f7/                    # Per-project directory (human-readable ID)
+      project.yaml                      # Project metadata anchor (see below)
+    ai-crew-platform-b2e1/
+      project.yaml
   run/                                  # Daemon runtime (ephemeral)
     daemon.sock                         # IPC socket
     daemon.pid                          # PID file
@@ -1119,7 +1124,68 @@ flightdeck.db                           # SQLite (authoritative state)
   → conversation history, tool state, planning artifacts
 ```
 
-**Design principle: SQLite is the single source of truth.** The filesystem manifest is a performance optimization for faster resume. The SDK session files are managed by the CLI, not by Flightdeck. The daemon's only filesystem state is runtime artifacts (socket, PID, token) that are ephemeral by nature.
+**Design principle: SQLite is the single source of truth** for runtime state. The `project.yaml` files are the anchor for project discovery and link projects to their working directories. The daemon manifest is a performance hint for faster resume.
+
+#### Project Metadata File (`project.yaml`)
+
+Each project has a `project.yaml` at `~/.flightdeck/projects/<project-id>/project.yaml`. This is the **anchor file** for the entire project directory — Flightdeck scans `~/.flightdeck/projects/*/project.yaml` on startup to discover all projects and load them into the UI.
+
+```yaml
+# ~/.flightdeck/projects/flightdeck-a3f7/project.yaml
+id: flightdeck-a3f7
+name: Flightdeck
+description: AI crew orchestration platform
+cwd: /Users/justinc/Documents/GitHub/ai-crew
+status: active
+createdAt: "2026-03-07T14:00:00.000Z"
+updatedAt: "2026-03-07T17:30:00.000Z"
+```
+
+**Why a file, not just SQLite?**
+
+1. **Project discovery without a running server.** CLI tools (`flightdeck list`, `flightdeck status`) can scan the filesystem to find projects without starting the server or opening SQLite. This enables lightweight CLI workflows.
+
+2. **Links projects to working directories.** The `cwd` field anchors a project to its repo. If the user moves their repo, they update one file. If they clone on a new machine, they create a new `project.yaml` pointing to the local path.
+
+3. **Human-inspectable.** A developer can `cat ~/.flightdeck/projects/flightdeck-a3f7/project.yaml` to see what's configured. YAML is readable; SQLite requires tooling.
+
+4. **Survives database reset.** If the user deletes `flightdeck.db` to start fresh, the project directory structure and metadata survive. The server can re-import projects from `project.yaml` files on next startup.
+
+**Lifecycle:**
+
+| Event | Action |
+|-------|--------|
+| `ProjectRegistry.create()` | Write `project.yaml` to `~/.flightdeck/projects/<id>/` AND insert into SQLite |
+| Server startup | Scan `~/.flightdeck/projects/*/project.yaml`, reconcile with SQLite (import missing, update stale) |
+| Project update (name, description, cwd) | Update both `project.yaml` and SQLite |
+| Project delete | Remove project directory AND SQLite row |
+| Database reset | On next startup, re-import from `project.yaml` files |
+
+**Reconciliation on startup:**
+
+```typescript
+function reconcileProjects(projectsDir: string, db: Database): void {
+  const yamlProjects = scanProjectYamls(projectsDir);  // Read all project.yaml files
+  const dbProjects = db.drizzle.select().from(projects).all();
+  const dbMap = new Map(dbProjects.map(p => [p.id, p]));
+
+  for (const yaml of yamlProjects) {
+    if (!dbMap.has(yaml.id)) {
+      // Project exists on disk but not in DB (e.g., DB was reset) → import
+      db.drizzle.insert(projects).values(yaml).run();
+    } else {
+      // Both exist → update DB from yaml if yaml is newer (cwd may have changed)
+      const dbProject = dbMap.get(yaml.id)!;
+      if (yaml.updatedAt > dbProject.updatedAt) {
+        db.drizzle.update(projects).set({ cwd: yaml.cwd, updatedAt: yaml.updatedAt })
+          .where(eq(projects.id, yaml.id)).run();
+      }
+    }
+  }
+}
+```
+
+**The `project.yaml` is the minimal, portable, human-readable anchor.** SQLite holds the full runtime state (sessions, DAG, agents, locks). The YAML file holds only what's needed for discovery and configuration.
 
 ### Human-Readable Project IDs
 
