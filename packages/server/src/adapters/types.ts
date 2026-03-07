@@ -80,8 +80,14 @@ export interface PermissionRequest {
 
 export interface AdapterStartOptions {
   cliCommand: string;
+  /** Provider-specific base args (e.g., ['--acp', '--stdio'] for Copilot) */
+  baseArgs?: string[];
   cliArgs?: string[];
   cwd?: string;
+  /** Extra environment variables to pass to the spawned process */
+  env?: Record<string, string>;
+  /** Session ID for resume via session/load (if provider supports it) */
+  sessionId?: string;
 }
 
 // ── Core Interface ──────────────────────────────────────────────────

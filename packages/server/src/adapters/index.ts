@@ -23,6 +23,14 @@ export type {
 
 export { AcpAdapter } from './AcpAdapter.js';
 export { MockAdapter } from './MockAdapter.js';
+export {
+  PROVIDER_PRESETS,
+  getPreset,
+  listPresets,
+  isValidProviderId,
+  detectInstalledProviders,
+} from './presets.js';
+export type { ProviderPreset, ProviderId, BinaryChecker } from './presets.js';
 
 import { AcpAdapter } from './AcpAdapter.js';
 import { MockAdapter } from './MockAdapter.js';

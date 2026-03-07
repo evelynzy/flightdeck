@@ -10,6 +10,7 @@ vi.mock('../config.js', async (importOriginal) => {
     host: '127.0.0.1',
     cliCommand: 'copilot',
     cliArgs: [],
+    provider: 'copilot',
     maxConcurrentAgents: 10,
     dbPath: ':memory:',
   };
@@ -30,6 +31,7 @@ function createTestContainerConfig(): ContainerConfig {
       host: '127.0.0.1',
       cliCommand: 'copilot',
       cliArgs: [],
+      provider: 'copilot',
       maxConcurrentAgents: 10,
       dbPath: ':memory:',
     },

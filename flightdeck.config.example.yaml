@@ -64,3 +64,10 @@ budget:
     warning: 0.7
     critical: 0.9
     pause: 1.0
+
+provider:
+  id: copilot                         # 'copilot' | 'gemini' | 'opencode' | 'cursor' | 'codex' | 'claude'
+  # binaryOverride: /usr/local/bin/copilot  # Override binary path (optional)
+  # argsOverride: ['--acp', '--stdio']      # Override spawn args (optional)
+  # envOverride:                             # Extra env vars (optional)
+  #   GEMINI_API_KEY: your-key-here

@@ -58,6 +58,7 @@ const fakeConfig: ServerConfig = {
   host: '127.0.0.1',
   cliCommand: 'copilot',
   cliArgs: [],
+  provider: 'copilot',
   maxConcurrentAgents: 50,
   dbPath: './test.db',
 };
@@ -73,7 +74,7 @@ describe('AgentAcpBridge — startAcp', () => {
 
   it('logs the actual error message when ACP start fails', async () => {
     const agent = createFakeAgent();
-    const startError = new Error('CLI binary "copilot" not found in PATH. Install it or set COPILOT_CLI_PATH.');
+    const startError = new Error('CLI binary "copilot" not found in PATH. Install the provider CLI or set the binary path in your config.');
     mockStart.mockRejectedValue(startError);
 
     startAcp(agent, fakeConfig);

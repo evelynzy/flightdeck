@@ -44,6 +44,17 @@ const budgetSchema = z.object({
   thresholds: budgetThresholdsSchema.optional(),
 });
 
+// ── Provider schema ────────────────────────────────────────
+
+const VALID_PROVIDERS = ['copilot', 'gemini', 'opencode', 'cursor', 'codex', 'claude'] as const;
+
+const providerSchema = z.object({
+  id: z.enum(VALID_PROVIDERS).default('copilot'),
+  binaryOverride: z.string().optional(),
+  argsOverride: z.array(z.string()).optional(),
+  envOverride: z.record(z.string(), z.string()).optional(),
+});
+
 // ── Top-level config ───────────────────────────────────────
 // Use z.preprocess to coerce undefined sections to {} before validation,
 // so that each section's field-level .default() values are applied.
@@ -60,12 +71,13 @@ export const flightdeckConfigSchema = z.preprocess(
     models: sectionDefault(modelsSchema),
     roles: z.preprocess((val) => val ?? {}, z.record(z.string(), roleOverrideSchema)),
     budget: sectionDefault(budgetSchema),
+    provider: sectionDefault(providerSchema),
   }),
 );
 
 export type FlightdeckConfig = z.infer<typeof flightdeckConfigSchema>;
 
-export { DEFAULT_KNOWN_MODELS };
+export { DEFAULT_KNOWN_MODELS, VALID_PROVIDERS };
 
 /** Returns a config with all defaults filled in (equivalent to empty file). */
 export function getDefaultConfig(): FlightdeckConfig {

@@ -102,12 +102,29 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
   async start(opts: AdapterStartOptions): Promise<string> {
     await this.spawnAndConnect(opts);
 
-    const sessionResult = await this.connection!.newSession({
-      cwd: opts.cwd || process.cwd(),
-      mcpServers: [],
-    });
+    let sessionId: string;
 
-    const { sessionId } = sessionResult;
+    if (opts.sessionId) {
+      // Try to resume an existing session (supported by some providers)
+      try {
+        const loadResult = await this.connection!.loadSession({ sessionId: opts.sessionId });
+        sessionId = loadResult.sessionId;
+      } catch {
+        // Fallback to new session if session/load is not supported
+        const newResult = await this.connection!.newSession({
+          cwd: opts.cwd || process.cwd(),
+          mcpServers: [],
+        });
+        sessionId = newResult.sessionId;
+      }
+    } else {
+      const sessionResult = await this.connection!.newSession({
+        cwd: opts.cwd || process.cwd(),
+        mcpServers: [],
+      });
+      sessionId = sessionResult.sessionId;
+    }
+
     this.sessionId = sessionId;
     this._isConnected = true;
     this.emit('connected', sessionId);
@@ -122,7 +139,7 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
     } catch {
       throw new Error(
         `CLI binary "${command}" not found in PATH. ` +
-        `Install it or set COPILOT_CLI_PATH to the full path of the binary.`,
+        `Install the provider CLI or set the binary path in your config.`,
       );
     }
   }
@@ -130,10 +147,11 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
   private async spawnAndConnect(opts: AdapterStartOptions): Promise<void> {
     this.validateCliCommand(opts.cliCommand);
 
-    const args = ['--acp', '--stdio', ...(opts.cliArgs || [])];
+    const args = [...(opts.baseArgs || ['--acp', '--stdio']), ...(opts.cliArgs || [])];
     this.process = spawn(opts.cliCommand, args, {
       stdio: ['pipe', 'pipe', 'inherit'],
       cwd: opts.cwd || process.cwd(),
+      ...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
     });
 
     if (!this.process.stdin || !this.process.stdout) {

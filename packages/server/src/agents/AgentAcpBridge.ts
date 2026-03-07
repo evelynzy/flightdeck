@@ -5,6 +5,7 @@
 import { mkdirSync, existsSync, renameSync } from 'fs';
 import { join } from 'path';
 import { AcpAdapter } from '../adapters/AcpAdapter.js';
+import { getPreset } from '../adapters/presets.js';
 import type { AgentAdapter, ToolCallInfo, PlanEntry } from '../adapters/types.js';
 import type { ServerConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
@@ -46,6 +47,9 @@ export function startAcp(agent: Agent, config: ServerConfig, initialPrompt?: str
   agent.status = 'running';
   wireAcpEvents(agent, conn);
 
+  // Resolve provider preset for CLI-specific spawn args
+  const preset = getPreset(config.provider || 'copilot');
+
   const cliArgs = [
     ...config.cliArgs,
     `--agent=${agentFlagForRole(agent.role.id)}`,
@@ -54,9 +58,12 @@ export function startAcp(agent: Agent, config: ServerConfig, initialPrompt?: str
   ];
 
   conn.start({
-    cliCommand: config.cliCommand,
+    cliCommand: preset?.binary || config.cliCommand,
+    baseArgs: preset?.args,
     cliArgs,
     cwd: agent.cwd || process.cwd(),
+    env: preset?.env,
+    sessionId: agent.resumeSessionId,
   }).then((sessionId) => {
     agent.sessionId = sessionId;
     agent._notifySessionReady(sessionId);

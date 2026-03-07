@@ -9,6 +9,8 @@ export interface ServerConfig {
   host: string;
   cliCommand: string;
   cliArgs: string[];
+  /** Provider ID for the CLI adapter (e.g., 'copilot', 'gemini', 'claude') */
+  provider: string;
   maxConcurrentAgents: number;
   dbPath: string;
 }
@@ -45,6 +47,7 @@ function resolveDbPath(explicit: string | undefined): string {
 const defaults: ServerConfig = {
   port: parseInt(process.env.PORT || '3001', 10),
   host: process.env.HOST || '127.0.0.1',
+  provider: process.env.CLI_PROVIDER || 'copilot',
   cliCommand: process.env.COPILOT_CLI_PATH || 'copilot',
   cliArgs: [],
   maxConcurrentAgents: parseInt(process.env.MAX_AGENTS || '50', 10),

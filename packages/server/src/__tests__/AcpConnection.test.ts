@@ -65,7 +65,7 @@ describe('AcpConnection', () => {
       })).rejects.toThrow(/CLI binary "nonexistent-binary" not found in PATH/);
     });
 
-    it('includes COPILOT_CLI_PATH hint in error message', async () => {
+    it('includes helpful hint in error message when binary not found', async () => {
       mockExecFileSync.mockImplementation(() => {
         throw new Error('not found');
       });
@@ -74,7 +74,7 @@ describe('AcpConnection', () => {
       await expect(conn.start({
         cliCommand: 'copilot',
         cwd: '/tmp',
-      })).rejects.toThrow(/COPILOT_CLI_PATH/);
+      })).rejects.toThrow(/Install the provider CLI/);
     });
 
     it('proceeds to spawn when CLI binary exists', async () => {
