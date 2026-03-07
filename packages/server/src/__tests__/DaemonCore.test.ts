@@ -558,6 +558,34 @@ describe('Daemon lifecycle modes', () => {
       expect(daemon.mode).toBe('development');
     });
 
+    it('detectMode respects FLIGHTDECK_MODE', () => {
+      const orig = process.env.FLIGHTDECK_MODE;
+      try {
+        process.env.FLIGHTDECK_MODE = 'development';
+        expect(DaemonProcess.detectMode()).toBe('development');
+        process.env.FLIGHTDECK_MODE = 'production';
+        expect(DaemonProcess.detectMode()).toBe('production');
+      } finally {
+        if (orig === undefined) delete process.env.FLIGHTDECK_MODE;
+        else process.env.FLIGHTDECK_MODE = orig;
+      }
+    });
+
+    it('detectMode respects FLIGHTDECK_DEV', () => {
+      const orig = process.env.FLIGHTDECK_DEV;
+      const origMode = process.env.FLIGHTDECK_MODE;
+      try {
+        delete process.env.FLIGHTDECK_MODE;
+        process.env.FLIGHTDECK_DEV = '1';
+        expect(DaemonProcess.detectMode()).toBe('development');
+      } finally {
+        if (orig === undefined) delete process.env.FLIGHTDECK_DEV;
+        else process.env.FLIGHTDECK_DEV = orig;
+        if (origMode === undefined) delete process.env.FLIGHTDECK_MODE;
+        else process.env.FLIGHTDECK_MODE = origMode;
+      }
+    });
+
     it('allows runtime mode switching', async () => {
       const daemon = new DaemonProcess({ socketDir: tempDir, mode: 'production' });
       await daemon.start();
@@ -578,6 +606,66 @@ describe('Daemon lifecycle modes', () => {
 
       expect(() => daemon.setMode('foo' as any)).toThrow(/Invalid lifecycle mode.*foo/);
       expect(daemon.mode).toBe('production'); // unchanged
+
+      await daemon.stop();
+    });
+
+    it('dev→production while orphaned clears dev timers and starts production shutdown', async () => {
+      const daemon = new DaemonProcess({
+        socketDir: tempDir,
+        mode: 'development',
+        productionGracePeriodMs: 100,
+        orphanTimeoutMs: 60_000, // long — should NOT fire
+      });
+      await daemon.start();
+
+      const client = new DaemonClient({
+        socketDir: tempDir,
+        heartbeatIntervalMs: 60_000,
+      });
+      await client.connect(daemon.token);
+      client.disconnect();
+
+      // Now orphaned in dev mode — switch to production
+      await new Promise(r => setTimeout(r, 50));
+      daemon.setMode('production');
+
+      // Production grace period should kick in and shut down
+      await new Promise(r => setTimeout(r, 300));
+      expect(existsSync(join(tempDir, 'agent-host.sock'))).toBe(false);
+    });
+
+    it('production→dev while orphaned clears production timer and starts dev timers', async () => {
+      const daemon = new DaemonProcess({
+        socketDir: tempDir,
+        mode: 'production',
+        productionGracePeriodMs: 60_000, // long — should NOT fire after switch
+        orphanTimeoutMs: 100, // short — should fire after switch
+      });
+      await daemon.start();
+
+      const client = new DaemonClient({
+        socketDir: tempDir,
+        heartbeatIntervalMs: 60_000,
+      });
+      await client.connect(daemon.token);
+      client.disconnect();
+
+      // Now orphaned in production mode — switch to dev
+      await new Promise(r => setTimeout(r, 50));
+      daemon.setMode('development');
+
+      // Dev orphan timeout (100ms) should fire, NOT the old production timer
+      await new Promise(r => setTimeout(r, 300));
+      expect(existsSync(join(tempDir, 'agent-host.sock'))).toBe(false);
+    });
+
+    it('setMode is a no-op when mode is unchanged', async () => {
+      const daemon = new DaemonProcess({ socketDir: tempDir, mode: 'production' });
+      await daemon.start();
+
+      daemon.setMode('production'); // same mode — no-op
+      expect(daemon.mode).toBe('production');
 
       await daemon.stop();
     });
