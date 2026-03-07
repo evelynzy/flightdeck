@@ -13,6 +13,8 @@ During Flightdeck development, the server runs via `tsx watch src/index.ts`, whi
 
 This is the primary developer experience friction for anyone iterating on the Flightdeck server codebase.
 
+**Primary use case (dogfooding):** A 12-agent AI crew is actively modifying Flightdeck source code. An agent commits a change to `AgentManager.ts`. `tsx watch` detects the change and restarts the server. All 12 agents — including the one that just made the change — must continue working without interruption. In-flight tool calls complete. No work is lost. The crew is developing the very system that manages them; the daemon enables this recursive iteration loop.
+
 ### Current Process Tree
 
 ```
@@ -156,12 +158,12 @@ Spawn agents with `detached: true`, communicate via filesystem FIFOs instead of 
 
 ## Recommended Approach: Phased Hybrid
 
-Ship **Phase 1** (Enhanced Auto-Resume) immediately for developer relief, then build **Phase 2** (Agent Host Daemon) as the correct long-term architecture.
+Ship **Phase 1** (Enhanced Auto-Resume) as the foundation and fallback mechanism, then ship **Phase 2** (Agent Host Daemon) immediately after as the primary hot-reload mechanism. **Both phases are required** — Phase 1 is not "done," it's the recovery path for when the daemon is unavailable.
 
-**Core design principle: The daemon is an optimization, not a dependency.** The server MUST work without the daemon — spawning ACP processes directly (current behavior). The daemon adds zero-downtime server restarts as an enhancement, but its absence or failure must never prevent the server from functioning. This means:
-- Server startup: attempt daemon connection → if unavailable, fall back to direct ACP spawn
-- Daemon crash mid-session: server detects socket EOF → switches to direct spawn → Phase 1 auto-resume for existing agents
-- No daemon installed: server works exactly as it does today
+**Core design principle: The daemon is core infrastructure, but the server degrades gracefully without it.** The daemon is the PRIMARY mechanism for surviving server restarts during development. SDK resume (Phase 1) is the FALLBACK — used for daemon crash recovery, first-time setup before daemon is built, or edge cases where the daemon isn't running. This means:
+- `npm run dev`: daemon auto-starts, agents survive restarts with zero disruption
+- Daemon crash: server detects socket EOF → falls back to SDK resume → agents restored in 5-15s
+- Daemon not installed (fresh clone): server works via direct ACP spawn + SDK resume (degraded but functional)
 
 ### Phase 1: Enhanced Auto-Resume (1-2 days)
 
@@ -909,40 +911,54 @@ For an idle agent (between tasks, waiting for delegation), SDK resume is indisti
 
 For small crews (1-3 agents), SDK resume is almost certainly sufficient. For large crews (10+), the cumulative interruption cost is significant.
 
-#### Recommendation: SDK-First Architecture
+#### Recommendation: Daemon-First with SDK Resume as Recovery
 
-**Phase 1 (SDK Resume) should be the primary investment. Phase 2 (Daemon) should be deferred to opt-in "pro mode."**
+**The daemon is core infrastructure, not optional.** The primary use case — an AI crew developing Flightdeck itself — requires zero-disruption hot reload. A 5-15s blip on every code change means 12 agents interrupted, in-flight tool calls aborted, and ~30s of wasted computation per save. With agents saving files every 2 minutes, this is a continuous productivity drain.
 
-This is already captured in the Product Positioning section, but the SDK research strengthens the case:
+SDK resume is essential but as the **fallback/recovery mechanism**, not the primary path:
 
-1. **Phase 1 is 80% built.** Resume plumbing exists in AgentAcpBridge, AgentManager, and ProjectRegistry. Remaining work: persist all agent sessionIds, auto-resume on startup, parallel resume, progress UI. Estimated: 3-4 hours.
+1. **Phase 1 ships first as the foundation.** Resume plumbing exists in AgentAcpBridge, AgentManager, and ProjectRegistry. Remaining work: persist all agent sessionIds, auto-resume on startup, parallel resume, progress UI. Estimated: 3-4 hours. This gives immediate developer relief while Phase 2 is built.
 
-2. **Phase 1 + SDK resume delivers 95% of the value.** Full context preservation, ~0 budget cost, 5-15s blip (or 1-2s with Copilot SDK's optimized resume). The only loss is in-flight turns.
+2. **Phase 2 ships immediately after as the primary mechanism.** The daemon eliminates the blip entirely. Agents never notice server restarts. In-flight tool chains complete uninterrupted. This is the target experience for dogfooding.
 
-3. **Phase 2 (daemon) delivers the remaining 5% at 10x the complexity.** 1466 lines of design doc, ~2.5 days implementation, ongoing maintenance of socket protocol, cross-platform transport, authentication, event buffering, reconnect protocol, and failure handling.
+3. **SDK resume becomes the daemon crash recovery path.** Daemon crashes → server falls back to Phase 1 auto-resume → agents restored with full context in 5-15s. This makes daemon crashes a brief inconvenience, not a catastrophe.
 
-4. **The daemon should NOT be eliminated from the design.** It solves a real problem for power users with large crews. But it should be opt-in (`daemon.enabled: true`), not the default path. The SDK-first architecture is simpler, more portable, and easier to maintain.
+4. **Both phases are on the critical path.** Phase 1 alone is insufficient for the dogfooding workflow. Phase 2 alone has no crash recovery. Together they form a complete, resilient system.
 
-#### What "SDK-First, No Daemon" Looks Like
+#### What the Daemon-First Architecture Looks Like
 
+**Primary path (daemon running — normal development):**
+```
+Developer saves file (or agent commits a code change)
+    → tsx watch sends SIGTERM to server
+    → gracefulShutdown() closes daemon socket FIRST
+    → Server exits. Daemon keeps all 12 agents alive.
+    → tsx watch spawns new server
+    → Server connects to daemon socket, authenticates
+    → Server calls daemon.list() → receives roster of 12 live agents
+    → Server rebuilds in-memory state from SQLite (delegations, DAG, file locks)
+    → Server subscribes to event streams for each agent
+    → Daemon replays any buffered events from the disconnect window
+    → UI shows brief "Reconnected" toast (green, auto-dismiss 3s)
+    → Total elapsed: <2s. Zero agent disruption. In-flight work preserved.
+```
+
+**Fallback path (daemon crashed or not running):**
 ```
 Developer saves file
     → tsx watch sends SIGTERM to server
     → gracefulShutdown() persists agent roster to SQLite:
         [{id, role, sessionId, task, status, parentId, model, cwd}, ...]
-    → Server exits
+    → Server exits. All agents terminated (no daemon to keep them alive).
     → tsx watch spawns new server
+    → Server attempts daemon connection → fails → falls back to direct ACP spawn
     → Server reads persisted roster from SQLite
     → For each agent: AgentManager.spawn(role, task, { resumeSessionId })
         → AgentAcpBridge adds --resume <sessionId> to CLI args
         → Agent process starts, loads session state from disk
-        → Agent is ready in 1-2s (Copilot) or 5-15s (Claude, depends on context size)
     → UI shows "Resuming N agents..." with per-agent progress
-    → All agents back online, full context, ready for work
-    → Total elapsed: 5-15s for crew of 12
+    → Total elapsed: 5-15s for crew of 12. Full context preserved, in-flight turn lost.
 ```
-
-**Recommendation:** Keep daemon design as-is (it's excellent documentation of the problem space). But **implement Phase 1 first**, evaluate whether the daemon adds enough value for the user's workflow, and build Phase 2 only if the 5-15s blip proves genuinely disruptive in practice.
 
 ### API Surface for Web Dashboard
 
@@ -1291,16 +1307,16 @@ The daemon is infrastructure. Users should NEVER have to think about it during n
 ```
 
 The daemon status dot appears next to the existing session indicator with **three states**:
-- **Green (●)** — Daemon connected, all agents healthy
+- **Green (●)** — Daemon connected, all agents healthy (default state during development)
 - **Amber (●)** — Reconnecting or degraded (agents resuming, stale heartbeat, brief disconnect)
-- **Gray (●)** — No daemon running / Phase 1 mode. This is NOT an error — it means the user doesn't have the daemon enabled, which is fine. Gray = "this is fine, you just don't have the daemon."
+- **Red (●)** — Daemon unavailable. Server is running in fallback mode (direct ACP spawn + SDK resume). This means agents will restart on code changes instead of surviving them.
 
-Tooltip on hover: `"Agent Host: Running (12 agents, uptime 2h 15m)"` (green), `"Agent Host: Reconnecting..."` (amber), `"Agent Host: Not running (Phase 1 mode)"` (gray).
+Tooltip on hover: `"Agent Host: Running (12 agents, uptime 2h 15m)"` (green), `"Agent Host: Reconnecting..."` (amber), `"Agent Host: Unavailable (fallback mode)"` (red).
 
 **Toast notifications on state changes:**
 - **Daemon disconnected:** Amber toast (does NOT auto-dismiss — stays until resolved)
 - **Reconnected:** Green toast (auto-dismiss 3s)
-- **Fallback mode:** Info toast: `"Running without daemon — agents will restart on code changes."`
+- **Fallback mode:** Warning toast: `"⚠️ Daemon unavailable — agents will restart on code changes. Run 'flightdeck daemon start' to fix."`
 
 #### Mission Control — System Health Panel
 
@@ -1456,21 +1472,21 @@ When daemon connection is lost, the header dot and UI escalate over time:
 
 The 60s threshold aligns with infrastructure reality: auto-resume < 30s, heartbeat timeout = 30s. Past 60s, something is genuinely broken. This prevents the stale state from becoming a lie of omission — users get honest uncertainty for the common case (brief reconnect) and clear escalation for the rare case (daemon crash).
 
-### SDK `--resume` Product Implications
+### SDK `--resume` Role in Architecture
 
-With SDK `--resume`, the product positioning shifts:
+SDK resume is the **fallback and recovery mechanism**, not the primary experience:
 
-1. **Phase 1 + `--resume` becomes the default experience (80% solution).** Agents resume with full context in seconds. Most solo devs won't need the daemon at all — a 10s blip on code change is acceptable.
+1. **Daemon crash recovery:** Daemon dies → server detects socket EOF → falls back to SDK resume → agents restored with full context in 5-15s. Makes daemon crashes a brief inconvenience, not catastrophic.
 
-2. **Phase 2 daemon becomes opt-in "pro mode" (100% solution).** Eliminates even the 10s blip — true zero-downtime hot reload. Auto-started in dev mode but gracefully degradable.
+2. **First-time setup:** Before the daemon is built (Phase 1 only), SDK resume provides the auto-resume experience. This is the foundation that Phase 2 builds on.
 
-3. **Security framing (@bb14c13b, @a6fa6770):** Phase 1 does NOT remove any security boundary — it IS the current security model (agents are child processes of the server). Every Copilot CLI user today runs in this model. Phase 2 ADDS process isolation as a security bonus (UDS + token + umask). Frame as: "Phase 2 adds defense-in-depth" rather than "Phase 1 is insecure." The threat model for Phase 1: if the server is compromised, agents are too — but that's already true today.
+3. **Edge cases:** Daemon fails to start, permissions issue, unsupported platform → server falls back to direct spawn + SDK resume transparently.
 
-**Recommendation:** Ship Phase 1 with `--resume` support as the default. Make Phase 2 daemon available via config flag (`daemon.enabled: true` in `flightdeck.config.yaml`). The daemon auto-starts when enabled but everything works without it. When a user first enables this flag, the UI shows a one-time onboarding tooltip: *"Agent host daemon enabled — your agents will now survive server restarts with zero downtime."*
+4. **Security framing (@bb14c13b, @a6fa6770):** The fallback path (direct ACP spawn) is the current security model — agents are child processes of the server. The daemon ADDS process isolation as a security bonus (UDS + token + umask). Frame as: "daemon adds defense-in-depth."
 
-#### Phase 1 Polish Priorities
+#### Phase 1 Foundation Priorities
 
-With Phase 1 becoming the default experience, invest heavily in polish (@e7f14c5e, @a6fa6770):
+Phase 1 ships first as the foundation and recovery path. Invest in polish since it's the fallback experience (@e7f14c5e, @a6fa6770):
 
 1. **Progress UI for resume** — per-agent status updates, not a single spinner
 2. **"Cancel resume" button** — let users start fresh instead of resuming
@@ -1479,25 +1495,25 @@ With Phase 1 becoming the default experience, invest heavily in polish (@e7f14c5
 
 ### Quality Bar — Acceptance Criteria
 
-#### Phase 1 is done when:
+#### Phase 2 is the PRIMARY quality bar — the dogfooding scenario:
 
-- [ ] User makes a code change → agents resume automatically → no manual intervention
+- [ ] A 12-agent crew is actively modifying Flightdeck source. An agent saves a file. `tsx watch` restarts the server. All 12 agents continue working without interruption. In-flight tool calls complete. No work is lost.
+- [ ] `npm run dev` just works — daemon auto-starts, no separate command, no config flag needed
+- [ ] Server can be restarted 10 times in a row with no agent loss or state corruption
+- [ ] Daemon crash → automatic recovery via Phase 1 SDK resume → user sees brief "Resuming" then normal
+- [ ] Emergency stop works via UI button, CLI, and sentinel file
+- [ ] Two developers can't accidentally collide (one daemon per user, socket permissions enforce isolation)
+- [ ] Server restart during an active agent prompt (mid-turn) results in no lost output — buffered events are replayed on reconnect (@e7f14c5e)
+- [ ] Works on macOS and Linux, degrades gracefully on other platforms
+
+#### Phase 1 is the FOUNDATION quality bar — the fallback path:
+
+- [ ] User makes a code change without daemon → agents resume automatically → no manual intervention
 - [ ] UI shows "Resuming N agents..." banner with per-agent progress
 - [ ] All agents come back within 30s (for a 12-agent crew)
 - [ ] In-flight inter-agent messages in SQLite survive the restart (DAG state, file locks)
 - [ ] User can cancel the auto-resume if they want a fresh start
 - [ ] Works on macOS and Linux
-
-#### Phase 2 is done when:
-
-- [ ] User makes a code change → zero visible disruption → agents never even blink
-- [ ] `npm run dev` just works — daemon starts automatically, no separate command
-- [ ] Daemon crash → automatic recovery via Phase 1 → user sees brief "Resuming" then normal
-- [ ] Emergency kill works via UI button, CLI, and kill file sentinel
-- [ ] Server can be restarted 10 times in a row with no agent loss or state corruption
-- [ ] Two developers can't accidentally collide (one daemon per user, socket permissions enforce isolation)
-- [ ] Server restart during an active agent prompt (mid-turn) results in no lost output — buffered events are replayed on reconnect (@e7f14c5e)
-- [ ] Works on macOS and Linux, degrades gracefully on other platforms
 
 ---
 
