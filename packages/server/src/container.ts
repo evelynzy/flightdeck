@@ -245,12 +245,25 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   scheduler.register({
     id: 'activity-log-prune',
     interval: 3_600_000,
-    run: () => activityLedger.prune(50_000),
+    run: () => {
+      activityLedger.pruneByAge(7); // Remove entries older than 7 days
+      activityLedger.prune(50_000); // Then cap at 50k entries
+    },
   });
   scheduler.register({
     id: 'stale-delegation-cleanup',
     interval: 300_000,
     run: () => { agentManager.cleanupStaleDelegations(); },
+  });
+  scheduler.register({
+    id: 'wal-size-monitor',
+    interval: 1_800_000, // 30 minutes
+    run: () => {
+      const { warning } = db.checkWalSize(100 * 1024 * 1024); // 100MB threshold
+      if (warning) {
+        db.walCheckpoint('TRUNCATE');
+      }
+    },
   });
   onShutdown('scheduler', () => scheduler.stop());
 

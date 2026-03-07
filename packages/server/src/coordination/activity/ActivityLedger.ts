@@ -198,13 +198,26 @@ export class ActivityLedger extends EventEmitter {
     return { totalActions, byAgent, byType, recentFiles };
   }
 
-  prune(keepCount: number = 10000): void {
+  prune(keepCount: number = 10000): number {
     this.flush();
-    this.db.run(
+    const result = this.db.run(
       'DELETE FROM activity_log WHERE id NOT IN (SELECT id FROM activity_log ORDER BY id DESC LIMIT ?)',
       [keepCount],
     );
     this._version++;
+    return result.changes;
+  }
+
+  /** Remove entries older than the given number of days */
+  pruneByAge(maxAgeDays: number = 7): number {
+    this.flush();
+    const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+    const result = this.db.run(
+      'DELETE FROM activity_log WHERE timestamp < ?',
+      [cutoff],
+    );
+    if (result.changes > 0) this._version++;
+    return result.changes;
   }
 
   private _mapRow(row: any): ActivityEntry {

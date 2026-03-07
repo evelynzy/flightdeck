@@ -89,40 +89,51 @@ export class FileLockRegistry extends EventEmitter {
     this.validatePath(filePath);
     this._cleanExpired();
 
-    const activeLocks = this.db.drizzle
-      .select()
-      .from(fileLocks)
-      .where(activeFilter)
-      .all();
+    // Wrap read-check-write in a transaction to prevent race conditions
+    // where two agents could both read "no conflict" then both write.
+    let result: { ok: boolean; holder?: string } = { ok: false };
 
-    for (const lock of activeLocks) {
-      if (lock.agentId === agentId && lock.filePath === filePath) {
-        // Same agent re-acquiring same exact path — allow (refresh)
-        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-        this.db.drizzle
-          .update(fileLocks)
-          .set({ expiresAt, reason, projectId })
-          .where(eq(fileLocks.filePath, filePath))
-          .run();
-        return { ok: true };
+    this.db.drizzle.transaction((tx) => {
+      const activeLocks = tx
+        .select()
+        .from(fileLocks)
+        .where(activeFilter)
+        .all();
+
+      for (const lock of activeLocks) {
+        if (lock.agentId === agentId && lock.filePath === filePath) {
+          // Same agent re-acquiring same exact path — allow (refresh)
+          const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+          tx
+            .update(fileLocks)
+            .set({ expiresAt, reason, projectId })
+            .where(eq(fileLocks.filePath, filePath))
+            .run();
+          result = { ok: true };
+          return;
+        }
+        if (lock.agentId !== agentId && pathsConflict(lock.filePath, filePath)) {
+          result = { ok: false, holder: lock.agentId };
+          return;
+        }
       }
-      if (lock.agentId !== agentId && pathsConflict(lock.filePath, filePath)) {
-        return { ok: false, holder: lock.agentId };
-      }
+
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      tx
+        .insert(fileLocks)
+        .values({ filePath, agentId, agentRole, reason, expiresAt, projectId })
+        .onConflictDoUpdate({
+          target: fileLocks.filePath,
+          set: { agentId, agentRole, reason, expiresAt, projectId },
+        })
+        .run();
+      result = { ok: true };
+    });
+
+    if (result.ok) {
+      this.emit('lock:acquired', { filePath, agentId, agentRole, reason, projectId });
     }
-
-    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-    this.db.drizzle
-      .insert(fileLocks)
-      .values({ filePath, agentId, agentRole, reason, expiresAt, projectId })
-      .onConflictDoUpdate({
-        target: fileLocks.filePath,
-        set: { agentId, agentRole, reason, expiresAt, projectId },
-      })
-      .run();
-
-    this.emit('lock:acquired', { filePath, agentId, agentRole, reason, projectId });
-    return { ok: true };
+    return result;
   }
 
   release(agentId: string, filePath: string): boolean {
