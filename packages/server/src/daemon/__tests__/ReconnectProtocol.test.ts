@@ -337,6 +337,33 @@ describe('ReconnectProtocol', () => {
       protocol.dispose();
       await expect(protocol.reconnect()).rejects.toThrow('disposed');
     });
+
+    it('deduplicates concurrent reconnect() calls', async () => {
+      client.listAgents = vi.fn(async () => ({ agents: [] }));
+
+      const p1 = protocol.reconnect();
+      const p2 = protocol.reconnect();
+
+      const [r1, r2] = await Promise.all([p1, p2]);
+      // Both resolve to the same reconciliation result
+      expect(r1).toEqual(r2);
+      // Only one actual connect attempt
+      expect(client.connect).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows a new reconnect after the previous one completes', async () => {
+      client.listAgents = vi.fn(async () => ({ agents: [] }));
+
+      await protocol.reconnect();
+      // Reset mock to track new calls
+      client.connect = vi.fn(async () => {
+        client.isConnected = true;
+        return mockAuthResult();
+      });
+
+      await protocol.reconnect();
+      expect(client.connect).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── Auto-Reconnect on Events ──────────────────────────────────

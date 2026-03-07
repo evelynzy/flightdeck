@@ -89,6 +89,7 @@ export class ReconnectProtocol extends TypedEmitter<ReconnectProtocolEvents> {
   private _attempts = 0;
   private _disposed = false;
   private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private _activeReconnect: Promise<ReconciliationResult> | null = null;
 
   /** Per-agent checkpoint for event replay. */
   private lastSeenEventIds = new Map<string, string>();
@@ -200,12 +201,17 @@ export class ReconnectProtocol extends TypedEmitter<ReconnectProtocolEvents> {
 
   /**
    * Manually trigger a reconnect cycle.
+   * If a reconnect is already in progress, returns the existing promise.
    * Resolves when reconnected and reconciled, or rejects if all attempts fail.
    */
   async reconnect(adapterReconnector?: AdapterReconnector): Promise<ReconciliationResult> {
     if (this._disposed) throw new Error('ReconnectProtocol has been disposed');
+    if (this._activeReconnect) return this._activeReconnect;
     this.cancelPendingReconnect();
-    return this.doReconnectLoop(adapterReconnector);
+    this._activeReconnect = this.doReconnectLoop(adapterReconnector).finally(() => {
+      this._activeReconnect = null;
+    });
+    return this._activeReconnect;
   }
 
   /**
@@ -255,12 +261,16 @@ export class ReconnectProtocol extends TypedEmitter<ReconnectProtocolEvents> {
   // ── Internal: Reconnect Loop ──────────────────────────────────
 
   private scheduleReconnect(): void {
-    if (this._disposed) return;
+    if (this._disposed || this._activeReconnect) return;
     this.cancelPendingReconnect();
 
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;
-      this.doReconnectLoop().catch(err => {
+      if (this._activeReconnect) return; // guard against race
+      this._activeReconnect = this.doReconnectLoop().finally(() => {
+        this._activeReconnect = null;
+      });
+      this._activeReconnect.catch(err => {
         logger.error({
           module: 'reconnect-protocol',
           msg: 'Reconnect loop failed',
