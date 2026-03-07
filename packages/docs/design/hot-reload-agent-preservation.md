@@ -876,6 +876,243 @@ Items identified during design review that are worth noting but not specced in d
 
 ---
 
+## Cross-Platform Compatibility
+
+The current design centers on Unix domain sockets, which don't exist on Windows. This section specifies cross-platform IPC, security, process management, and socket location strategies for all three target platforms.
+
+### Design Principle: Platform-Native IPC with Unified Protocol
+
+Node.js `net.createServer()` / `net.createConnection()` natively support **both** Unix domain sockets and Windows named pipes through the same API — only the path string format differs. This means the JSON-RPC protocol layer, authentication handshake, event buffering, and reconnect logic are 100% shared. Only the transport setup (path, permissions, cleanup) is platform-specific.
+
+**No additional npm packages are needed.** The core `net` module handles everything. The `xpipe` package exists for path normalization but is unnecessary given our explicit platform detection.
+
+### TransportAdapter Abstraction
+
+```typescript
+interface TransportAdapter {
+  /** Platform-specific IPC path (socket path or pipe name) */
+  getAddress(): string;
+  /** Apply platform-specific security before listen() */
+  secureBefore(): void;
+  /** Apply platform-specific security after listen() */
+  secureAfter(): Promise<void>;
+  /** Check if a stale socket/pipe exists and clean up */
+  cleanupStale(): Promise<'clean' | 'live-daemon' | 'error'>;
+  /** Remove socket/pipe on shutdown */
+  cleanup(): Promise<void>;
+  /** Platform-specific process termination: graceful → forced */
+  terminateProcess(pid: number): Promise<void>;
+  /** Get platform-specific token file path */
+  getTokenPath(): string;
+  /** Get platform-specific PID file path */
+  getPidPath(): string;
+}
+```
+
+Three implementations: `LinuxTransport`, `DarwinTransport`, `WindowsTransport`. Selected at startup via `os.platform()`.
+
+### Platform Matrix
+
+| Concern | Linux | macOS | Windows |
+|---------|-------|-------|---------|
+| **IPC mechanism** | Unix domain socket | Unix domain socket | Named pipe |
+| **Socket/pipe path** | `$XDG_RUNTIME_DIR/flightdeck/daemon.sock` | `$TMPDIR/flightdeck/daemon.sock` | `\\.\pipe\flightdeck-daemon-{uid}` |
+| **File permissions** | `umask(0o177)` before `listen()` | `umask(0o177)` before `listen()` | Named pipe default DACL + token auth |
+| **Token file location** | `$XDG_RUNTIME_DIR/flightdeck/daemon.token` | `$TMPDIR/flightdeck/daemon.token` | `%LOCALAPPDATA%\flightdeck\daemon.token` |
+| **Token file permissions** | `open(path, 'w', 0o600)` | `open(path, 'w', 0o600)` | NTFS ACL (owner-only) via `icacls` |
+| **Stale detection** | `connect()` probe → ECONNREFUSED | `connect()` probe → ECONNREFUSED | `connect()` probe → ECONNREFUSED (pipe auto-cleans) |
+| **Graceful terminate** | `SIGTERM` | `SIGTERM` | `stdin.end()` + protocol message |
+| **Forced terminate** | `SIGKILL` (5s timeout) | `SIGKILL` (5s timeout) | `child.kill()` / `TerminateProcess` |
+| **Process detach** | `setsid` (via `detached: true`) | `setsid` (via `detached: true`) | `CREATE_NEW_PROCESS_GROUP` (via `detached: true`) |
+| **Emergency sentinel** | `~/.flightdeck/run/EMERGENCY_STOP` | `~/.flightdeck/run/EMERGENCY_STOP` | `%LOCALAPPDATA%\flightdeck\EMERGENCY_STOP` |
+| **Auto-cleanup** | Manual `unlink()` on shutdown | Manual `unlink()` on shutdown | Automatic when last handle closes |
+
+### Linux: Primary Target
+
+Linux is the reference implementation. The design doc's existing sections (Unix domain socket, `$XDG_RUNTIME_DIR`, `umask`, `SIGTERM`/`SIGKILL`) apply directly.
+
+**Socket location resolution:**
+```
+$XDG_RUNTIME_DIR/flightdeck/daemon.sock    (preferred, typically /run/user/$UID/)
+~/.flightdeck/run/daemon.sock               (fallback if XDG_RUNTIME_DIR unset)
+```
+
+**Abstract sockets (future):** Linux supports abstract Unix sockets (prefixed with `\0`) that live in kernel memory and auto-cleanup on process exit. This eliminates all filesystem race conditions and stale socket issues. Deferred to a future optimization since it's Linux-specific.
+
+### macOS: Close to Linux, Different Socket Location
+
+macOS uses Unix domain sockets identically to Linux. The only difference is socket location — macOS does NOT set `$XDG_RUNTIME_DIR` by default.
+
+**Socket location resolution:**
+```
+$TMPDIR/flightdeck/daemon.sock     (preferred, per-user, 0700, e.g. /var/folders/.../T/)
+~/.flightdeck/run/daemon.sock      (fallback)
+```
+
+`$TMPDIR` on macOS points to a per-user temporary directory (e.g., `/var/folders/vd/53h736bj.../T/`) that is:
+- Owned by the user with `0700` permissions (kernel-enforced)
+- Cleared on reboot (acceptable — daemon doesn't survive reboots anyway)
+- NOT in `/tmp` (which is world-writable and vulnerable to symlink attacks)
+
+This provides equivalent security properties to Linux's `$XDG_RUNTIME_DIR`.
+
+**macOS-specific note: TMPDIR and Time Machine.** `$TMPDIR` contents may be included in Time Machine backups. The daemon token file (256-bit secret) could be backed up. Mitigation: use `xattr -w com.apple.metadata:com_apple_backup_excludeItem com.apple.backupd` on the flightdeck directory, or place the token in a non-backed-up location. This is a low-severity concern since the token is per-session and ephemeral.
+
+**launchd integration (future):** macOS's `launchd` could auto-start the daemon via a user-level `LaunchAgent` plist. This would start the daemon on login rather than on first `npm run dev`. Deferred — useful for production setups but unnecessary for development workflow.
+
+### Windows: Named Pipes (Not Windows UDS)
+
+**Decision: Use Windows named pipes, NOT Windows AF_UNIX sockets.**
+
+Windows 10 1803+ added AF_UNIX support, but it has significant limitations:
+- Only `SOCK_STREAM` supported (no `SOCK_DGRAM`, `SOCK_SEQPACKET`)
+- No file descriptor passing
+- No `socketpair` API
+- Less mature, community reports of edge cases and reliability issues
+- Not available on older Windows 10 builds
+
+Windows named pipes are the native IPC mechanism — stable, well-tested, and natively supported by Node.js `net` module:
+
+```typescript
+// Windows named pipe path
+const pipeName = `\\\\.\\pipe\\flightdeck-daemon-${process.getuid?.() ?? process.pid}`;
+
+// Same API as Unix domain sockets:
+const server = net.createServer(handler);
+server.listen(pipeName);
+
+const client = net.createConnection(pipeName);
+```
+
+**Key behavioral differences from Unix domain sockets:**
+- **Auto-cleanup:** Named pipes are automatically removed when the last handle closes. No stale pipe cleanup needed (unlike Unix sockets which leave orphaned files).
+- **No filesystem path:** Named pipes live in the kernel's pipe namespace (`\\.\pipe\`), not the filesystem. No symlink attacks, no directory permission issues.
+- **Discovery:** Anyone can enumerate pipe names via `\\.\pipe\` listing. Security relies on authentication (token), not obscurity.
+
+#### Windows Security Model
+
+Windows named pipes use ACLs (Access Control Lists) instead of Unix file permissions. **Node.js ignores the `mode` parameter on Windows** — you cannot set `0600` equivalent via core Node.js APIs.
+
+**Security strategy for Windows (defense in depth):**
+
+1. **Token authentication (primary):** Same per-session 256-bit token as Unix. The token file is stored in `%LOCALAPPDATA%\flightdeck\daemon.token` with restricted NTFS ACL. Token is required for all daemon operations. This is the primary security boundary on Windows.
+
+2. **Token file ACL:** On daemon startup, restrict the token file to owner-only access:
+   ```typescript
+   // After writing token file on Windows:
+   import { execSync } from 'child_process';
+   execSync(`icacls "${tokenPath}" /inheritance:r /grant:r "%USERNAME%:R"`);
+   ```
+   This is the Windows equivalent of `chmod 0600`. It removes inherited permissions and grants read-only to the current user.
+
+3. **Pipe name includes user identifier:** `\\.\pipe\flightdeck-daemon-{uid}` — prevents accidental cross-user collisions. Not a security boundary (pipe names are globally visible), but reduces attack surface.
+
+4. **Named pipe ACL (optional hardening):** For full 0600 equivalence, the pipe itself needs a restricted ACL. This requires native code (`CreateNamedPipe` with custom `SECURITY_ATTRIBUTES`). Deferred to Phase 2 hardening — token auth is sufficient for development use.
+
+**Threat comparison — Windows vs Unix:**
+
+| Threat | Unix Mitigation | Windows Mitigation |
+|--------|----------------|-------------------|
+| Unauthorized connection | Socket file perms (0600) + token | Token auth (primary) + pipe name obscurity |
+| Token file theft | File perms (0600) + `fdatasync` | NTFS ACL via `icacls` |
+| Eavesdropping | Socket is local-only (kernel) | Pipe is local-only (kernel) |
+| Impersonation | Socket directory perms (0700) | Token `timingSafeEqual` |
+| Stale socket/pipe | `connect()` probe + `unlink()` | Auto-cleanup (pipes vanish when daemon dies) |
+
+#### Windows Process Management
+
+Windows lacks Unix signals entirely. The zombie escalation pattern maps differently:
+
+**Unix escalation (existing design):**
+```
+SIGTERM → wait 5s → SIGKILL → wait 2s → force remove from roster
+```
+
+**Windows escalation:**
+```
+stdin.end() + 'shutdown' message → wait 5s → child.kill() (TerminateProcess) → remove from roster
+```
+
+Key differences:
+- **Graceful shutdown:** On Unix, `SIGTERM` lets the process handle cleanup. On Windows, `child.kill('SIGTERM')` is actually an immediate `TerminateProcess` with no cleanup. Instead, send a `shutdown` message over the agent's stdin pipe and close stdin. The Copilot CLI process should handle stdin close as a shutdown signal.
+- **Forced shutdown:** `child.kill()` on Windows calls `TerminateProcess` — always immediate, no SIGKILL equivalent needed (it's already a hard kill).
+- **No zombie processes:** Windows doesn't have the Unix zombie state (Z). `TerminateProcess` always succeeds. The 2s zombie timeout in the Unix design is unnecessary on Windows.
+
+**Process detachment:** Node.js `spawn({ detached: true })` maps to `CREATE_NEW_PROCESS_GROUP` + `DETACHED_PROCESS` flags on Windows. Combined with `stdio: 'ignore'` and `child.unref()`, this achieves the same daemon-outlives-server behavior as Unix `setsid`.
+
+#### Windows Emergency Kill
+
+The emergency kill switch adapts to Windows:
+
+| Level | Unix | Windows |
+|-------|------|---------|
+| CLI | `flightdeck daemon stop --force` | Same (cross-platform Node.js CLI) |
+| Signal | `kill -9 <daemon-pid>` | `taskkill /PID <pid> /F` |
+| Sentinel | `touch ~/.flightdeck/run/EMERGENCY_STOP` | `echo. > %LOCALAPPDATA%\flightdeck\EMERGENCY_STOP` |
+
+The sentinel file approach works identically on Windows — `fs.watchFile()` is cross-platform.
+
+### Implementation: Platform Detection
+
+```typescript
+import { platform } from 'os';
+
+function createTransport(): TransportAdapter {
+  switch (platform()) {
+    case 'linux':
+      return new LinuxTransport();
+    case 'darwin':
+      return new DarwinTransport();
+    case 'win32':
+      return new WindowsTransport();
+    default:
+      // Unsupported platform — fall back to TCP localhost + token
+      return new TcpFallbackTransport();
+  }
+}
+```
+
+**TCP fallback:** For unsupported platforms (FreeBSD, etc.), fall back to `127.0.0.1` with a random high port + token auth. This provides the daemon functionality without platform-specific IPC. The token is the only security boundary (no filesystem permission enforcement). This is acceptable for development use.
+
+### Cross-Platform Testing Strategy
+
+| Test | Linux | macOS | Windows |
+|------|-------|-------|---------|
+| Socket/pipe creation | ✅ UDS | ✅ UDS | ✅ Named pipe |
+| Permission enforcement | ✅ `stat()` + `umask` | ✅ `stat()` + `umask` | ✅ `icacls` verification |
+| Stale cleanup | ✅ `connect()` probe + `unlink()` | ✅ `connect()` probe + `unlink()` | ✅ Auto-cleanup (verify pipe gone) |
+| Process terminate (graceful) | ✅ SIGTERM | ✅ SIGTERM | ✅ stdin close + message |
+| Process terminate (forced) | ✅ SIGKILL | ✅ SIGKILL | ✅ `child.kill()` |
+| Daemon survives server restart | ✅ `setsid` | ✅ `setsid` | ✅ `CREATE_NEW_PROCESS_GROUP` |
+| Emergency sentinel | ✅ `fs.watchFile` | ✅ `fs.watchFile` | ✅ `fs.watchFile` |
+| Token auth | ✅ `timingSafeEqual` | ✅ `timingSafeEqual` | ✅ `timingSafeEqual` |
+
+CI should run daemon integration tests on all three platforms. The `TransportAdapter` abstraction makes this straightforward — same test suite, different transport.
+
+### What Stays the Same Across All Platforms
+
+The cross-platform abstraction is thin — most of the daemon design is platform-independent:
+
+- ✅ JSON-RPC protocol (100% shared)
+- ✅ Authentication handshake (token generation, `timingSafeEqual`)
+- ✅ Event buffering and replay (100% shared)
+- ✅ Single-client enforcement (100% shared)
+- ✅ Auto-shutdown timer (100% shared)
+- ✅ `DaemonAdapter` implementing `AgentAdapter` interface (100% shared)
+- ✅ Reconnect protocol with `lastSeenEventId` (100% shared)
+- ✅ Structured pino logging (100% shared)
+- ✅ All UI/UX flows (100% shared)
+
+**Only the following are platform-specific:**
+- IPC path format and location (~20 lines per platform)
+- File permission enforcement (~10 lines per platform)
+- Process termination escalation (~15 lines per platform)
+- Stale socket cleanup (~10 lines per platform)
+
+Total platform-specific code: ~55 lines per platform, out of an estimated ~300-line daemon. The `TransportAdapter` keeps the platform seam minimal and testable.
+
+---
+
 ## User Experience Design
 
 *Based on product analysis by @a6fa6770, with architectural validation by @e7f14c5e and @bb14c13b.*
