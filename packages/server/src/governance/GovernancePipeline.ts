@@ -41,7 +41,7 @@ export class GovernancePipeline {
   registerPreHook(hook: PreActionHook): void {
     this.preHooks.push(hook);
     this.preHooks.sort((a, b) => a.priority - b.priority);
-    logger.debug('governance', `Registered pre-hook: ${hook.name} (priority ${hook.priority})`);
+    logger.debug({ module: 'governance', msg: 'Registered pre-hook', hookName: hook.name, priority: hook.priority });
   }
 
   /**
@@ -50,7 +50,7 @@ export class GovernancePipeline {
   registerPostHook(hook: PostActionHook): void {
     this.postHooks.push(hook);
     this.postHooks.sort((a, b) => a.priority - b.priority);
-    logger.debug('governance', `Registered post-hook: ${hook.name} (priority ${hook.priority})`);
+    logger.debug({ module: 'governance', msg: 'Registered post-hook', hookName: hook.name, priority: hook.priority });
   }
 
   /** Remove a pre-hook by name */
@@ -96,27 +96,18 @@ export class GovernancePipeline {
         const result = hook.evaluate(action, context);
 
         if (result.decision === 'block') {
-          logger.info('governance', `Hook "${hook.name}" blocked ${action.commandName}`, {
-            agentId: action.agent.id,
-            reason: result.reason,
-          });
+          logger.info({ module: 'governance', msg: 'Hook blocked command', hookName: hook.name, command: action.commandName, targetAgentId: action.agent.id, reason: result.reason });
           return result;
         }
 
         if (result.decision === 'modify') {
-          logger.debug('governance', `Hook "${hook.name}" modified ${action.commandName}`, {
-            agentId: action.agent.id,
-          });
+          logger.debug({ module: 'governance', msg: 'Hook modified command', hookName: hook.name, command: action.commandName, targetAgentId: action.agent.id });
           return result;
         }
         // decision === 'allow' → continue to next hook
       } catch (err) {
         // Hook errors should not crash the dispatch loop. Log and continue.
-        logger.error('governance', `Pre-hook "${hook.name}" threw`, {
-          error: (err as Error).message,
-          agentId: action.agent.id,
-          command: action.commandName,
-        });
+        logger.error({ module: 'governance', msg: 'Pre-hook threw', hookName: hook.name, command: action.commandName, targetAgentId: action.agent.id, err: (err as Error).message });
         // Fail-open: a broken hook should not block all commands
       }
     }
@@ -138,19 +129,11 @@ export class GovernancePipeline {
         // If the hook returns a promise, catch unhandled rejections
         if (result && typeof (result as Promise<void>).catch === 'function') {
           (result as Promise<void>).catch(err => {
-            logger.error('governance', `Post-hook "${hook.name}" async error`, {
-              error: (err as Error).message,
-              agentId: action.agent.id,
-              command: action.commandName,
-            });
+            logger.error({ module: 'governance', msg: 'Post-hook async error', hookName: hook.name, command: action.commandName, targetAgentId: action.agent.id, err: (err as Error).message });
           });
         }
       } catch (err) {
-        logger.error('governance', `Post-hook "${hook.name}" threw`, {
-          error: (err as Error).message,
-          agentId: action.agent.id,
-          command: action.commandName,
-        });
+        logger.error({ module: 'governance', msg: 'Post-hook threw', hookName: hook.name, command: action.commandName, targetAgentId: action.agent.id, err: (err as Error).message });
       }
     }
   }

@@ -85,9 +85,9 @@ describe('AgentAcpBridge — startAcp', () => {
 
     // The error should be logged with details, NOT swallowed
     expect(logger.error).toHaveBeenCalledWith(
-      'acp',
-      expect.stringContaining('ACP start failed'),
       expect.objectContaining({
+        module: 'acp',
+        msg: 'ACP start failed',
         cliCommand: 'copilot',
         cwd: '/test/project',
         role: 'lead',
@@ -96,9 +96,9 @@ describe('AgentAcpBridge — startAcp', () => {
 
     // Verify the actual error message is included in the log
     const errorCall = (logger.error as any).mock.calls.find(
-      (call: any[]) => call[1]?.includes('ACP start failed'),
+      (call: any[]) => call[0]?.msg === 'ACP start failed',
     );
-    expect(errorCall[1]).toContain('not found in PATH');
+    expect(errorCall[0].err).toContain('not found in PATH');
   });
 
   it('sets agent status to failed on error', async () => {
@@ -126,9 +126,10 @@ describe('AgentAcpBridge — startAcp', () => {
 
     // Should not throw, should still log something
     expect(logger.error).toHaveBeenCalledWith(
-      'acp',
-      expect.stringContaining('ACP start failed'),
-      expect.any(Object),
+      expect.objectContaining({
+        module: 'acp',
+        msg: 'ACP start failed',
+      }),
     );
   });
 
@@ -143,9 +144,11 @@ describe('AgentAcpBridge — startAcp', () => {
     });
 
     expect(logger.error).toHaveBeenCalledWith(
-      'acp',
-      expect.stringContaining('abcdef12'),
-      expect.any(Object),
+      expect.objectContaining({
+        module: 'acp',
+        msg: 'ACP start failed',
+        err: 'timeout',
+      }),
     );
   });
 

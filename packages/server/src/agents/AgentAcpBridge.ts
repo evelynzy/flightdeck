@@ -24,15 +24,15 @@ export function ensureSharedWorkspace(agent: Agent): void {
   if (!existsSync(newBase) && existsSync(legacyBase)) {
     try {
       renameSync(legacyBase, newBase);
-      logger.info('agent', `📦 Migrated workspace: .ai-crew/ → .flightdeck/`);
+      logger.info({ module: 'agent', msg: 'Migrated workspace: .ai-crew/ → .flightdeck/' });
     } catch {
-      logger.debug('agent', 'Could not migrate .ai-crew/ dir, creating fresh .flightdeck/');
+      logger.debug({ module: 'agent', msg: 'Could not migrate .ai-crew/ dir, creating fresh .flightdeck/' });
     }
   }
 
   const sharedDir = join(newBase, 'shared');
   if (!existsSync(sharedDir)) {
-    try { mkdirSync(sharedDir, { recursive: true }); } catch (err) { logger.debug('agent', 'Shared dir already exists or cannot be created'); }
+    try { mkdirSync(sharedDir, { recursive: true }); } catch (err) { logger.debug({ module: 'agent', msg: 'Shared dir already exists or cannot be created' }); }
   }
 }
 
@@ -65,11 +65,7 @@ export function startAcp(agent: Agent, config: ServerConfig, initialPrompt?: str
     }
   }).catch((err) => {
     const errorMsg = err?.message || String(err);
-    logger.error('acp', `Agent ${agent.id.slice(0, 8)} ACP start failed: ${errorMsg}`, {
-      cliCommand: config.cliCommand,
-      cwd: agent.cwd || process.cwd(),
-      role: agent.role?.id,
-    });
+    logger.error({ module: 'acp', msg: 'ACP start failed', err: errorMsg, cliCommand: config.cliCommand, cwd: agent.cwd || process.cwd(), role: agent.role?.id });
 
     // Store error for exit event (text pipeline is buffered, races with immediate exit)
     agent.exitError = errorMsg;

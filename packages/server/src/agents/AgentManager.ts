@@ -216,12 +216,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       if (target && (target.status === 'running' || target.status === 'idle')) {
         const fromAgent = this.agents.get(msg.from);
         const fromLabel = fromAgent ? `${fromAgent.role.name} (${msg.from.slice(0, 8)})` : msg.from.slice(0, 8);
-        logger.info('message', `Delivering: ${fromLabel} → ${target.role.name} (${msg.to.slice(0, 8)})`, {
-          contentPreview: msg.content.slice(0, 80),
-        });
+        logger.info({ module: 'comms', msg: 'Delivering message', targetAgentId: msg.to, targetRole: target.role.name, fromAgentId: msg.from, contentPreview: msg.content.slice(0, 80) });
         target.sendMessage(`[Message from ${fromLabel}]: ${msg.content}`);
       } else {
-        logger.warn('message', `Delivery failed — target not found/running: ${msg.to.slice(0, 8)}`);
+        logger.warn({ module: 'comms', msg: 'Delivery failed — target not found/running', targetAgentId: msg.to });
       }
     });
   }
@@ -271,7 +269,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
 
   spawn(role: Role, task?: string, parentId?: string, autopilot?: boolean, model?: string, cwd?: string, resumeSessionId?: string, id?: string, options?: { projectName?: string; projectId?: string }): Agent {
     if (this.getRunningCount() >= this.maxConcurrent) {
-      logger.error('agent', `Concurrency limit reached (${this.maxConcurrent})`, { role: role.id });
+      logger.error({ module: 'agent', msg: 'Concurrency limit reached', maxConcurrent: this.maxConcurrent, role: role.id });
       throw new Error(
         `Concurrency limit reached (${this.maxConcurrent}). Terminate an agent or increase the limit.`,
       );
@@ -288,9 +286,9 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     const modelResolution = this.resolveModelForRole(role.id, model, effectiveProjectId);
     const effectiveModel = modelResolution.model;
     if (modelResolution.overridden && modelResolution.reason) {
-      logger.warn('model-config', modelResolution.reason);
+      logger.warn({ module: 'config', msg: modelResolution.reason! });
     } else if (modelResolution.reason) {
-      logger.info('model-config', modelResolution.reason);
+      logger.info({ module: 'config', msg: modelResolution.reason! });
     }
 
     // Filter initial peer list to same project to prevent cross-project visibility
@@ -349,7 +347,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     // with projectId: '' and become invisible to scoped queries.
     if (!parentId && !agent.projectId) {
       agent.projectId = randomUUID();
-      logger.warn('agent', `Root agent ${agent.id.slice(0, 8)} spawned without projectId — generated ${agent.projectId.slice(0, 8)}`);
+      logger.warn({ module: 'agent', msg: 'Root agent spawned without projectId', generatedProjectId: agent.projectId });
     }
 
     this.agents.set(agent.id, agent);
@@ -442,7 +440,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     });
 
     agent.onContextCompacted((info) => {
-      logger.info('agent', `Context compacted for ${agent.role.name} (${agent.id.slice(0, 8)}): ${info.percentDrop}% reduction`);
+      logger.info({ module: 'agent', msg: 'Context compacted', percentDrop: info.percentDrop });
       this.emit('agent:context_compacted', { agentId: agent.id, ...info });
     });
 
@@ -483,15 +481,12 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       this.flushAgentMessage(agent.id);
       this.clearHungTimer(agent.id);
       this.dispatcher.clearBuffer(agent.id);
-      logger.info('agent', `Exited ${agent.role.name} (${agent.id.slice(0, 8)}) code=${code}`, {
-        role: agent.role.id,
-        status: agent.status,
-      });
+      logger.info({ module: 'agent', msg: 'Agent exited', exitCode: code, role: agent.role.id, status: agent.status });
 
       // Release any file locks held by the exiting agent
       const releasedCount = this.lockRegistry.releaseAll(agent.id);
       if (releasedCount > 0) {
-        logger.info('lock', `Auto-released ${releasedCount} lock(s) for exiting agent ${agent.id.slice(0, 8)}`);
+        logger.info({ module: 'files', msg: 'Auto-released locks for exiting agent', count: releasedCount });
       }
 
       // Clear any pending timers for the exiting agent
@@ -519,7 +514,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       if (agent.role.id === 'lead' && !agent.parentId && agent.projectId && this.projectRegistry) {
         const status = (code !== null && code !== 0) ? 'crashed' : 'completed';
         this.projectRegistry.endSession(agent.id, status);
-        logger.info('project', `Session ended for project ${agent.projectId.slice(0, 8)} — ${status}`);
+        logger.info({ module: 'project', msg: 'Session ended', status });
       }
 
       // Clean up dedup tracking after a delay
@@ -537,7 +532,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         const agentRole = agent.role?.id ?? 'unknown';
         const crashKey = `${agentRole}:${agent.task ?? ''}`;
 
-        logger.error('agent', `Crashed ${agent.role.name} (${agent.id.slice(0, 8)}) exit=${code}`, { crashKey });
+        logger.error({ module: 'agent', msg: 'Agent crashed', exitCode: code, crashKey });
         this.activityLedger.log(agent.id, agentRole, 'error', `Agent crashed with exit code ${code}`, {}, this.getProjectIdForAgent(agent.id) ?? '');
         this.emit('agent:crashed', { agentId: agent.id, code });
 
@@ -545,25 +540,25 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         this.crashCounts.set(crashKey, count);
 
         if (this.autoRestart && count < this.maxRestarts) {
-          logger.warn('agent', `Auto-restarting ${agent.role.name} (attempt ${count + 1}/${this.maxRestarts})`);
+          logger.warn({ module: 'agent', msg: 'Auto-restarting agent', attempt: count + 1, maxRestarts: this.maxRestarts });
           setTimeout(() => {
             try {
               // Verify parent is still alive before restarting
               if (agent.parentId) {
                 const parent = this.agents.get(agent.parentId);
                 if (!parent || isTerminalStatus(parent.status)) {
-                  logger.warn('agent', `Skipping auto-restart: parent ${agent.parentId.slice(0, 8)} no longer active`);
+                  logger.warn({ module: 'agent', msg: 'Skipping auto-restart — parent no longer active', parentAgentId: agent.parentId });
                   return;
                 }
               }
               const newAgent = this.spawn(agent.role, agent.task, agent.parentId, undefined, agent.model || undefined, agent.cwd, agent.sessionId || undefined, undefined, { projectName: agent.projectName, projectId: agent.projectId });
               this.emit('agent:auto_restarted', { agentId: newAgent.id, previousAgentId: agent.id, crashCount: count });
             } catch (err) {
-              logger.error('agent', `Auto-restart failed for ${agent.role.name}: ${(err as Error).message}`);
+              logger.error({ module: 'agent', msg: 'Auto-restart failed', err: (err as Error).message });
             }
           }, 2000);
         } else if (count >= this.maxRestarts) {
-          logger.error('agent', `Restart limit reached for ${agent.role.name} (${this.maxRestarts} restarts)`);
+          logger.error({ module: 'agent', msg: 'Restart limit reached', maxRestarts: this.maxRestarts });
           this.emit('agent:restart_limit', { agentId: agent.id });
         }
       } else {
@@ -593,11 +588,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
 
     // Helper: post-start actions (emit events after cwd is set)
     const postSpawn = () => {
-      logger.info('agent', `Spawned ${role.name} (${agent.id.slice(0, 8)})`, {
-        autopilot: agent.autopilot,
-        parentId: parentId?.slice(0, 8),
-        task,
-      });
+      logger.info({ module: 'agent', msg: 'Agent spawned', role: role.name, autopilot: agent.autopilot, parentAgentId: parentId, task });
       this.emit('agent:spawned', agent.toJSON());
       this.updateLeadBudgets();
       // Auto-add to groups with matching role criteria (B4: group auto-add)
@@ -611,10 +602,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       this.worktreeManager.create(agent.id)
         .then(worktreePath => {
           agent.cwd = worktreePath;
-          logger.info('worktree', `Agent ${agent.id.slice(0, 8)} using worktree at ${worktreePath}`);
+          logger.info({ module: 'files', msg: 'Using worktree', worktreePath });
         })
         .catch(err => {
-          logger.warn('worktree', `Worktree creation failed for ${agent.id.slice(0, 8)}, using shared cwd: ${err.message}`);
+          logger.warn({ module: 'files', msg: 'Worktree creation failed, using shared cwd', err: err.message });
         })
         .finally(() => {
           agent.start();
@@ -638,7 +629,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       });
       if (allTerminal) {
         this.chatGroupRegistry.archiveGroup(group.name, group.leadId);
-        logger.info('group', `Auto-archived group "${group.name}" — all members terminated`);
+        logger.info({ module: 'comms', msg: 'Auto-archived group — all members terminated', groupName: group.name });
       }
     }
   }
@@ -655,14 +646,14 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     // Release any file locks held by the terminated agent
     const releasedCount = this.lockRegistry.releaseAll(id);
     if (releasedCount > 0) {
-      logger.info('lock', `Auto-released ${releasedCount} lock(s) for terminated agent ${id.slice(0, 8)}`);
+      logger.info({ module: 'files', msg: 'Auto-released locks for terminated agent', targetAgentId: id, count: releasedCount });
     }
 
     // Cascade: terminate orphaned children recursively
     for (const childId of [...agent.childIds]) {
       const child = this.agents.get(childId);
       if (child && !isTerminalStatus(child.status)) {
-        logger.info('agent', `Cascade-terminating orphaned child ${child.role.name} (${childId.slice(0, 8)})`);
+        logger.info({ module: 'agent', msg: 'Cascade-terminating orphaned child', childAgentId: childId, childRole: child.role.name });
         this.terminate(childId, visited);
       }
     }
@@ -694,12 +685,12 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       this.worktreeManager.merge(id)
         .then(result => {
           if (!result.ok) {
-            logger.warn('worktree', `Merge failed for ${id.slice(0, 8)}: ${result.conflicts?.join(', ')}`);
+            logger.warn({ module: 'files', msg: 'Worktree merge failed', targetAgentId: id, conflicts: result.conflicts });
           }
         })
         .finally(() => {
           this.worktreeManager!.cleanup(id).catch(err => {
-            logger.warn('worktree', `Cleanup failed for ${id.slice(0, 8)}: ${err.message}`);
+            logger.warn({ module: 'files', msg: 'Worktree cleanup failed', targetAgentId: id, err: err.message });
           });
         });
     }
@@ -773,10 +764,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         { projectName: leadAgent.projectName, projectId: leadAgent.projectId },
       );
       secretary.isSystemAgent = true;
-      logger.info('agent', `Auto-spawned secretary (${secretary.id.slice(0, 8)}) for lead (${leadAgent.id.slice(0, 8)})`);
+      logger.info({ module: 'agent', msg: 'Auto-spawned secretary', secretaryId: secretary.id, leadAgentId: leadAgent.id });
       return secretary;
     } catch (err: any) {
-      logger.warn('agent', `Failed to auto-spawn secretary: ${err.message}`);
+      logger.warn({ module: 'agent', msg: 'Failed to auto-spawn secretary', err: err.message });
       setTimeout(() => {
         leadAgent.sendMessage(`[System] Auto-secretary spawn failed: ${err.message}. You can manually create one with CREATE_AGENT.`);
       }, 2000);
@@ -846,7 +837,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       }
     }
     this.emit('system:paused', { paused: true });
-    logger.info('system', 'System paused by user');
+    logger.info({ module: 'agent', msg: 'System paused by user' });
   }
 
   /** Resume the system — deliver queued messages, notify agents */
@@ -861,7 +852,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       }
     }
     this.emit('system:paused', { paused: false });
-    logger.info('system', 'System resumed by user');
+    logger.info({ module: 'agent', msg: 'System resumed by user' });
     // Drain pending messages on all idle agents
     for (const agent of this.agents.values()) {
       if (agent.status === 'idle' || agent.status === 'running') {
@@ -909,7 +900,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     // Clean up all worktrees (async, best-effort)
     // Individual terminate() calls skip merge when _shuttingDown is true
     this.worktreeManager?.cleanupAll().catch(err => {
-      logger.warn('worktree', `Shutdown worktree cleanup failed: ${err.message}`);
+      logger.warn({ module: 'files', msg: 'Shutdown worktree cleanup failed', err: err.message });
     });
   }
 
@@ -1033,12 +1024,12 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
           const added = this.chatGroupRegistry.addMembers(leadId, group.name, [agent.id]);
           if (added.length > 0) {
             agent.queueMessage(`[System] You've been auto-added to group "${group.name}" (matches your role "${agent.role.id}"). Send messages: ⟦⟦ GROUP_MESSAGE {"group": "${group.name}", "content": "your message"} ⟧⟧`);
-            logger.info('groups', `Auto-added ${agent.role.name} (${agent.id.slice(0, 8)}) to group "${group.name}" via role criteria`);
+            logger.info({ module: 'comms', msg: 'Auto-added agent to group via role criteria', groupName: group.name, role: agent.role.name });
           }
         }
       }
     } catch (err) {
-      logger.warn('groups', `Failed to auto-add agent to role groups: ${(err as Error).message}`);
+      logger.warn({ module: 'comms', msg: 'Failed to auto-add agent to role groups', err: (err as Error).message });
     }
   }
 }

@@ -145,7 +145,7 @@ export class CommandDispatcher {
       if (best) {
         // Skip commands whose ⟦⟦ is nested inside another ⟦⟦ ⟧⟧ block
         if (CommandDispatcher.isInsideCommandBlock(buf, best.index)) {
-          logger.debug('agent', `Skipped nested command: ${best.name} from ${agent.role.name} (${agent.id.slice(0, 8)})`);
+          logger.debug({ module: 'command', msg: 'Skipped nested command', command: best.name });
           agent.sendMessage(
             `[System] Nested ${best.name} was stripped — it appeared inside another command's payload. ` +
             `To show command examples in text, refer to commands by name (e.g. "use the ${best.name} command") ` +
@@ -173,12 +173,12 @@ export class CommandDispatcher {
             }
 
             // Execute handler
-            logger.debug('agent', `Command: ${best.name} from ${agent.role.name} (${agent.id.slice(0, 8)})`);
+            logger.debug({ module: 'command', msg: 'Command dispatched', command: best.name });
             try {
               best.handler(agent, best.text);
             } catch (err) {
               const errMsg = (err as Error).message;
-              logger.error('command', `Handler error for ${best.name} from ${agent.role.name}: ${errMsg}`);
+              logger.error({ module: 'command', msg: 'Handler error', command: best.name, err: errMsg });
               const example = getCommandExample(best.name);
               const exampleHint = example ? `\nCorrect format: ${example}` : '';
               agent.sendMessage(`[System] ${best.name} failed: ${errMsg}${exampleHint}`);
@@ -188,12 +188,12 @@ export class CommandDispatcher {
             this.governance.runPost(action, hookCtx);
           } else {
             // No governance pipeline — original path
-            logger.debug('agent', `Command: ${best.name} from ${agent.role.name} (${agent.id.slice(0, 8)})`);
+            logger.debug({ module: 'command', msg: 'Command dispatched', command: best.name });
             try {
               best.handler(agent, best.text);
             } catch (err) {
               const errMsg = (err as Error).message;
-              logger.error('command', `Handler error for ${best.name} from ${agent.role.name}: ${errMsg}`);
+              logger.error({ module: 'command', msg: 'Handler error', command: best.name, err: errMsg });
               const example = getCommandExample(best.name);
               const exampleHint = example ? `\nCorrect format: ${example}` : '';
               agent.sendMessage(`[System] ${best.name} failed: ${errMsg}${exampleHint}`);
@@ -326,7 +326,7 @@ export class CommandDispatcher {
         continue;
       }
       const cmdName = match[1];
-      logger.warn('command', `Unknown command "${cmdName}" from ${agent.role.name} (${agent.id.slice(0, 8)})`);
+      logger.warn({ module: 'command', msg: 'Unknown command', command: cmdName });
       agent.sendMessage(
         `[System] Unknown command: ${cmdName}. Did you mean one of the available commands?\n\n${buildCommandHelp()}`,
       );

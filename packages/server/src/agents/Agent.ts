@@ -383,7 +383,7 @@ When you discover something important about the codebase, a pattern, a gotcha, o
 
     if (this.acpConnection?.isConnected) {
       this.acpConnection.prompt(update).catch((err) => {
-        logger.warn('agent', `Context update failed for ${this.role.name} (${this.id.slice(0, 8)}): ${err?.message}`);
+        logger.warn({ module: 'agent', msg: 'Context update failed', role: this.role.name, err: err?.message });
       });
     }
     return true;
@@ -395,7 +395,7 @@ When you discover something important about the codebase, a pattern, a gotcha, o
       this.status = 'running';
       this.events.notifyStatus(this.status);
       this.acpConnection.prompt(data, opts).catch((err) => {
-        logger.error('agent', `Prompt failed for ${this.role.name} (${this.id.slice(0, 8)}): ${err?.message || err}`);
+        logger.error({ module: 'agent', msg: 'Prompt failed', role: this.role.name, err: String(err?.message || err) });
         // Reset status so agent doesn't get stuck as 'running'
         if (this.status === 'running') {
           this.status = 'idle';
@@ -432,7 +432,7 @@ When you discover something important about the codebase, a pattern, a gotcha, o
   /** Internal: insert message into pendingMessages with FIFO priority ordering and rate limiting */
   private enqueueMessage(message: PromptContent, priority?: boolean): void {
     if (!priority && this.pendingMessages.length >= Agent.MAX_PENDING_MESSAGES) {
-      logger.warn('agent', `Message queue full (${Agent.MAX_PENDING_MESSAGES}) for ${this.role.name} (${this.id.slice(0, 8)}) — dropping non-priority message`);
+      logger.warn({ module: 'agent', msg: 'Message queue full — dropping non-priority message', role: this.role.name, maxMessages: Agent.MAX_PENDING_MESSAGES });
       return;
     }
     if (priority) {
