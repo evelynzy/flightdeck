@@ -27,10 +27,4 @@ features:
   - icon: 📊
     title: Canvas & Task DAG
     details: Interactive node-graph of your agent crew with real-time status, communication edges, and conflict indicators.
-  - icon: 📱
-    title: Mobile PWA
-    details: Full Progressive Web App with swipe-to-approve cards, bottom tab navigation, offline support, and mobile command sheet.
-  - icon: 🤝
-    title: Community Playbooks
-    details: Share and discover reusable session templates. Star ratings, reviews, fork & customize. Create custom agent roles with the visual Role Builder.
 ---
