@@ -1352,6 +1352,189 @@ function reconcileProject(projectDir: string, db: Database): void {
 
 **The `project.yaml` is the minimal, portable, human-readable anchor.** SQLite holds the full runtime state (sessions, DAG, agents, locks). The YAML file holds only what's needed for discovery and configuration.
 
+### Message Persistence & Recovery
+
+When the server restarts (or crashes), several categories of in-flight state are lost because they live only in memory. The daemon keeps agents alive, but once the server reconnects, it must recover queued work — otherwise messages are silently dropped and delegations vanish.
+
+#### In-Memory State Audit
+
+| State | Location | Data Structure | Persisted? | Impact of Loss |
+|-------|----------|---------------|------------|----------------|
+| **Agent message queue** | `Agent.pendingMessages[]` | `PromptContent[]` (max 200) | ❌ | Messages from peers/lead never delivered — agent misses instructions |
+| **Active delegations** | `CommandDispatcher.delegations` | `Map<string, Delegation>` | ❌ | Parent agent never gets completion callback; HeartbeatMonitor incorrectly reports idle |
+| **Pending approvals** | `ApprovalGateHook.pendingApprovals` | `Map<string, {id, action, reason, timestamp}>` | ❌ | Blocked commands (TERMINATE_AGENT, RESET_DAG, CREATE_AGENT) stuck forever |
+| **Pending system actions** | `CommandDispatcher.pendingSystemActions` | `Map<decisionId, {type, value, agentId}>` | ❌ | Config changes (e.g., raise agent limit) approved but never applied |
+| **Streaming text buffers** | `CommandDispatcher.textBuffers` | `Map<agentId, string>` | ❌ | Partial command output lost — acceptable (agent retries) |
+| **Reported completions** | `CommandDispatcher.reportedCompletions` | `Set<string>` | ❌ | Duplicate completion events possible — harmless (idempotent) |
+
+**Already persisted (no action needed):**
+
+| State | Table | Notes |
+|-------|-------|-------|
+| Timers | `timers` | ✅ DB-first persistence, `loadPending()` on startup — crash-safe |
+| Group messages | `chatGroupMessages` | ✅ Full history persisted |
+| Decision history | `decisions` | ✅ Approval records persisted (but gate queue is not) |
+| Activity log | `activityLog` | ✅ Message send/receive audit trail |
+| DAG tasks | `dagTasks` | ✅ Task state persisted |
+| Agent memory | `agentMemory` | ✅ Cross-session key-value store |
+| Conversations | `conversations`, `messages` | ✅ Full agent conversation history |
+
+#### New SQLite Table: `messageQueue`
+
+A single table for all recoverable queued work. Write-on-enqueue (not write-on-shutdown) for crash safety:
+
+```sql
+CREATE TABLE messageQueue (
+  id TEXT PRIMARY KEY,                    -- msg-{timestamp}-{random}
+  projectId TEXT NOT NULL REFERENCES projects(id),
+  targetAgentId TEXT NOT NULL,            -- Who should receive this
+  sourceAgentId TEXT,                     -- Who sent it (null for system messages)
+  type TEXT NOT NULL,                     -- 'agent_message' | 'delegation_result' | 'broadcast' | 'system'
+  priority INTEGER NOT NULL DEFAULT 0,   -- 1 = priority, 0 = normal
+  payload TEXT NOT NULL,                  -- JSON: the PromptContent or message body
+  status TEXT NOT NULL DEFAULT 'queued',  -- 'queued' | 'delivered' | 'expired'
+  createdAt TEXT NOT NULL,
+  deliveredAt TEXT,
+  expiresAt TEXT                          -- Optional TTL (e.g., broadcasts expire after 5 min)
+);
+
+CREATE INDEX idx_mq_target_status ON messageQueue(targetAgentId, status);
+CREATE INDEX idx_mq_project ON messageQueue(projectId);
+```
+
+**Write-on-enqueue pattern:** Every call to `agent.queueMessage()` writes to `messageQueue` first, then adds to the in-memory array. This mirrors the timer pattern (`TimerRegistry` persists to DB before caching in memory) — proven crash-safe in the codebase.
+
+```typescript
+// Agent.queueMessage() — updated flow
+async queueMessage(msg: PromptContent, priority?: boolean): Promise<void> {
+  // 1. Persist to SQLite FIRST (crash-safe)
+  const row = { id: generateId('msg'), targetAgentId: this.id, type: 'agent_message',
+                priority: priority ? 1 : 0, payload: JSON.stringify(msg), status: 'queued' };
+  db.insert(messageQueue).values(row).run();
+
+  // 2. Then add to in-memory queue (fast delivery path)
+  this.enqueueMessage(msg, priority);
+
+  // 3. If agent is idle, deliver immediately
+  if (this.status === 'idle') this.drainPendingMessages();
+}
+
+// On successful delivery, mark as delivered
+async deliverMessage(msgId: string): Promise<void> {
+  db.update(messageQueue).set({ status: 'delivered', deliveredAt: now() })
+    .where(eq(messageQueue.id, msgId)).run();
+}
+```
+
+#### New SQLite Table: `activeDelegations`
+
+Delegations are critical business state — a parent agent's `DELEGATE` command creates a child agent and tracks completion. Loss means the parent never learns the child finished.
+
+```sql
+CREATE TABLE activeDelegations (
+  id TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id),
+  fromAgentId TEXT NOT NULL,              -- Parent (delegating agent)
+  toAgentId TEXT NOT NULL,                -- Child (assigned agent)
+  toRole TEXT NOT NULL,
+  task TEXT NOT NULL,
+  context TEXT,
+  status TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'completed' | 'failed' | 'cancelled'
+  result TEXT,
+  createdAt TEXT NOT NULL,
+  completedAt TEXT
+);
+
+CREATE INDEX idx_deleg_from ON activeDelegations(fromAgentId, status);
+CREATE INDEX idx_deleg_to ON activeDelegations(toAgentId);
+CREATE INDEX idx_deleg_project ON activeDelegations(projectId);
+```
+
+**Write pattern:** `CommandDispatcher` writes to `activeDelegations` on every delegation create/complete/fail — same write-on-mutation pattern. The in-memory `Map` becomes a cache, SQLite is authoritative.
+
+#### Approval Gate Recovery
+
+Pending approvals (`ApprovalGateHook.pendingApprovals`) are transient by nature — the action that triggered the approval is suspended in an agent's turn. On server restart:
+
+- **If daemon is running:** The agent is still alive, waiting. When the server reconnects and the agent's next message arrives, the agent will re-issue the command that needs approval. The approval gate will create a new pending entry. **No persistence needed** — the agent retries naturally.
+
+- **If no daemon (crash restart):** The agent is dead. On resume via SDK, the agent gets its conversation history back and will re-attempt the gated command. Same outcome — no persistence needed.
+
+**Decision: Don't persist approval gate state.** It's self-healing through agent retry. Persisting it would require tracking the suspended coroutine state, which is complex and unnecessary.
+
+#### Pending System Actions Recovery
+
+`pendingSystemActions` (e.g., approved config changes not yet applied) are a genuine gap — the user approved a change, but the server crashed before applying it.
+
+**Fix:** Write the approved action to the existing `decisions` table with a `status: 'approved_pending_apply'` state. On startup, the server scans for `approved_pending_apply` decisions and applies them.
+
+```typescript
+// On approval:
+db.update(decisions).set({ status: 'approved_pending_apply' })
+  .where(eq(decisions.id, decisionId)).run();
+
+// On startup recovery:
+const pending = db.select().from(decisions)
+  .where(eq(decisions.status, 'approved_pending_apply')).all();
+for (const decision of pending) {
+  applySystemAction(decision);  // e.g., raise agent limit
+  db.update(decisions).set({ status: 'approved' })
+    .where(eq(decisions.id, decision.id)).run();
+}
+```
+
+#### Recovery Flow on Server Startup
+
+When the server starts (or reconnects to the daemon after restart):
+
+```
+Server startup sequence (message recovery):
+  1. Load timers             → TimerRegistry.loadPending()          [EXISTING]
+  2. Load delegations        → activeDelegations table → Map        [NEW]
+  3. Load message queues     → messageQueue WHERE status='queued'   [NEW]
+  4. Apply pending actions   → decisions WHERE status='approved_pending_apply' [NEW]
+  5. Connect to daemon       → subscribe to each agent
+  6. For each agent:
+     a. Daemon replays buffered events (event buffering protocol)
+     b. Server rebuilds agent in-memory state from SQLite
+     c. Server drains messageQueue → agent.pendingMessages[]
+     d. Agent idle? → deliver first queued message immediately
+```
+
+#### Daemon Interaction
+
+The daemon and message persistence work together but stay decoupled:
+
+- **Daemon responsibility:** Keep agents alive, buffer agent *events* (stdout, exit) during server disconnect
+- **Server responsibility:** Persist and recover *messages to agents* (queued work, delegation results)
+- **No overlap:** The daemon never reads `messageQueue` — it doesn't understand business logic. The server never buffers agent events — that's the daemon's job.
+
+```
+         Messages TO agents          Events FROM agents
+         ──────────────────          ───────────────────
+Persist: Server → SQLite messageQueue    Daemon → in-memory event buffer
+Recover: Server reads SQLite on start    Daemon replays on server reconnect
+```
+
+**Scenario: 12-agent crew, developer saves file, tsx watch restarts server:**
+
+1. **t=0s:** Server begins shutdown. Writes nothing extra (messages already in SQLite from write-on-enqueue).
+2. **t=0-3s:** Server dies. Daemon enters orphaned mode, buffers agent events.
+3. **t=3-5s:** New server starts. Loads `messageQueue`, `activeDelegations`, `timers` from SQLite.
+4. **t=5s:** Server connects to daemon, subscribes to all 12 agents with `lastSeenEventId`.
+5. **t=5-6s:** Daemon replays buffered events. Server drains `messageQueue` for each agent.
+6. **t=6s:** All agents have their queued messages. Delegations are tracked. Timers are ticking. Zero messages lost.
+
+#### What We Explicitly Don't Persist
+
+| State | Reason |
+|-------|--------|
+| Streaming text buffers (`textBuffers`) | Partial command output — agent retries the command |
+| Reported completions set | Deduplication cache — duplicate completions are idempotent |
+| Approval gate queue | Self-healing — agent re-issues gated command on resume |
+| WebSocket subscriptions | Rebuilt on reconnect |
+| In-memory agent references | Rebuilt from daemon `list()` + SQLite |
+
 ### Human-Readable Project IDs
 
 Project IDs appear in filesystem paths, UI, API responses, logs, and agent context. UUIDs (`8e0f22ff-a4e7-4142-853b-527735bd3adb`) are unreadable in all of these contexts. Project IDs should be human-readable slugs.
