@@ -163,7 +163,7 @@ export class HandoffService extends EventEmitter {
     this.emit('handoff:started', { handoffId: id, sourceAgentId: params.agentId, trigger: params.trigger });
     this.emit('handoff:generated', { handoffId: id, qualityScore, tokenCount: narrative.length });
 
-    logger.info('handoff', `Briefing generated for ${params.agentId.slice(0, 8)} (trigger: ${params.trigger}, quality: ${qualityScore ?? 'N/A'})`);
+    logger.info({ module: 'coordination', msg: 'Briefing generated', agentId: params.agentId, trigger: params.trigger, qualityScore: qualityScore ?? 'N/A' });
     return record;
   }
 
@@ -194,7 +194,7 @@ export class HandoffService extends EventEmitter {
     this.saveRecords();
     this.emit('handoff:delivered', { handoffId: id, targetAgentId: targetAgentId ?? null });
 
-    logger.info('handoff', `Briefing delivered for ${record.sourceAgentId.slice(0, 8)} → ${(targetAgentId ?? 'none').slice(0, 8)}`);
+    logger.info({ module: 'coordination', msg: 'Briefing delivered', sourceAgentId: record.sourceAgentId, targetAgentId: targetAgentId ?? 'none' });
     return record;
   }
 

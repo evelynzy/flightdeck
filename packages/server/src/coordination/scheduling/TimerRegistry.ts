@@ -43,7 +43,7 @@ export class TimerRegistry extends EventEmitter {
     this.cleanupOld();
     this.loadPending();
     this.interval = setInterval(() => this.tick(), CHECK_INTERVAL_MS);
-    logger.info('timer', `TimerRegistry started — ${this.pending.size} pending timers loaded`);
+    logger.info({ module: 'timer', msg: 'TimerRegistry started', pendingCount: this.pending.size });
   }
 
   stop(): void {
@@ -77,7 +77,7 @@ export class TimerRegistry extends EventEmitter {
       )
       .run();
     if (result.changes > 0) {
-      logger.info('timer', `Cleaned up ${result.changes} old fired/cancelled timers`);
+      logger.info({ module: 'timer', msg: 'Old timers cleaned up', count: result.changes });
     }
   }
 
@@ -123,7 +123,7 @@ export class TimerRegistry extends EventEmitter {
 
     this.pending.set(timer.id, timer);
     this.emit('timer:created', timer);
-    logger.info('timer', `Timer "${timer.label}" set for ${agentId.slice(0, 8)} — fires in ${input.delaySeconds}s`);
+    logger.info({ module: 'timer', msg: 'Timer set', label: timer.label, agentId, delaySeconds: input.delaySeconds });
     return timer;
   }
 
@@ -139,7 +139,7 @@ export class TimerRegistry extends EventEmitter {
       .run();
 
     this.emit('timer:cancelled', timer);
-    logger.info('timer', `Timer "${timer.label}" cancelled for ${agentId.slice(0, 8)}`);
+    logger.info({ module: 'timer', msg: 'Timer cancelled', label: timer.label, agentId });
     return true;
   }
 
@@ -173,7 +173,7 @@ export class TimerRegistry extends EventEmitter {
             .run();
           timer.status = 'fired';
           this.emit('timer:fired', timer);
-          logger.info('timer', `Timer "${timer.label}" fired for ${timer.agentId.slice(0, 8)}`);
+          logger.info({ module: 'timer', msg: 'Timer fired', label: timer.label, agentId: timer.agentId });
           timer.status = 'pending';
           timer.fireAt = newFireAt;
         } else {
@@ -185,7 +185,7 @@ export class TimerRegistry extends EventEmitter {
             .run();
           timer.status = 'fired';
           this.emit('timer:fired', timer);
-          logger.info('timer', `Timer "${timer.label}" fired for ${timer.agentId.slice(0, 8)}`);
+          logger.info({ module: 'timer', msg: 'Timer fired', label: timer.label, agentId: timer.agentId });
         }
       }
     }

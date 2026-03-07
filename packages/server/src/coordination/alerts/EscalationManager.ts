@@ -63,14 +63,14 @@ export class EscalationManager extends EventEmitter {
   start(intervalMs: number = 60_000): void {
     if (this.checkTimer) return;
     this.checkTimer = setInterval(() => this.evaluate(), intervalMs);
-    logger.info('escalation', `EscalationManager started (interval: ${intervalMs}ms)`);
+    logger.info({ module: 'coordination', msg: 'EscalationManager started', intervalMs });
   }
 
   stop(): void {
     if (this.checkTimer) {
       clearInterval(this.checkTimer);
       this.checkTimer = null;
-      logger.info('escalation', 'EscalationManager stopped');
+      logger.info({ module: 'coordination', msg: 'EscalationManager stopped' });
     }
   }
 
@@ -114,7 +114,7 @@ export class EscalationManager extends EventEmitter {
     }
 
     if (newEscalations.length > 0) {
-      logger.warn('escalation', `${newEscalations.length} new escalation(s) raised`);
+      logger.warn({ module: 'coordination', msg: 'Escalations raised', count: newEscalations.length });
     }
 
     return newEscalations;
@@ -127,7 +127,7 @@ export class EscalationManager extends EventEmitter {
     const existing = this.escalations.find(e => e.subject === subject && e.ruleId === rule.id && !e.resolved);
     if (existing) return null;
     const esc = this.createEscalation(rule, subject, detail);
-    logger.warn('escalation', `Build failure escalation: ${detail}`);
+    logger.warn({ module: 'coordination', msg: 'Build failure escalation', detail });
     return esc;
   }
 
@@ -136,7 +136,7 @@ export class EscalationManager extends EventEmitter {
     if (!esc) return false;
     esc.resolved = true;
     esc.resolvedAt = Date.now();
-    logger.info('escalation', `Escalation ${escalationId} resolved`);
+    logger.info({ module: 'coordination', msg: 'Escalation resolved', escalationId });
     this.emit('escalation:resolved', esc);
     return true;
   }

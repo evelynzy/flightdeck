@@ -46,9 +46,7 @@ export class EventPipeline {
 
   register(handler: EventHandler): void {
     this.handlers.push(handler);
-    logger.info('pipeline', `Registered handler: ${handler.name} for ${
-      handler.eventTypes === '*' ? 'all events' : handler.eventTypes.join(', ')
-    }`);
+    logger.info({ module: 'coordination', msg: 'Handler registered', handlerName: handler.name, events: handler.eventTypes === '*' ? 'all events' : handler.eventTypes.join(', ') });
   }
 
   /** Enqueue an event from ActivityLedger. Processes async without blocking the caller. */
@@ -71,7 +69,7 @@ export class EventPipeline {
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       const dropped: PipelineEvent = { entry: this.queue.shift()!.entry, meta: {} };
       this._dropCount++;
-      logger.warn('pipeline', `Queue full (${MAX_QUEUE_SIZE}) — dropping oldest event (total drops: ${this._dropCount})`);
+      logger.warn({ module: 'coordination', msg: 'Queue full, dropping oldest event', queueSize: MAX_QUEUE_SIZE, totalDrops: this._dropCount });
       this.onEventDropped?.(dropped);
     }
     this.queue.push({ entry, meta: {} });
@@ -91,7 +89,7 @@ export class EventPipeline {
         try {
           await handler.handle(event);
         } catch (err) {
-          logger.warn('pipeline', `Handler "${handler.name}" failed for ${event.entry.actionType}: ${(err as Error).message}`);
+          logger.warn({ module: 'coordination', msg: 'Handler failed', handlerName: handler.name, actionType: event.entry.actionType, error: (err as Error).message });
         }
       }
     }
@@ -108,7 +106,7 @@ export class EventPipeline {
   /** Subscribe to an ActivityLedger's 'activity' events */
   connectToLedger(ledger: import('../activity/ActivityLedger.js').ActivityLedger): void {
     ledger.on('activity', (entry: ActivityEntry) => this.emit(entry));
-    logger.info('pipeline', `Connected to ActivityLedger with ${this.handlers.length} handler(s)`);
+    logger.info({ module: 'coordination', msg: 'Connected to ActivityLedger', handlerCount: this.handlers.length });
   }
 }
 
@@ -122,7 +120,7 @@ export const taskCompletedHandler: EventHandler = {
     const { entry } = event;
     const agent = entry.details.agentRole || entry.agentRole;
     const task = entry.details.task || entry.summary;
-    logger.info('pipeline', `✅ Task completed by ${agent} (${entry.agentId.slice(0, 8)}): ${task.slice(0, 120)}`);
+    logger.info({ module: 'coordination', msg: 'Task completed', agentRole: agent, agentId: entry.agentId, task });
   },
 };
 
@@ -134,7 +132,7 @@ export const commitQualityGateHandler: EventHandler = {
     const { entry, meta } = event;
     if (entry.details.type === 'commit' || entry.summary.includes('commit')) {
       meta.shouldRunTests = true;
-      logger.info('pipeline', `📋 Commit detected from ${entry.agentRole} (${entry.agentId.slice(0, 8)}) — tests should be queued`);
+      logger.info({ module: 'coordination', msg: 'Commit detected', agentRole: entry.agentRole, agentId: entry.agentId });
     }
   },
 };
@@ -146,7 +144,6 @@ export const delegationTracker: EventHandler = {
   handle: (event) => {
     const { entry } = event;
     const to = entry.details.toRole || 'unknown';
-    const toId = (entry.details.toAgentId || '').slice(0, 8);
-    logger.info('pipeline', `📨 New delegation: ${entry.agentRole} → ${to} (${toId}): ${entry.summary.slice(0, 100)}`);
+    logger.info({ module: 'coordination', msg: 'New delegation', fromRole: entry.agentRole, toRole: to, toAgentId: entry.details.toAgentId, summary: entry.summary });
   },
 };

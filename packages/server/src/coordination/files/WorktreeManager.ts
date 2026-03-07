@@ -85,10 +85,10 @@ export class WorktreeManager extends EventEmitter {
       const info: WorktreeInfo = { agentId, branch, path: worktreePath, createdAt: Date.now() };
       this.worktrees.set(agentId, info);
       this.emit('worktree:created', info);
-      logger.info('worktree', `Created worktree for ${shortId} at ${worktreePath}`);
+      logger.info({ module: 'files', msg: 'Worktree created', agentId, path: worktreePath });
       return worktreePath;
     } catch (err: any) {
-      logger.error('worktree', `Failed to create worktree for ${shortId}: ${err.message}`);
+      logger.error({ module: 'files', msg: 'Worktree creation failed', agentId, error: err.message });
       throw err;
     }
   }
@@ -116,7 +116,7 @@ export class WorktreeManager extends EventEmitter {
 
       if (unlockedFiles.length > 0) {
         this.emit('worktree:unlocked_files', { agentId, branch: info.branch, files: unlockedFiles });
-        logger.warn('worktree', `Agent ${agentId.slice(0, 8)} merged ${unlockedFiles.length} unlocked file(s): ${unlockedFiles.join(', ')}`);
+        logger.warn({ module: 'files', msg: 'Unlocked files merged', agentId, fileCount: unlockedFiles.length, files: unlockedFiles });
       }
 
       this.emit('worktree:merged', { agentId, branch: info.branch });
@@ -166,7 +166,7 @@ export class WorktreeManager extends EventEmitter {
 
     this.worktrees.delete(agentId);
     this.emit('worktree:cleaned', { agentId });
-    logger.info('worktree', `Cleaned up worktree for ${shortId}`);
+    logger.info({ module: 'files', msg: 'Worktree cleaned up', agentId });
   }
 
   /** Clean up all worktrees (call on server shutdown). */
@@ -201,7 +201,7 @@ export class WorktreeManager extends EventEmitter {
     }
     if (cleaned > 0) {
       await execAsync('git worktree prune', { cwd: this.repoRoot, timeout: 5_000 }).catch(() => {});
-      logger.info('worktree', `Cleaned ${cleaned} orphaned worktrees`);
+      logger.info({ module: 'files', msg: 'Orphaned worktrees cleaned', count: cleaned });
     }
     return cleaned;
   }

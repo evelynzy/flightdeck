@@ -120,13 +120,13 @@ export class RecoveryService extends EventEmitter {
            (e.status !== 'recovered' && e.status !== 'failed'),
     );
     if (activeRecovery) {
-      logger.info('recovery', `Skipping duplicate recovery for ${params.originalAgentId.slice(0, 8)} — active recovery ${activeRecovery.id.slice(0, 12)} exists`);
+      logger.info({ module: 'coordination', msg: 'Skipping duplicate recovery', agentId: params.originalAgentId, activeRecoveryId: activeRecovery.id });
       return null;
     }
 
     // Budget gate: don't auto-restart if budget is exhausted
     if (params.budgetExhausted && this.settings.autoRestart) {
-      logger.warn('recovery', `Skipping auto-restart for ${params.originalAgentId.slice(0, 8)} — budget exhausted`);
+      logger.warn({ module: 'coordination', msg: 'Skipping auto-restart, budget exhausted', agentId: params.originalAgentId });
       const id = `recovery-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const failedEvent: RecoveryEvent = {
         id,
@@ -186,7 +186,7 @@ export class RecoveryService extends EventEmitter {
     this.emit('recovery:started', { recoveryId: id, agentId: params.originalAgentId, trigger: params.trigger });
     this.emit('recovery:briefing', { recoveryId: id, briefing });
 
-    logger.info('recovery', `Recovery started for agent ${params.originalAgentId.slice(0, 8)} (trigger: ${params.trigger})`);
+    logger.info({ module: 'coordination', msg: 'Recovery started', agentId: params.originalAgentId, trigger: params.trigger });
     return event;
   }
 
@@ -224,7 +224,7 @@ export class RecoveryService extends EventEmitter {
       replacementAgentId: event.replacementAgentId,
     });
 
-    logger.info('recovery', `Recovery completed for ${event.originalAgentId.slice(0, 8)} → ${(replacementAgentId ?? 'same agent').slice(0, 8)}`);
+    logger.info({ module: 'coordination', msg: 'Recovery completed', agentId: event.originalAgentId, replacementAgentId: replacementAgentId ?? 'same agent' });
     return event;
   }
 
@@ -246,7 +246,7 @@ export class RecoveryService extends EventEmitter {
     this.saveEvents();
     this.emit('recovery:failed', { recoveryId: id, reason });
 
-    logger.warn('recovery', `Recovery failed for ${event.originalAgentId.slice(0, 8)} after ${event.attempts} attempts: ${reason}`);
+    logger.warn({ module: 'coordination', msg: 'Recovery failed', agentId: event.originalAgentId, attempts: event.attempts, reason });
     return event;
   }
 

@@ -171,7 +171,7 @@ export class ConflictDetectionEngine {
     conflict.resolution = resolution;
     conflict.status = 'resolved';
     this.saveConflicts();
-    logger.info('conflicts', `Resolved conflict ${id} via ${resolution.type}`);
+    logger.info({ module: 'coordination', msg: 'Conflict resolved', conflictId: id, resolutionType: resolution.type });
     return true;
   }
 
@@ -182,7 +182,7 @@ export class ConflictDetectionEngine {
     conflict.resolution = { type: 'dismissed', by: 'user' };
     conflict.status = 'dismissed';
     this.saveConflicts();
-    logger.info('conflicts', `Dismissed conflict ${id}`);
+    logger.info({ module: 'coordination', msg: 'Conflict dismissed', conflictId: id });
     return true;
   }
 
@@ -214,7 +214,7 @@ export class ConflictDetectionEngine {
     const newConflicts = this.mergeConflicts(detected);
     if (newConflicts.length > 0) {
       this.saveConflicts();
-      logger.info('conflicts', `Scan found ${newConflicts.length} new conflict(s)`);
+      logger.info({ module: 'coordination', msg: 'Scan found new conflicts', count: newConflicts.length });
     }
 
     return newConflicts;

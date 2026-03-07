@@ -67,7 +67,7 @@ export class AlertEngine extends EventEmitter {
     this.checkTimer = setInterval(() => this.runChecks(), CHECK_INTERVAL_MS);
     // Run immediately on start
     this.runChecks();
-    logger.info('alerts', 'AlertEngine started');
+    logger.info({ module: 'coordination', msg: 'AlertEngine started' });
   }
 
   stop(): void {
@@ -272,6 +272,6 @@ export class AlertEngine extends EventEmitter {
     }
 
     this.emit('alert:new', alert);
-    logger.info('alerts', `[${alert.severity.toUpperCase()}] ${alert.type}: ${alert.message}`);
+    logger.info({ module: 'coordination', msg: 'Alert triggered', severity: alert.severity, alertType: alert.type, alertMessage: alert.message });
   }
 }
