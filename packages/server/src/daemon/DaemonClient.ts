@@ -1,15 +1,15 @@
 /**
  * Daemon client — used by the Flightdeck server to connect to the daemon.
  *
- * Connects to the daemon's Unix Domain Socket, authenticates with a token,
- * sends JSON-RPC commands, and receives event notifications. Includes
- * heartbeat (ping every 10s) and reconnection logic.
+ * Connects to the daemon's IPC endpoint (Unix Domain Socket on Linux/macOS,
+ * named pipe on Windows), authenticates with a token, sends JSON-RPC commands,
+ * and receives event notifications. Includes heartbeat (ping every 10s) and
+ * reconnection logic.
  *
  * Design: packages/docs/design/hot-reload-agent-preservation.md
  */
 import { connect, type Socket } from 'node:net';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { TypedEmitter } from '../utils/TypedEmitter.js';
 import { logger } from '../utils/logger.js';
 import {
@@ -29,8 +29,8 @@ import {
   createRequest,
   isResponse,
   isNotification,
-  getSocketDir,
 } from './DaemonProtocol.js';
+import { createTransport, type TransportAdapter } from './platform.js';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -87,6 +87,9 @@ export class DaemonClient extends TypedEmitter<DaemonClientEvents> {
   private disposed = false;
   private connected = false;
 
+  /** Cross-platform transport adapter for IPC path resolution. */
+  readonly transport: TransportAdapter;
+
   private readonly options: Required<DaemonClientOptions>;
   private readonly socketDir: string;
   private readonly socketPath: string;
@@ -94,8 +97,9 @@ export class DaemonClient extends TypedEmitter<DaemonClientEvents> {
   constructor(options: DaemonClientOptions = {}) {
     super();
     this.options = { ...DEFAULT_OPTIONS, ...options };
-    this.socketDir = this.options.socketDir || getSocketDir();
-    this.socketPath = join(this.socketDir, this.options.socketName);
+    this.transport = createTransport(options.socketDir);
+    this.socketDir = this.options.socketDir || this.transport.getSocketDir();
+    this.socketPath = this.transport.getAddress(this.options.socketName);
   }
 
   /** Whether the client is connected and authenticated. */
@@ -397,7 +401,7 @@ export class DaemonClient extends TypedEmitter<DaemonClientEvents> {
   // ── Helpers ───────────────────────────────────────────────────
 
   private readToken(): string {
-    const tokenPath = join(this.socketDir, 'agent-host.token');
+    const tokenPath = this.transport.getTokenPath();
     try {
       return readFileSync(tokenPath, 'utf-8').trim();
     } catch (err) {
