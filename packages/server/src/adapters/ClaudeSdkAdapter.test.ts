@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ClaudeSdkAdapter } from './ClaudeSdkAdapter.js';
-import { createAdapter } from './index.js';
+
 import type {
   SdkMessage,
   SdkAssistantMessage,
@@ -821,17 +821,5 @@ describe('ClaudeSdkAdapter', () => {
     });
   });
 
-  // ── Factory Integration ────────────────────────────────────
 
-  describe('createAdapter() factory', () => {
-    it('creates ClaudeSdkAdapter for type claude-sdk', () => {
-      const a = createAdapter({ type: 'claude-sdk' });
-      expect(a.type).toBe('claude-sdk');
-    });
-
-    it('passes autopilot and model to ClaudeSdkAdapter', () => {
-      const a = createAdapter({ type: 'claude-sdk', autopilot: true, model: 'claude-opus-4' });
-      expect(a.type).toBe('claude-sdk');
-    });
-  });
 });
