@@ -70,9 +70,8 @@ export function startAcp(agent: Agent, config: ServerConfig, initialPrompt?: str
       role: agent.role?.id,
     });
 
-    // Surface error in chat UI via existing agent:text pipeline
-    agent.messages.push(`[System] ❌ Failed to start agent: ${errorMsg}`);
-    agent._notifyData(`[System] ❌ Failed to start agent: ${errorMsg}`);
+    // Store error for exit event (text pipeline is buffered, races with immediate exit)
+    agent.exitError = errorMsg;
 
     agent.status = 'failed';
     agent._notifyExit(1);

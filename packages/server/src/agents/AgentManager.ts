@@ -36,7 +36,7 @@ export type { Delegation } from './CommandDispatcher.js';
 export interface AgentManagerEvents {
   'agent:spawned': ReturnType<Agent['toJSON']>;
   'agent:terminated': string;
-  'agent:exit': { agentId: string; code: number };
+  'agent:exit': { agentId: string; code: number; error?: string };
   'agent:text': { agentId: string; text: string };
   'agent:response_start': { agentId: string };
   'agent:tool_call': { agentId: string; toolCall: ToolCallInfo };
@@ -506,7 +506,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         this.heartbeat.trackRemoved(agent.id);
       }
 
-      this.emit('agent:exit', { agentId: agent.id, code });
+      this.emit('agent:exit', { agentId: agent.id, code, error: agent.exitError });
 
       // Notify parent agent of child completion
       this.dispatcher.notifyParentOfCompletion(agent, code);

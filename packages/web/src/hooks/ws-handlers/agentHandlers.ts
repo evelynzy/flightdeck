@@ -12,9 +12,24 @@ export function handleAgentTerminated(msg: any, ctx: HandlerContext): void {
 }
 
 export function handleAgentExit(msg: any, ctx: HandlerContext): void {
-  ctx.updateAgent(msg.agentId, {
+  const updates: Record<string, any> = {
     status: msg.code === 0 ? 'completed' : 'failed',
-  });
+  };
+
+  // Surface launch/crash error as a system message in the chat panel
+  if (msg.error && msg.code !== 0) {
+    const existing = useAppStore.getState().agents.find((a) => a.id === msg.agentId);
+    const msgs = [...(existing?.messages ?? [])];
+    msgs.push({
+      type: 'text',
+      text: `❌ Failed to start: ${msg.error}`,
+      sender: 'system',
+      timestamp: Date.now(),
+    });
+    updates.messages = msgs;
+  }
+
+  ctx.updateAgent(msg.agentId, updates);
 }
 
 export function handleAgentStatus(msg: any, ctx: HandlerContext): void {

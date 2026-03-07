@@ -84,6 +84,8 @@ export class Agent {
   public model?: string;
   /** Working directory for this agent's CLI process */
   public cwd?: string;
+  /** Error message if agent failed to start (e.g., CLI binary not found) */
+  public exitError?: string;
   /** Tracks when the last human message was received (for leads) */
   public lastHumanMessageAt: Date | null = null;
   public lastHumanMessageText: string | null = null;

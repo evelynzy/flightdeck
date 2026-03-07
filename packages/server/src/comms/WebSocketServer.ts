@@ -137,9 +137,9 @@ export class WebSocketServer {
       this.broadcastToProject({ type: 'agent:terminated', agentId }, projectId);
     });
 
-    this.track(agentManager, 'agent:exit', ({ agentId, code }: { agentId: string; code: number }) => {
+    this.track(agentManager, 'agent:exit', ({ agentId, code, error }: { agentId: string; code: number; error?: string }) => {
       const projectId = this.resolveAgentProjectId(agentId);
-      this.broadcastToProject({ type: 'agent:exit', agentId, code }, projectId);
+      this.broadcastToProject({ type: 'agent:exit', agentId, code, error }, projectId);
     });
 
     this.track(agentManager, 'agent:status', (data: any) => {
