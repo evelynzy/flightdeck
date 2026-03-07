@@ -88,6 +88,12 @@ export interface AdapterStartOptions {
   env?: Record<string, string>;
   /** Session ID for resume via session/load (if provider supports it) */
   sessionId?: string;
+  /** Model name or tier alias (resolved by ModelResolver before use) */
+  model?: string;
+  /** Maximum turns before auto-stop (SDK adapters only) */
+  maxTurns?: number;
+  /** System prompt override (SDK adapters only) */
+  systemPrompt?: string;
 }
 
 // ── Core Interface ──────────────────────────────────────────────────
@@ -129,8 +135,9 @@ export interface AgentAdapter extends EventEmitter {
 // ── Factory Types ───────────────────────────────────────────────────
 
 export interface AdapterFactoryOptions {
-  type: 'acp' | 'mock';
+  type: 'acp' | 'mock' | 'claude-sdk';
   autopilot?: boolean;
+  model?: string;
 }
 
 export type AdapterFactory = (opts: AdapterFactoryOptions) => AgentAdapter;
