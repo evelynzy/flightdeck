@@ -1394,30 +1394,32 @@ A single shared SQLite database (WAL mode, already configured) with clear write 
 - Existing 25+ tables and migrations work unchanged
 - Single backup, single migration path
 
+> **Note:** Tables are scoped by `(projectId, teamId)` or `(projectId)` only. See the **Multi-Team, Multi-Project Model** section for full scoping rules, schema changes, and index strategy.
+
 #### Agent Server Owns (writes):
 
-| Table | Contents | Write Trigger |
-|-------|----------|---------------|
-| `agentRoster` | Active agent instances: id, role, status, pid, sessionId, provider | Every spawn, status change, exit |
-| `activeDelegations` | Parent→child task assignments: fromAgent, toAgent, task, status | Every delegation create, complete, fail |
-| `conversations` (agent rows) | Per-agent conversation threads | On agent output events |
-| `messages` (agent rows) | Individual messages within conversations | On each agent message |
+| Table | Scope | Write Trigger |
+|-------|-------|---------------|
+| `agentRoster` | `(projectId, teamId)` | Every spawn, status change, exit |
+| `activeDelegations` | `(projectId, teamId)` | Delegation create, complete, fail |
+| `conversations` (agent rows) | `(agentId)` | On agent output events |
+| `messages` (agent rows) | `(conversationId)` | On each agent message |
 
 #### Orchestration Server Owns (writes):
 
-| Table | Contents | Write Trigger |
-|-------|----------|---------------|
-| `dagTasks` | Task DAG: tasks, dependencies, status | DAG mutations |
-| `projects` | Project metadata: id, name, config | Project CRUD |
-| `messageQueue` | Queued messages TO agents (write-on-enqueue) | Agent messaging |
-| `knowledge` | Knowledge store entries (core, procedural, semantic, episodic) | Knowledge operations |
-| `fileLocks` | File lock registry | Lock/unlock operations |
-| `decisions` | Approval gate decisions | Governance actions |
-| `timers` | Scheduled timer state | Timer create/fire/cancel |
-| `chatGroups`, `chatGroupMessages` | Group chat definitions and history | Group operations |
-| `activityLog` | Audit trail | All significant events |
-| `agentMemory` | Cross-session key-value memory | Memory operations |
-| `agentPlans` | Agent planning state | Plan updates |
+| Table | Scope | Write Trigger |
+|-------|-------|---------------|
+| `dagTasks` | `(projectId, leadId=teamId)` | DAG mutations |
+| `projects` | global | Project CRUD |
+| `messageQueue` | `(projectId, teamId)` | Agent messaging |
+| `knowledge` | `(projectId)` — shared across teams | Knowledge operations |
+| `fileLocks` | `(projectId)` — shared across teams | Lock/unlock operations |
+| `decisions` | `(projectId, teamId)` | Governance actions |
+| `timers` | `(projectId, teamId)` | Timer create/fire/cancel |
+| `chatGroups`, `chatGroupMessages` | `(projectId, teamId)` | Group operations |
+| `activityLog` | `(projectId, teamId)` | All significant events |
+| `collectiveMemory` | `(projectId)` — shared across teams | Memory operations |
+| `agentPlans` | `(agentId)` | Plan updates |
 
 #### Both Read:
 
@@ -1431,25 +1433,9 @@ A single shared SQLite database (WAL mode, already configured) with clear write 
 
 ### Filesystem Mirroring Ownership
 
-Each process runs its own `SyncEngine` instance for the tables it owns. This produces clear directory ownership with no file conflicts:
+Each process runs its own `SyncEngine` instance for the tables it owns. See the **Multi-Team, Multi-Project Model** section for the full directory structure with team-scoped paths.
 
-```
-~/.flightdeck/projects/<project-id>/
-  agents/                              # Agent server SyncEngine
-    roster.json                        # Agent roster snapshot
-    delegations.json                   # Active delegations snapshot
-    sessions/                          # Per-agent session metadata
-      <agent-id>.json                  # sessionId, provider, model, status
-  knowledge/                           # Orchestration server SyncEngine
-    core.json                          # Core knowledge entries
-    procedural.json                    # Learned procedures
-    semantic.json                      # Domain concepts
-    episodic.json                      # Session history
-  dag/                                 # Orchestration server SyncEngine
-    tasks.json                         # Task DAG state
-    delegations-view.json              # Read-only copy for UI
-  project.yaml                         # Project metadata (orchestration server)
-```
+**Summary:** Team-scoped data lives under `~/.flightdeck/projects/<project-id>/teams/<team-id>/` (agents, DAG, activity). Project-scoped shared data lives under `~/.flightdeck/projects/<project-id>/` (knowledge, locks, memory).
 
 **Rule:** Each directory is written by exactly one process. The other process may read but never writes. This eliminates filesystem race conditions without locks.
 
@@ -1552,64 +1538,638 @@ async function reconcileAgents(
 2. After agent server restart (re-fork recovery)
 3. On explicit user action ("Reconcile agents" button)
 
-## Project Scoping
+## Multi-Team, Multi-Project Model
 
-### Everything is Project-Scoped
+### Overview
 
-Agents, knowledge, DAG tasks, delegations, file locks, and memory are all keyed by `projectId`. This is already the case in the existing schema — every major table has a `projectId` foreign key.
+The agent server supports a **many-to-many** relationship between teams and projects:
 
-### Agent Server is Project-Aware but Not Project-Limited
+- A **team** can work on multiple projects simultaneously
+- A **project** can be worked on by multiple teams
+- The agent server hosts agents from ALL teams across ALL projects
 
-The agent server manages agents across **all projects simultaneously**. Each agent carries its `projectId`, and the agent server uses it for:
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Agent Server (shared infrastructure)                            │
+│                                                                  │
+│  ┌─ Project: acme-app ─────────────────────────────────────┐     │
+│  │  ┌─ Team: alice ──────┐  ┌─ Team: bob ──────────────┐  │     │
+│  │  │  architect (agent)  │  │  developer-1 (agent)      │  │     │
+│  │  │  developer-1        │  │  developer-2              │  │     │
+│  │  │  developer-2        │  │  qa-tester                │  │     │
+│  │  └────────────────────┘  └───────────────────────────┘  │     │
+│  │  Knowledge: shared across both teams                     │     │
+│  │  DAG: separate per team (alice's DAG, bob's DAG)         │     │
+│  └──────────────────────────────────────────────────────────┘     │
+│                                                                  │
+│  ┌─ Project: billing-service ──────────────────────────────┐     │
+│  │  ┌─ Team: alice ──────┐                                  │     │
+│  │  │  developer-1        │  (alice works on both projects) │     │
+│  │  │  developer-2        │                                  │     │
+│  │  └────────────────────┘                                  │     │
+│  │  Knowledge: separate from acme-app                       │     │
+│  └──────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────┘
+```
 
-- Routing events to the correct orchestration server connection (future: multi-server)
-- Scoping `list()` responses when the orchestration server requests agents for a specific project
-- Isolating mass-failure detection per project (a bad API key in project A shouldn't pause project B)
+### Team Identity
+
+A **team** is identified by its **lead** — the orchestration session that spawned the agents. The `teamId` is the lead's agent ID:
 
 ```typescript
-// Agent server: list agents, optionally scoped to project
-handleList(msg: ListAgentsMessage): void {
-  let agents = [...this.agents.values()];
-  if (msg.projectId) {
-    agents = agents.filter(a => a.params.projectId === msg.projectId);
-  }
-  this.listener.send({
-    type: 'list_result',
-    requestId: msg.requestId,
-    agents: agents.map(toDescriptor),
-  });
+type TeamId = string;  // e.g., "alice-lead-a1b2c3", or the agentId of the project lead
+
+interface TeamContext {
+  teamId: TeamId;       // The lead that owns this team
+  projectId: string;    // The project being worked on
 }
 ```
 
-### Orchestration Server Connects with Project Context
+**Why teamId = leadId?**
+- A crew is defined by its lead. The lead spawns agents, manages the DAG, and coordinates work.
+- `dagTasks` already uses `leadId` as part of its compound primary key (`id + leadId`).
+- No new identity system needed — we reuse what exists.
+- Solo developers get `teamId = 'default'` (implicit single-team mode).
 
-The orchestration server tells the agent server which project it's working on. This scopes event subscriptions and agent listing:
+**How teamId is assigned:**
+1. **Session-based:** Each orchestration session gets a teamId from its lead agent. When a lead starts, its agentId becomes the teamId for all agents it spawns.
+2. **Explicit override:** A user can set `teamId` in config for persistent identity across sessions (e.g., for a CI pipeline that always uses the same teamId).
+3. **Default fallback:** If no lead is running (solo mode, direct CLI), `teamId = 'default'`.
+
+### Scoping Hierarchy
+
+The compound key `(projectId, teamId)` is the primary scoping mechanism. Different data types scope differently:
+
+```
+                    ┌─────────────────────────────┐
+                    │  Global (agent server-wide)  │
+                    │  - Server config             │
+                    │  - Health monitoring          │
+                    │  - Mass failure detection     │
+                    └──────────┬──────────────────┘
+                               │
+                    ┌──────────▼──────────────────┐
+                    │  Project-scoped (projectId)  │
+                    │  - Knowledge store            │
+                    │  - File locks                 │
+                    │  - Project config             │
+                    │  - Collective memory          │
+                    └──────────┬──────────────────┘
+                               │
+                    ┌──────────▼──────────────────┐
+                    │  Team-scoped                  │
+                    │  (projectId + teamId)         │
+                    │  - Agent roster               │
+                    │  - DAG tasks                  │
+                    │  - Active delegations          │
+                    │  - Chat groups                │
+                    │  - Message queue              │
+                    │  - Activity log               │
+                    └──────────┬──────────────────┘
+                               │
+                    ┌──────────▼──────────────────┐
+                    │  Agent-scoped (agentId)       │
+                    │  - Conversations / messages   │
+                    │  - Agent plans                │
+                    │  - Agent memory               │
+                    └─────────────────────────────┘
+```
+
+**Key rule: Knowledge is project-level, not team-level.** When Alice's team learns that "the billing API uses OAuth2," Bob's team on the same project should see that knowledge too. Knowledge is a shared asset for the project. But Alice's DAG and agents are her own — Bob shouldn't see or control them (unless granted access).
+
+### Data Ownership with Multi-Team
+
+#### Agent Server Owns (writes):
+
+| Table | Scope | Key Columns | Write Trigger |
+|-------|-------|-------------|---------------|
+| `agentRoster` | `(projectId, teamId)` | agentId, role, status, pid, **projectId**, **teamId** | Every spawn, status change, exit |
+| `activeDelegations` | `(projectId, teamId)` | delegationId, agentId, task, **projectId**, **teamId** | Delegation create, complete, fail |
+| `conversations` | `(agentId)` | id, agentId, taskId | On agent output |
+| `messages` | `(conversationId)` | id, conversationId, sender, content | On each agent message |
+
+#### Orchestration Server Owns (writes):
+
+| Table | Scope | Key Columns | Write Trigger |
+|-------|-------|-------------|---------------|
+| `dagTasks` | `(projectId, teamId)` | id, **leadId** (=teamId), **projectId** | DAG mutations |
+| `knowledge` | `(projectId)` | id, **projectId**, category, key | Knowledge operations |
+| `messageQueue` | `(projectId, teamId)` | id, agentId, **projectId**, **teamId** | Agent messaging |
+| `fileLocks` | `(projectId)` | filePath, agentId, **projectId** | Lock/unlock |
+| `decisions` | `(projectId, teamId)` | id, **projectId**, **teamId** | Governance actions |
+| `collectiveMemory` | `(projectId)` | id, **projectId**, key | Memory operations |
+| `chatGroups` | `(projectId, teamId)` | id, **projectId**, **teamId** | Group operations |
+| `activityLog` | `(projectId, teamId)` | id, **projectId**, **teamId** | All significant events |
+| `timers` | `(projectId, teamId)` | id, **projectId**, **teamId** | Timer operations |
+| `agentPlans` | `(agentId)` | agentId, plan | Plan updates |
+
+#### Cross-Team Read Patterns:
+
+| Reader | Tables Read | Scope | Purpose |
+|--------|-------------|-------|---------|
+| Team A's orchestrator | `knowledge` | projectId only | See knowledge from all teams |
+| Team A's orchestrator | `fileLocks` | projectId only | See all locks (prevent conflicts) |
+| Team A's orchestrator | `agentRoster` | own (projectId, teamId) | Own agents only (default) |
+| Project admin | `agentRoster` | projectId only | See all teams' agents |
+| Agent server | `messageQueue` | (projectId, teamId) per agent | Drain messages to each agent |
+
+### Scenarios
+
+#### Scenario 1: Solo Developer (default)
+
+```
+Config: No explicit teamId
+teamId = 'default' (auto-assigned)
+
+Agent Server:
+  Project: my-app
+    Team: default
+      lead, architect, developer-1, developer-2
+```
+
+Everything works as before. The `teamId = 'default'` is implicit — solo developers never need to think about teams. All existing code continues to work unchanged because the default value is applied automatically.
+
+#### Scenario 2: One Developer, Multiple Projects
+
+```
+Alice opens two terminal tabs, each running a different project.
+
+Agent Server:
+  Project: acme-app (tab 1)
+    Team: alice-lead-x7k2
+      architect, dev-1, dev-2, qa
+  Project: billing-service (tab 2)
+    Team: alice-lead-m4n9
+      dev-1, dev-2
+
+Alice's agent budget: 6 total agents across both projects.
+She switches tabs — the orchestration server in each tab connects
+to the same agent server with different (projectId, teamId) scopes.
+```
+
+The agent server manages both project's agents simultaneously. Each orchestration server only sees its own scope. When Alice closes tab 1, she can choose to terminate acme-app agents or let them keep running.
+
+#### Scenario 3: Team Collaboration (Same Project)
+
+```
+Alice and Bob both work on acme-app.
+Alice runs her own Flightdeck instance, Bob runs his.
+Both connect to the same agent server (via WebSocketTransport, future).
+
+Agent Server:
+  Project: acme-app
+    Team: alice-lead-x7k2
+      architect, dev-1, dev-2       # Alice's crew
+    Team: bob-lead-j8p5
+      dev-1, dev-2, qa              # Bob's crew
+
+Shared across teams:
+  - Knowledge store (projectId = acme-app)
+  - File locks (projectId = acme-app) — prevents Alice and Bob editing same files
+
+Isolated per team:
+  - Agent roster (each team's agents are independent)
+  - DAG tasks (each team runs its own task DAG)
+  - Delegations (each team's delegation chain)
+```
+
+**File lock contention:** File locks are project-scoped. If Alice's dev-1 locks `src/api.ts`, Bob's dev-2 sees the lock and cannot acquire it. This is the coordination mechanism between teams — they share the lock table even though they have separate agents.
+
+**Knowledge sharing:** When Alice's architect writes to knowledge ("the auth module uses JWT"), Bob's agents see it when they query knowledge. Knowledge flows between teams automatically.
+
+#### Scenario 4: Enterprise (Many Teams, Many Projects)
+
+```
+Agent Server (centralized, running on a shared machine):
+  Project: platform-api
+    Team: alice-lead    (3 agents)
+    Team: bob-lead      (4 agents)
+    Team: ci-pipeline   (2 agents, automated)
+  Project: mobile-app
+    Team: carol-lead    (5 agents)
+    Team: alice-lead    (2 agents — Alice works on both)
+  Project: data-pipeline
+    Team: dave-lead     (3 agents)
+
+Total: 19 agents, 4 projects, 5 teams
+Some teams span multiple projects (alice-lead on both platform-api and mobile-app).
+```
+
+This requires the WebSocketTransport (multiple orchestration servers connecting over the network). The ForkTransport (single parent) works only for local/solo scenarios.
+
+### Agent Server API Changes
+
+All scoping-relevant messages gain `projectId` and `teamId` fields:
 
 ```typescript
-// On connect, orchestration server declares its project context
-agentServerClient.send({
-  type: 'configure',
-  projectId: currentProject.id,  // "I care about this project's agents"
+// Updated OrchestrationMessage types
+
+interface SpawnAgentMessage {
+  type: 'spawn';
+  requestId: string;
+  projectId: string;            // ← NEW: which project
+  teamId: string;               // ← NEW: which team
+  params: {
+    agentId: string;
+    role: string;
+    task: string;
+    provider: string;
+    model?: string;
+    cwd: string;
+    env?: Record<string, string>;
+    cliCommand: string;
+    cliArgs: string[];
+    sessionId?: string;
+    autopilot: boolean;
+    systemPrompt: string;
+  };
+}
+
+interface TerminateAgentMessage {
+  type: 'terminate';
+  requestId: string;
+  projectId: string;            // ← NEW
+  teamId: string;               // ← NEW
+  agentId: string;
+  reason?: string;
+}
+
+interface ListAgentsMessage {
+  type: 'list';
+  requestId: string;
+  projectId?: string;           // ← NEW: filter by project (optional)
+  teamId?: string;              // ← NEW: filter by team (optional)
+  // Both omitted → all agents (admin view)
+  // projectId only → all teams on this project
+  // Both specified → specific team's agents
+}
+
+interface SubscribeMessage {
+  type: 'subscribe';
+  projectId: string;            // ← NEW
+  teamId: string;               // ← NEW
+  agentId?: string;             // Optional: subscribe to one agent, or all in scope
+  lastSeenEventId?: string;
+  fromStart?: boolean;
+}
+
+interface ConfigureMessage {
+  type: 'configure';
+  projectId: string;            // ← NEW: declare project context
+  teamId: string;               // ← NEW: declare team context
+  massFailure?: { threshold?: number; windowMs?: number; cooldownMs?: number };
+}
+```
+
+**Updated response types:**
+
+```typescript
+interface AgentDescriptor {
+  agentId: string;
+  projectId: string;            // ← NEW
+  teamId: string;               // ← NEW
+  role: string;
+  task: string;
+  provider: string;
+  model?: string;
+  sessionId?: string;
+  pid: number;
+  status: 'running' | 'idle' | 'prompting' | 'exited';
+  startedAt: string;
+}
+
+interface AgentEventMessage {
+  type: 'agent_event';
+  eventId: string;
+  agentId: string;
+  projectId: string;            // ← NEW: for event routing
+  teamId: string;               // ← NEW: for event routing
+  event: AgentEvent;
+}
+
+interface MassFailureMessage {
+  type: 'mass_failure';
+  projectId: string;            // ← NEW: mass failure is project-scoped
+  teamId: string;               // ← NEW: ...and team-scoped
+  exitCount: number;
+  windowSeconds: number;
+  recentExits: Array<{ agentId: string; exitCode: number | null; error: string | null }>;
+  pausedUntilMs: number;
+  likelyCause: 'auth_failure' | 'rate_limit' | 'model_unavailable' | 'resource_exhaustion' | 'unknown';
+}
+```
+
+**Agent server routing logic:**
+
+```typescript
+class AgentServer {
+  // Agents indexed by compound key for efficient scoping
+  private agents = new Map<string, ManagedAgent>();  // agentId → agent
+  private projectTeamIndex = new Map<string, Set<string>>();  // "projectId:teamId" → Set<agentId>
+  private projectIndex = new Map<string, Set<string>>();       // "projectId" → Set<agentId>
+
+  handleList(msg: ListAgentsMessage): AgentDescriptor[] {
+    if (msg.projectId && msg.teamId) {
+      // Scoped to specific team
+      const key = `${msg.projectId}:${msg.teamId}`;
+      const ids = this.projectTeamIndex.get(key) ?? new Set();
+      return [...ids].map(id => this.toDescriptor(this.agents.get(id)!));
+    }
+    if (msg.projectId) {
+      // All teams on this project (admin/cross-team view)
+      const ids = this.projectIndex.get(msg.projectId) ?? new Set();
+      return [...ids].map(id => this.toDescriptor(this.agents.get(id)!));
+    }
+    // All agents (global admin view)
+    return [...this.agents.values()].map(this.toDescriptor);
+  }
+
+  routeEvent(event: AgentEventMessage): void {
+    // Only send events to orchestration servers subscribed to the matching scope
+    for (const subscriber of this.subscribers) {
+      if (subscriber.projectId === event.projectId &&
+          subscriber.teamId === event.teamId) {
+        subscriber.transport.send(event);
+      }
+    }
+  }
+}
+```
+
+**Mass failure detection is scoped per `(projectId, teamId)`:**
+
+```typescript
+// Each team gets its own mass failure detector
+private massFailureDetectors = new Map<string, MassFailureDetector>();
+
+onAgentExit(agent: ManagedAgent, exitCode: number): void {
+  const key = `${agent.projectId}:${agent.teamId}`;
+  let detector = this.massFailureDetectors.get(key);
+  if (!detector) {
+    detector = new MassFailureDetector(this.config.massFailure);
+    this.massFailureDetectors.set(key, detector);
+  }
+  detector.recordExit(agent.agentId, exitCode);
+  // A bad API key in Alice's team doesn't pause Bob's team
+}
+```
+
+### Database Schema Changes
+
+#### `agentRoster` — Add `teamId`
+
+```sql
+-- Migration: add teamId to agent_roster
+ALTER TABLE agent_roster ADD COLUMN team_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX idx_agent_roster_project_team ON agent_roster(project_id, team_id);
+CREATE INDEX idx_agent_roster_team ON agent_roster(team_id);
+```
+
+```typescript
+export const agentRoster = sqliteTable('agent_roster', {
+  agentId: text('agent_id').primaryKey(),
+  role: text('role').notNull(),
+  model: text('model').notNull(),
+  status: text('status').notNull().default('idle'),
+  sessionId: text('session_id'),
+  projectId: text('project_id'),
+  teamId: text('team_id').notNull().default('default'),     // ← NEW
+  createdAt: text('created_at').notNull().default(utcNow),
+  updatedAt: text('updated_at').notNull().default(utcNow),
+  lastTaskSummary: text('last_task_summary'),
+  metadata: text('metadata'),
 });
+// Indexes: status, projectId, (projectId + teamId), teamId
+```
+
+#### `activeDelegations` — Add `projectId` and `teamId`
+
+```sql
+-- Migration: add projectId and teamId to active_delegations
+ALTER TABLE active_delegations ADD COLUMN project_id TEXT;
+ALTER TABLE active_delegations ADD COLUMN team_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX idx_active_delegations_project_team
+  ON active_delegations(project_id, team_id);
+```
+
+```typescript
+export const activeDelegations = sqliteTable('active_delegations', {
+  delegationId: text('delegation_id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => agentRoster.agentId),
+  task: text('task').notNull(),
+  context: text('context'),
+  dagTaskId: text('dag_task_id'),
+  projectId: text('project_id'),                              // ← NEW
+  teamId: text('team_id').notNull().default('default'),       // ← NEW
+  status: text('status').notNull().default('active'),
+  createdAt: text('created_at').notNull().default(utcNow),
+  completedAt: text('completed_at'),
+  result: text('result'),
+});
+// Indexes: (agentId + status), status, dagTaskId, (projectId + teamId)
+```
+
+#### `dagTasks` — Already has `leadId` ≈ `teamId`
+
+The `dagTasks` table already has `leadId` as part of its compound primary key. In the multi-team model, `leadId` IS the `teamId`:
+
+```typescript
+// Existing — no migration needed for dagTasks
+export const dagTasks = sqliteTable('dag_tasks', {
+  id: text('id').notNull(),
+  leadId: text('lead_id').notNull(),     // This IS the teamId
+  projectId: text('project_id'),
+  // ... rest unchanged
+});
+// Primary key: (id, leadId)
+// leadId = teamId — same identity, already in place
+```
+
+#### `messageQueue` — Add `teamId`
+
+```sql
+ALTER TABLE message_queue ADD COLUMN team_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX idx_message_queue_project_team ON message_queue(project_id, team_id);
+```
+
+#### `chatGroups` — Add `teamId`
+
+```sql
+ALTER TABLE chat_groups ADD COLUMN team_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX idx_chat_groups_project_team ON chat_groups(project_id, team_id);
+```
+
+#### `activityLog` — Add `teamId`
+
+```sql
+ALTER TABLE activity_log ADD COLUMN team_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX idx_activity_log_project_team ON activity_log(project_id, team_id);
+```
+
+#### Tables that do NOT get `teamId` (project-scoped only):
+
+| Table | Reason |
+|-------|--------|
+| `knowledge` | Shared across all teams on a project |
+| `fileLocks` | Shared — teams must see each other's locks to avoid conflicts |
+| `collectiveMemory` | Shared knowledge across teams |
+| `projects` | Project metadata is global |
+
+#### Index Strategy
+
+```sql
+-- Compound indexes for efficient (projectId, teamId) scoping
+-- These are the hot query paths: "list agents for my team on my project"
+
+CREATE INDEX idx_agent_roster_project_team ON agent_roster(project_id, team_id);
+CREATE INDEX idx_active_delegations_project_team ON active_delegations(project_id, team_id);
+CREATE INDEX idx_message_queue_project_team ON message_queue(project_id, team_id);
+CREATE INDEX idx_chat_groups_project_team ON chat_groups(project_id, team_id);
+CREATE INDEX idx_activity_log_project_team ON activity_log(project_id, team_id);
+
+-- Project-only indexes for cross-team queries
+CREATE INDEX idx_knowledge_project ON knowledge(project_id);
+CREATE INDEX idx_file_locks_project ON file_locks(project_id);
+
+-- Team-only index for "find all of Alice's agents across projects"
+CREATE INDEX idx_agent_roster_team ON agent_roster(team_id);
+```
+
+### Security: Team Isolation
+
+#### Can Team A See Team B's Agents?
+
+**Default: No.** Each orchestration server connects with a `(projectId, teamId)` scope. The agent server filters all responses and events to that scope.
+
+```typescript
+// Default behavior: team-scoped filtering
+handleList(msg: ListAgentsMessage): void {
+  // The orchestration server's teamId is set on connect
+  const scope = this.connectionScope;  // { projectId, teamId }
+  const agents = this.getAgentsByScope(scope.projectId, scope.teamId);
+  this.send({ type: 'list_result', requestId: msg.requestId, agents });
+}
+```
+
+**Exception: Project admin view.** An orchestration server can request a cross-team view by sending `ListAgentsMessage` with `projectId` only (no `teamId`). This is gated by a permission check:
+
+```typescript
+// Permission levels
+type TeamPermission = 'team_member' | 'project_admin' | 'server_admin';
+
+// team_member: see/control own team's agents only
+// project_admin: see all teams' agents on a project, control own team only
+// server_admin: see/control everything (for the agent server operator)
+```
+
+For local development (single user), this is academic — the user is implicitly `server_admin`. Permissions become meaningful with the WebSocketTransport when multiple users connect remotely.
+
+#### Can Team A Control Team B's Agents?
+
+**No.** Even project admins can only view, not control other teams' agents. Agent operations (spawn, terminate, prompt) are always scoped to `(projectId, teamId)` and the agent server enforces this:
+
+```typescript
+handleTerminate(msg: TerminateAgentMessage): void {
+  const agent = this.agents.get(msg.agentId);
+  if (!agent) return this.sendError(msg.requestId, 'AGENT_NOT_FOUND');
+  // Enforce team ownership
+  if (agent.teamId !== msg.teamId || agent.projectId !== msg.projectId) {
+    return this.sendError(msg.requestId, 'TEAM_SCOPE_VIOLATION',
+      `Agent ${msg.agentId} belongs to team ${agent.teamId}, not ${msg.teamId}`);
+  }
+  this.doTerminate(agent, msg.reason);
+}
+```
+
+#### Knowledge Sharing Boundaries
+
+Knowledge is project-scoped but writable by any team on that project:
+
+| Operation | Scope | Rule |
+|-----------|-------|------|
+| Write knowledge | `(projectId, teamId)` | Any team can write; `metadata.source` records which team/agent wrote it |
+| Read knowledge | `(projectId)` | All teams on the project see all knowledge |
+| Delete knowledge | `(projectId, teamId)` | Teams can only delete entries they created (`metadata.source.teamId` match) |
+| Knowledge conflicts | `(projectId, key)` | Last-write-wins with `updatedAt` timestamp; conflicts are rare since keys are specific |
+
+This models real-world team collaboration: shared wiki (read by all), authored entries (owned by the writer), conflict resolution by timestamp.
+
+### Filesystem Mirroring with Multi-Team
+
+Updated directory structure with team-scoping:
+
+```
+~/.flightdeck/projects/<project-id>/
+  teams/                                        # ← NEW: team-scoped data
+    <team-id>/
+      agents/                                   # Agent server SyncEngine
+        roster.json                             # This team's agent roster
+        delegations.json                        # This team's delegations
+        sessions/
+          <agent-id>.json                       # Per-agent session data
+      dag/                                      # Orchestration server SyncEngine
+        tasks.json                              # This team's task DAG
+      activity/                                 # Orchestration server SyncEngine
+        log.json                                # This team's activity
+      messages/                                 # Orchestration server SyncEngine
+        queue.json                              # Queued messages for this team
+  knowledge/                                    # Orchestration server SyncEngine (shared)
+    core.json                                   # Shared across all teams
+    procedural.json
+    semantic.json
+    episodic.json
+  locks/                                        # Orchestration server SyncEngine (shared)
+    active.json                                 # All teams' file locks
+  memory/                                       # Orchestration server SyncEngine (shared)
+    collective.json                             # Shared collective memory
+  project.yaml                                  # Project metadata
+```
+
+**Ownership rules:**
+- `teams/<team-id>/agents/` → written by agent server
+- `teams/<team-id>/dag/` → written by orchestration server for that team
+- `knowledge/`, `locks/`, `memory/` → written by orchestration server (project-level)
+- No cross-team file writes — each team's directory is isolated
+
+**Solo developer (backward compatible):**
+```
+~/.flightdeck/projects/<project-id>/
+  teams/default/                                # teamId = 'default'
+    agents/roster.json
+    dag/tasks.json
+  knowledge/core.json
+  project.yaml
 ```
 
 ### Agent Server as Shared Service
 
-The agent server outlives any single project session:
+The agent server is infrastructure that outlives any single project or team session:
 
-- **User switches projects:** Agents from the previous project keep running. The orchestration server subscribes to the new project's agents. Old agents are either explicitly terminated or continue running in the background.
-- **Multiple projects active:** The agent server manages agents for project A and project B simultaneously. Each project's agents are isolated by `projectId`.
-- **Future team mode:** Multiple orchestration servers (different developers or different UI instances) connect to the same agent server, each with their own project context. The agent server routes events to the appropriate orchestration server based on `projectId`. This is a natural extension of the architecture — no redesign needed.
+- **User switches projects:** The orchestration server sends a new `configure` message with the new `(projectId, teamId)`. Old agents keep running. The user can explicitly terminate them or leave them.
+- **User switches teams:** Same mechanism — the orchestration server re-configures its scope.
+- **Agent server restart:** All teams lose agents simultaneously. Recovery (via reconciliation) is per-team — each orchestration server reconciles its own team's agents.
+- **Multiple orchestration servers:** With WebSocketTransport, multiple orchestration servers connect simultaneously, each with their own `(projectId, teamId)` scope. Events are routed only to the matching subscriber.
 
 ```
-Future: Team Mode
-  Orchestration Server A (Alice, project-X) ──┐
-                                               ├── Agent Server (shared)
-  Orchestration Server B (Bob, project-Y)   ──┘     ├─ agents for project-X
-                                                     └─ agents for project-Y
+Multi-Team Architecture (WebSocketTransport, future):
+
+  Alice's Orchestrator ──────────┐  scope: (acme-app, alice-lead)
+                                 │
+  Bob's Orchestrator ────────────┤  scope: (acme-app, bob-lead)
+                                 │
+  Alice's 2nd Orchestrator ──────┤  scope: (billing-svc, alice-lead)
+                                 │
+         Agent Server ───────────┘
+           ├─ acme-app / alice-lead: 3 agents
+           ├─ acme-app / bob-lead: 4 agents
+           └─ billing-svc / alice-lead: 2 agents
+
+  Events for alice-lead's agents on acme-app → only Alice's 1st orchestrator
+  Events for bob-lead's agents on acme-app → only Bob's orchestrator
+  Alice's 2nd orchestrator only sees billing-svc agents
 ```
 
-This requires the WebSocketTransport (multi-connection) and multi-client support in the agent server — but the architecture is ready for it.
+This is the natural evolution of the architecture. No redesign needed — only the WebSocketTransport implementation and multi-client support in the agent server listener.
 
 ## Migration from Daemon Code
 
@@ -1679,26 +2239,28 @@ Result:          ~1,600 LOC total (vs 3,726)
 The pluggable transport interface enables a clean evolution path:
 
 ```
-Phase 1 (now):   ForkTransport — local dev, Node IPC + TCP reconnect
-Phase 2 (later): WebSocketTransport — network separation
+Phase 1 (now):   ForkTransport — local dev, Node IPC + TCP reconnect, single team
+Phase 2 (next):  WebSocketTransport — network separation, multi-team collaboration
 ```
 
-**WebSocket transport enables:**
-- **Multi-machine:** Agent server on a GPU machine (model inference), orchestration on a laptop (UI)
+**WebSocket transport enables the multi-team scenarios** described in "Multi-Team, Multi-Project Model":
+- **Team collaboration:** Alice and Bob each run their own orchestration server, both connect to a shared agent server. Each operates in their own `(projectId, teamId)` scope.
+- **Multi-machine:** Agent server on a GPU machine, orchestration servers on laptops
 - **Shared agent pools:** Multiple developers share a pool of persistent agents
-- **Cloud deployment:** Agent server in a container, UI server on edge/CDN
-- **Horizontal scaling:** Multiple agent servers behind a load balancer
+- **Cloud deployment:** Agent server in a container, UI servers on edge/CDN
+- **Enterprise:** Many teams, many projects, centralized agent infrastructure
 
-**The interface is already correct for this.** `AgentServerTransport.send()` and `.onMessage()` work identically whether the transport is a fork IPC channel, a TCP socket, or a WebSocket. The message protocol (typed TypeScript objects) serializes to JSON for network transport.
+**The interface is already correct for this.** `AgentServerTransport.send()` and `.onMessage()` work identically whether the transport is a fork IPC channel, a TCP socket, or a WebSocket. The message protocol (typed TypeScript objects) serializes to JSON for network transport. The `(projectId, teamId)` scoping in all messages means the agent server can route events to the correct subscriber regardless of transport.
 
 **What WebSocketTransport adds:**
 - TLS encryption (wss://)
-- Token authentication (Bearer header)
+- Token authentication (Bearer header per connection)
 - Reconnect with exponential backoff
-- Connection multiplexing (multiple orchestration servers)
-- ~200-300 LOC
+- **Connection multiplexing** (multiple orchestration servers, one per team)
+- Event routing by `(projectId, teamId)` scope
+- ~300-400 LOC
 
-This is the path from "local dev tool" to "production infrastructure" — and the transport interface makes it a clean addition, not a rewrite.
+This is the path from "local dev tool" to "team infrastructure" — and the transport interface makes it a clean addition, not a rewrite.
 
 ## Open Questions
 
