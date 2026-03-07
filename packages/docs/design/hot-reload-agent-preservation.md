@@ -1202,13 +1202,20 @@ This is the same recovery path as "daemon crash → Phase 1 fallback" but with b
 #### Directory Structure Summary
 
 ```
+# Case 1: Inside a git repo (most common)
 <repo-root>/
   .flightdeck/
-    project.yaml                        # Project metadata anchor (at git repo root)
+    project.yaml                        # Project metadata anchor
     shared/                             # Shared workspace (already exists)
 
+# Case 2: No git repo (standalone directory)
+~/.flightdeck/projects/<project-id>/
+  project.yaml                          # Project metadata anchor
+  shared/                               # Shared workspace
+
+# Global (always present)
 ~/.flightdeck/
-  projects.json                         # Global index: projectId → repoRoot path
+  projects.json                         # Global index: projectId → project root path
   run/                                  # Daemon runtime (ephemeral)
     daemon.sock                         # IPC socket
     daemon.pid                          # PID file
@@ -1227,56 +1234,88 @@ flightdeck.db                           # SQLite (authoritative runtime state)
 
 **Design principle: SQLite is the single source of truth** for runtime state. The `project.yaml` files are the anchor for project discovery and link projects to their working directories. The daemon manifest is a performance hint for faster resume.
 
+#### Storage Location Rule (Deterministic, No User Choice)
+
+The location of `.flightdeck/` is **automatic** — determined entirely by whether the project is inside a git repo:
+
+| Condition | `.flightdeck/` location | Resolution |
+|-----------|------------------------|------------|
+| Inside a git repo | `<git-repo-root>/.flightdeck/` | `git rev-parse --show-toplevel` |
+| No git repo | `~/.flightdeck/projects/<project-id>/` | Home directory fallback |
+
+There is no user choice, no configuration, no modes. The rule is deterministic:
+
+```typescript
+function resolveProjectRoot(cwd: string): { root: string; type: 'repo' | 'standalone' } {
+  try {
+    const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'],
+      { cwd, encoding: 'utf8' }).trim();
+    return { root: repoRoot, type: 'repo' };
+  } catch {
+    // Not inside a git repo → use home directory
+    return { root: path.join(os.homedir(), '.flightdeck', 'projects', projectId), type: 'standalone' };
+  }
+}
+
+const { root, type } = resolveProjectRoot(process.cwd());
+const flightdeckDir = path.join(root, '.flightdeck');
+const projectYaml = path.join(flightdeckDir, 'project.yaml');
+```
+
+**Why no choice?** Configuration means decisions. Decisions mean mistakes. The git repo root is the natural anchor for code projects (matches `.git/`, `.github/`, `.vscode/`). For the rare non-git case, the home directory fallback is predictable. One rule, zero configuration.
+
 #### Project Metadata File (`project.yaml`)
 
-Each project has a `project.yaml` at `<repo-root>/.flightdeck/project.yaml`. The `.flightdeck/` directory is always at the **git repo root** (`git rev-parse --show-toplevel`), not the server's cwd or a subdirectory. This file is the **anchor** that identifies a directory as a Flightdeck project.
+Each project has a `project.yaml` inside its `.flightdeck/` directory. The location is determined by the storage location rule above — either `<git-repo-root>/.flightdeck/project.yaml` or `~/.flightdeck/projects/<id>/project.yaml`. This file is the **anchor** that identifies a directory as a Flightdeck project.
 
 ```yaml
-# /Users/justinc/Documents/GitHub/ai-crew/.flightdeck/project.yaml
+# Git repo example: /Users/justinc/Documents/GitHub/ai-crew/.flightdeck/project.yaml
 id: flightdeck-a3f7
 name: Flightdeck
 description: AI crew orchestration platform
-repoRoot: /Users/justinc/Documents/GitHub/ai-crew   # git rev-parse --show-toplevel
+projectRoot: /Users/justinc/Documents/GitHub/ai-crew   # Resolved root (git repo root or standalone dir)
+type: repo                                              # 'repo' or 'standalone'
 status: active
 createdAt: "2026-03-07T14:00:00.000Z"
 updatedAt: "2026-03-07T17:30:00.000Z"
 ```
 
-**Location rule:** `.flightdeck/` MUST be at the git repo root. The server resolves this on startup:
+**Location resolution** uses the deterministic rule from above — no user input needed:
 ```typescript
-const repoRoot = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
-const projectYaml = path.join(repoRoot, '.flightdeck', 'project.yaml');
+const { root, type } = resolveProjectRoot(process.cwd());
+const projectYaml = path.join(root, '.flightdeck', 'project.yaml');
 ```
 
 **Why a file at the repo root, not just SQLite?**
 
-1. **Project discovery without a running server.** CLI tools (`flightdeck list`, `flightdeck status`) can find the project by looking for `.flightdeck/project.yaml` in the current repo — no server or SQLite needed. Similar to how `.git/` identifies a git repo.
+1. **Project discovery without a running server.** CLI tools (`flightdeck list`, `flightdeck status`) can find the project by looking for `.flightdeck/project.yaml` in the current repo or home directory — no server or SQLite needed. Similar to how `.git/` identifies a git repo.
 
-2. **Anchors project to its repo.** The `repoRoot` field is the git repo root. All relative paths in the project (agent cwd, worktrees, shared workspace) resolve from this root. If the repo moves, the server detects the mismatch and updates the field.
+2. **Anchors project to its root.** The `projectRoot` field is the resolved root (git repo root or standalone directory). All relative paths in the project (agent cwd, worktrees, shared workspace) resolve from this root. If the directory moves, the server detects the mismatch and updates the field.
 
 3. **Human-inspectable.** A developer can `cat .flightdeck/project.yaml` to see what's configured. YAML is readable; SQLite requires tooling.
 
 4. **Survives database reset.** If the user deletes `flightdeck.db` to start fresh, the project metadata survives in the repo. The server re-imports from `project.yaml` on next startup.
 
-5. **Committed to the repo.** The `project.yaml` (minus machine-specific fields like `repoRoot`) can be committed to the repo, allowing team members to share project configuration.
+5. **Committable (repo projects).** For git repo projects, the `project.yaml` (minus machine-specific fields like `projectRoot`) can be committed to the repo, allowing team members to share project configuration. Standalone projects keep it in the home directory.
 
-**Global project registry:** The server also maintains `~/.flightdeck/projects.json` — a lightweight index mapping project IDs to repo root paths for cross-repo discovery:
+**Global project registry:** The server also maintains `~/.flightdeck/projects.json` — a lightweight index mapping project IDs to project root paths for cross-project discovery:
 
 ```json
 {
   "flightdeck-a3f7": "/Users/justinc/Documents/GitHub/ai-crew",
-  "my-other-project-c1b9": "/Users/justinc/Documents/GitHub/other-repo"
+  "my-other-project-c1b9": "/Users/justinc/Documents/GitHub/other-repo",
+  "scratch-pad-e4f1": "~/.flightdeck/projects/scratch-pad-e4f1"
 }
 ```
 
-This enables `flightdeck list` to find all projects across all repos without scanning the entire filesystem.
+This enables `flightdeck list` to find all projects (repo-based and standalone) without scanning the filesystem.
 
 **Lifecycle:**
 
 | Event | Action |
 |-------|--------|
-| `ProjectRegistry.create()` | Write `.flightdeck/project.yaml` at repo root, register in `~/.flightdeck/projects.json`, insert into SQLite |
-| Server startup | Read `.flightdeck/project.yaml` from current repo root, reconcile with SQLite |
+| `ProjectRegistry.create()` | Resolve project root (git repo root or `~/.flightdeck/projects/<id>/`), write `project.yaml`, register in `projects.json`, insert into SQLite |
+| Server startup | Resolve project root, read `project.yaml`, reconcile with SQLite |
 | Project update (name, description) | Update both `project.yaml` and SQLite |
 | Project delete | Remove `.flightdeck/project.yaml`, unregister from `projects.json`, delete SQLite row |
 | Database reset | On next startup, re-import from `project.yaml` |
@@ -1284,8 +1323,8 @@ This enables `flightdeck list` to find all projects across all repos without sca
 **Reconciliation on startup:**
 
 ```typescript
-function reconcileProject(repoRoot: string, db: Database): void {
-  const yamlPath = path.join(repoRoot, '.flightdeck', 'project.yaml');
+function reconcileProject(projectRoot: string, db: Database): void {
+  const yamlPath = path.join(projectRoot, '.flightdeck', 'project.yaml');
   if (!fs.existsSync(yamlPath)) return;  // No project.yaml → not a Flightdeck project
 
   const yaml = loadProjectYaml(yamlPath);
@@ -1293,15 +1332,15 @@ function reconcileProject(repoRoot: string, db: Database): void {
 
   if (!dbProject) {
     // Project exists on disk but not in DB (e.g., DB was reset) → import
-    db.drizzle.insert(projects).values({ ...yaml, repoRoot }).run();
+    db.drizzle.insert(projects).values({ ...yaml, projectRoot }).run();
   } else if (yaml.updatedAt > dbProject.updatedAt) {
     // YAML is newer → update DB (e.g., user edited project.yaml manually)
-    db.drizzle.update(projects).set({ name: yaml.name, repoRoot, updatedAt: yaml.updatedAt })
+    db.drizzle.update(projects).set({ name: yaml.name, projectRoot, updatedAt: yaml.updatedAt })
       .where(eq(projects.id, yaml.id)).run();
   }
 
   // Update global registry
-  updateProjectsJson(yaml.id, repoRoot);
+  updateProjectsJson(yaml.id, projectRoot);
 }
 ```
 
