@@ -1,6 +1,6 @@
 // Notification Channel types — aligned with P3 C5 designer spec
 
-export type ChannelType = 'desktop' | 'slack' | 'discord' | 'email' | 'webhook' | 'telegram';
+export type ChannelType = 'desktop' | 'slack' | 'discord' | 'webhook' | 'telegram';
 export type NotificationTier = 'interrupt' | 'summon';
 export type NotifiableEvent =
   | 'decision_pending'
@@ -42,7 +42,6 @@ export const CHANNEL_DISPLAY: Record<ChannelType, { icon: string; label: string;
   desktop: { icon: '🖥', label: 'Desktop Notifications', description: 'Browser push notifications' },
   slack: { icon: '💬', label: 'Slack', description: 'Post alerts to a Slack channel' },
   discord: { icon: '🎮', label: 'Discord', description: 'Post alerts to Discord' },
-  email: { icon: '📧', label: 'Email Digest', description: 'Receive session summaries by email' },
   webhook: { icon: '🔗', label: 'Webhook', description: 'POST events to a custom URL' },
   telegram: { icon: '📱', label: 'Telegram', description: 'Send alerts to a Telegram chat' },
 };
@@ -67,8 +66,8 @@ export const PRESET_DEFAULTS: Record<PresetName, Record<NotifiableEvent, Channel
     agent_crashed: ['desktop'],
     agent_recovered: [],
     budget_warning: ['desktop'],
-    budget_exceeded: ['desktop', 'slack', 'email'],
-    session_completed: ['desktop', 'slack', 'email'],
+    budget_exceeded: ['desktop', 'slack'],
+    session_completed: ['desktop', 'slack'],
     task_completed: [],
     context_critical: [],
     handoff_ready: ['desktop'],
@@ -78,19 +77,19 @@ export const PRESET_DEFAULTS: Record<PresetName, Record<NotifiableEvent, Channel
     agent_crashed: ['desktop', 'slack', 'telegram'],
     agent_recovered: ['slack'],
     budget_warning: ['desktop'],
-    budget_exceeded: ['desktop', 'slack', 'email'],
-    session_completed: ['desktop', 'slack', 'email'],
+    budget_exceeded: ['desktop', 'slack'],
+    session_completed: ['desktop', 'slack'],
     task_completed: [],
     context_critical: [],
     handoff_ready: ['desktop', 'slack'],
   },
   everything: {
-    decision_pending: ['desktop', 'slack', 'email', 'webhook', 'telegram'],
-    agent_crashed: ['desktop', 'slack', 'email', 'webhook', 'telegram'],
+    decision_pending: ['desktop', 'slack', 'webhook', 'telegram'],
+    agent_crashed: ['desktop', 'slack', 'webhook', 'telegram'],
     agent_recovered: ['desktop', 'slack', 'webhook'],
     budget_warning: ['desktop', 'slack', 'webhook', 'telegram'],
-    budget_exceeded: ['desktop', 'slack', 'email', 'webhook', 'telegram'],
-    session_completed: ['desktop', 'slack', 'email', 'webhook'],
+    budget_exceeded: ['desktop', 'slack', 'webhook', 'telegram'],
+    session_completed: ['desktop', 'slack', 'webhook'],
     task_completed: ['desktop', 'webhook'],
     context_critical: ['desktop', 'webhook', 'telegram'],
     handoff_ready: ['desktop', 'slack', 'webhook', 'telegram'],

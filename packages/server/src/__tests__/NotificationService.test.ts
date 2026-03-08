@@ -84,14 +84,6 @@ describe('NotificationService', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Invalid webhook URL');
     });
-
-    it('tests email channel with invalid address', () => {
-      const channel = service.createChannel('email', {
-        address: 'not-an-email',
-        digestFrequency: 'realtime',
-      });
-      expect(service.testChannel(channel.id).success).toBe(false);
-    });
   });
 
   describe('preferences', () => {

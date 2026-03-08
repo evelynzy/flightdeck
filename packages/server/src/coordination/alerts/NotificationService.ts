@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 
 // ── Types ─────────────────────────────────────────────────────────
 
-export type ChannelType = 'desktop' | 'slack' | 'discord' | 'email' | 'webhook' | 'telegram';
+export type ChannelType = 'desktop' | 'slack' | 'discord' | 'webhook' | 'telegram';
 export type NotificationTier = 'interrupt' | 'summon';
 export type NotifiableEvent =
   | 'decision_pending'
@@ -35,11 +35,6 @@ export interface DiscordConfig {
   threadPerSession: boolean;
 }
 
-export interface EmailConfig {
-  address: string;
-  digestFrequency: 'realtime' | 'hourly' | 'session_end';
-}
-
 export interface WebhookConfig {
   url: string;
   method: 'POST' | 'PUT';
@@ -53,7 +48,7 @@ export interface TelegramChannelConfig {
   chatId: string;
 }
 
-export type ChannelConfig = DesktopConfig | SlackConfig | DiscordConfig | EmailConfig | WebhookConfig | TelegramChannelConfig;
+export type ChannelConfig = DesktopConfig | SlackConfig | DiscordConfig | WebhookConfig | TelegramChannelConfig;
 
 export interface NotificationChannel {
   id: string;
@@ -186,13 +181,6 @@ export class NotificationService extends EventEmitter {
         const cfg = channel.config as SlackConfig | DiscordConfig;
         if (!cfg.webhookUrl || !cfg.webhookUrl.startsWith('https://')) {
           return { success: false, error: 'Invalid webhook URL' };
-        }
-        return { success: true };
-      }
-      case 'email': {
-        const cfg = channel.config as EmailConfig;
-        if (!cfg.address || !cfg.address.includes('@')) {
-          return { success: false, error: 'Invalid email address' };
         }
         return { success: true };
       }
