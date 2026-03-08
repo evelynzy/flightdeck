@@ -50,6 +50,7 @@ const DesignPanel = lazy(() => import('./components/DesignPanel').then(m => ({ d
 const AgentServerPanel = lazy(() => import('./components/AgentServerPanel').then(m => ({ default: m.AgentServerPanel })));
 const HomeDashboard = lazy(() => import('./components/HomeDashboard').then(m => ({ default: m.HomeDashboard })));
 const TeamPage = lazy(() => import('./pages/TeamPage').then(m => ({ default: m.TeamPage })));
+const TeamRoster = lazy(() => import('./components/TeamRoster/TeamRoster').then(m => ({ default: m.TeamRoster })));
 
 function RouteSpinner() {
   return (
@@ -357,7 +358,7 @@ export function App() {
             <Route path="/lead" element={<ProjectRedirect page="session" />} />
             <Route path="/overview" element={<ProjectRedirect page="overview" />} />
             <Route path="/agents" element={<ProjectRedirect page="agents" />} />
-            <Route path="/team" element={<ProjectRedirect page="agents" />} />
+            <Route path="/team" element={<Suspense fallback={<RouteSpinner />}><TeamRoster /></Suspense>} />
             <Route path="/tasks" element={<ProjectRedirect page="tasks" />} />
             <Route path="/knowledge" element={<ProjectRedirect page="knowledge" />} />
             <Route path="/timeline" element={<ProjectRedirect page="timeline" />} />
