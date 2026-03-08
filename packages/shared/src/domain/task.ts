@@ -3,7 +3,7 @@ import { z } from 'zod';
 // ── DAG Task ──────────────────────────────────────────────────────
 
 export const DagTaskStatusSchema = z.enum([
-  'pending', 'ready', 'running', 'done', 'failed', 'blocked', 'paused', 'skipped',
+  'pending', 'ready', 'running', 'in_review', 'done', 'failed', 'blocked', 'paused', 'skipped',
 ]);
 export type DagTaskStatus = z.infer<typeof DagTaskStatusSchema>;
 
@@ -25,5 +25,6 @@ export const DagTaskSchema = z.object({
   startedAt: z.string().optional(),
   completedAt: z.string().optional(),
   archivedAt: z.string().optional(),
+  overriddenBy: z.string().optional(),
 });
 export type DagTask = z.infer<typeof DagTaskSchema>;

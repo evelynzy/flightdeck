@@ -146,17 +146,20 @@ listenWithRetry(config.port, config.host).then((actualPort) => {
 });
 
 // ── Graceful shutdown ──────────────────────────────────────
-function gracefulShutdown(signal: string) {
+async function gracefulShutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   container.internal.contextRefresher.stop();
   wsServer.close();
-  container.shutdown().then(() => {
-    httpServer.close(() => {
-      console.log('Server closed.');
-      process.exit(0);
-    });
-    setTimeout(() => process.exit(1), 15000);
+  try {
+    await container.shutdown();
+  } catch (err) {
+    console.warn('[shutdown] Container shutdown error:', err);
+  }
+  httpServer.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
   });
+  setTimeout(() => process.exit(1), 15000);
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

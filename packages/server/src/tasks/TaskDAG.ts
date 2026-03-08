@@ -9,8 +9,9 @@ export type { DagTaskStatus, DagTask } from '@flightdeck/shared';
 /** Valid source states for each state transition method */
 export const VALID_TRANSITIONS: Record<string, DagTaskStatus[]> = {
   start:    ['ready'],
-  complete: ['running', 'paused', 'ready'],
-  fail:     ['running'],
+  complete: ['running', 'paused', 'ready', 'in_review'],
+  fail:     ['running', 'in_review'],
+  review:   ['running'],
   pause:    ['pending', 'ready'],
   resume:   ['paused'],
   retry:    ['failed'],
@@ -121,6 +122,7 @@ function rowToTask(row: typeof dagTasks.$inferSelect): DagTask {
     startedAt: row.startedAt || undefined,
     completedAt: row.completedAt || undefined,
     archivedAt: row.archivedAt || undefined,
+    overriddenBy: row.overriddenBy || undefined,
   };
 }
 
@@ -442,6 +444,19 @@ export class TaskDAG extends EventEmitter {
           .run();
       }
     }
+    this.emit('dag:updated', { leadId });
+    return true;
+  }
+
+  /** Move a running task into review */
+  reviewTask(leadId: string, taskId: string): boolean {
+    const error = this.validateTransition(leadId, taskId, 'review');
+    if (error) return false;
+    this.db.drizzle
+      .update(dagTasks)
+      .set({ dagStatus: 'in_review' })
+      .where(and(eq(dagTasks.id, taskId), eq(dagTasks.leadId, leadId)))
+      .run();
     this.emit('dag:updated', { leadId });
     return true;
   }

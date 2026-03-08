@@ -309,7 +309,9 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   agentManager.setSessionKnowledgeExtractor(sessionKnowledgeExtractor);
   const skillsLoader = new SkillsLoader(join(repoRoot, '.github/skills'));
   skillsLoader.loadAll();
+  skillsLoader.startWatching();
   agentManager.setSkillsLoader(skillsLoader);
+  onShutdown('skillsLoader', () => skillsLoader.stopWatching());
   onShutdown('agentManager', () => agentManager.shutdownAll());
 
   // SessionResumeManager: persists agent roster on lifecycle events, handles resume on startup

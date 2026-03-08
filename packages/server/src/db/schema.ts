@@ -170,6 +170,7 @@ export const dagTasks = sqliteTable('dag_tasks', {
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
   archivedAt: text('archived_at'),
+  overriddenBy: text('overridden_by'),
 }, (table) => [
   primaryKey({ columns: [table.id, table.leadId] }),
   index('idx_dag_tasks_lead').on(table.leadId),

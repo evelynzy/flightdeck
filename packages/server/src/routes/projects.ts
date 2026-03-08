@@ -171,6 +171,9 @@ export function projectsRoutes(ctx: AppContext): Router {
         case 'failed':
           result = taskDAG.failTask(leadId, taskId) || null;
           break;
+        case 'in_review':
+          result = taskDAG.reviewTask(leadId, taskId) || null;
+          break;
         case 'paused':
           result = taskDAG.pauseTask(leadId, taskId) || null;
           break;

@@ -1,7 +1,8 @@
 // packages/server/src/knowledge/SkillsLoader.ts
 // Loads .github/skills/**/SKILL.md files and makes them available to the knowledge system.
 
-import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, statSync, watch } from 'node:fs';
+import type { FSWatcher } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
@@ -92,6 +93,9 @@ export function parseFrontmatter(raw: string): { metadata: SkillMetadata; body: 
 export class SkillsLoader {
   private skills: LoadedSkill[] = [];
   private loaded = false;
+  private watcher: FSWatcher | null = null;
+  private reloadTimer: ReturnType<typeof setTimeout> | null = null;
+  private onReload?: (result: SkillsLoadResult) => void;
 
   constructor(private readonly skillsDir: string) {}
 
@@ -215,5 +219,47 @@ export class SkillsLoader {
   /** Number of successfully loaded skills. */
   get count(): number {
     return this.skills.length;
+  }
+
+  /**
+   * Watch the skills directory for changes and auto-reload.
+   * Uses fs.watch with a debounce to avoid rapid reloads from editors
+   * that write multiple times (save + rename + chmod).
+   *
+   * @param callback Optional callback invoked after each reload with the result.
+   */
+  startWatching(callback?: (result: SkillsLoadResult) => void): void {
+    if (this.watcher) return; // already watching
+    if (!existsSync(this.skillsDir)) return;
+
+    this.onReload = callback;
+
+    try {
+      this.watcher = watch(this.skillsDir, { recursive: true }, (_event, _filename) => {
+        // Debounce: coalesce rapid changes within 500ms
+        if (this.reloadTimer) clearTimeout(this.reloadTimer);
+        this.reloadTimer = setTimeout(() => {
+          this.reloadTimer = null;
+          const result = this.loadAll();
+          this.onReload?.(result);
+        }, 500);
+      });
+    } catch {
+      // fs.watch can fail on some platforms/filesystems — degrade gracefully
+      this.watcher = null;
+    }
+  }
+
+  /** Stop watching for changes and clean up resources. */
+  stopWatching(): void {
+    if (this.reloadTimer) {
+      clearTimeout(this.reloadTimer);
+      this.reloadTimer = null;
+    }
+    if (this.watcher) {
+      this.watcher.close();
+      this.watcher = null;
+    }
+    this.onReload = undefined;
   }
 }
