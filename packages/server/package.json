@@ -11,12 +11,13 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@flightdeck/shared": "*",
     "@agentclientprotocol/sdk": "^0.14.1",
+    "@flightdeck/shared": "*",
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.6",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
+    "grammy": "^1.41.1",
     "helmet": "^8.1.0",
     "pino": "^9.14.0",
     "uuid": "^13.0.0",
@@ -35,5 +36,9 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.71",
+    "@github/copilot-sdk": "0.1.32"
   }
 }
