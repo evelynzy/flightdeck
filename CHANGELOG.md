@@ -102,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Add Task form** — Create tasks directly from the board with title, description, and priority.
 - **Load More pagination** — Paginated task loading for large backlogs.
 - **Visual polish** — Agent avatar on card face, time-in-status display, filter bar, stale badge, emerald done column, auto-collapse done tasks.
-- **113+ tests** — DnD interaction tests, form tests, filter tests, context menu API tests.
+- **116 tests** across the TaskQueue module — DnD interaction, form, filter, DAG graph, Gantt, and critical path tests.
 
 #### AttentionBar
 
@@ -134,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Daemon removal** — Removed ~7,400 lines of unnecessary daemon code after agent server migration. Daemon concept replaced by two-process agent server architecture.
 - **Frontend route rename** — `/daemon` → `/agent-server`, component `DaemonPanel` → `AgentServerPanel`, sidebar label updated.
-- **KanbanBoard decomposition** — Refactored 1,114-line monolith into 6 focused files: `KanbanColumn`, `KanbanCard`, `KanbanFilters`, `AddTaskForm`, `KanbanContextMenu`, `useDragAndDrop`.
+- **KanbanBoard decomposition** — Refactored 1,114-line monolith into 6 focused files: `KanbanColumn`, `TaskCard`, `FilterBar`, `AddTaskForm`, `kanbanConstants`, `KanbanBoard`.
 - **NotificationBridge → NotificationBatcher** — Renamed for clarity; batches notifications with 5s debounce window.
 - **IntegrationAgent → IntegrationRouter** — Renamed to reflect its routing responsibility (not an agent).
 - **`formatRelativeTime` extraction** — Moved from inline implementations to a shared utility used across all timestamp displays.
