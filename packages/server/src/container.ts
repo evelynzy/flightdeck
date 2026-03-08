@@ -597,12 +597,15 @@ export function wireReconciliationOnReconnect(
 ): void {
   const reconciliation = new AgentReconciliation(agentServerClient);
   let hasConnectedBefore = false;
+  let isReconciling = false;
 
   agentServerClient.on('connected', () => {
     if (!hasConnectedBefore) {
       hasConnectedBefore = true;
       return; // Skip reconciliation on initial connect
     }
+
+    if (isReconciling) return; // Prevent concurrent reconciliation on rapid reconnects
 
     const nonTerminalAgents = agentManager.getAll().filter(
       a => !isTerminalStatus(a.status),
@@ -616,6 +619,7 @@ export function wireReconciliationOnReconnect(
       lastSeenEventId: agentServerClient.getLastSeenEventId(a.id),
     }));
 
+    isReconciling = true;
     reconciliation.reconcile(expectedAgents)
       .then(report => {
         logger.info({
@@ -636,6 +640,9 @@ export function wireReconciliationOnReconnect(
           msg: 'Agent reconciliation failed after reconnect',
           error: err.message,
         });
+      })
+      .finally(() => {
+        isReconciling = false;
       });
   });
 }

@@ -189,4 +189,37 @@ describe('wireReconciliationOnReconnect', () => {
 
     expect(client.list).toHaveBeenCalledTimes(3);
   });
+
+  it('prevents concurrent reconciliation on rapid reconnects', async () => {
+    // Use a deferred promise so reconcile() stays in-flight
+    let resolveList!: (value: any) => void;
+    const serverAgents = [makeAgentInfo({ agentId: 'a1', status: 'running' })];
+    client = createMockAgentServerClient(serverAgents);
+    (client.list as ReturnType<typeof vi.fn>).mockImplementation(
+      () => new Promise(resolve => { resolveList = resolve; }),
+    );
+    manager = createMockAgentManager([
+      { id: 'a1', role: { id: 'developer' }, model: 'gpt-4', status: 'running' },
+    ]);
+
+    wireReconciliationOnReconnect(client, manager);
+
+    client.emit('connected'); // initial — skip
+    client.emit('connected'); // 1st reconnect — starts reconciliation
+    client.emit('connected'); // 2nd reconnect — should be skipped (still reconciling)
+    client.emit('connected'); // 3rd reconnect — should be skipped (still reconciling)
+
+    // Only 1 call should have been made (the 1st reconnect)
+    expect(client.list).toHaveBeenCalledTimes(1);
+
+    // Now resolve the in-flight reconciliation
+    resolveList(serverAgents);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // After resolving, the next reconnect should work
+    client.emit('connected'); // 4th reconnect — should proceed
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(client.list).toHaveBeenCalledTimes(2);
+  });
 });

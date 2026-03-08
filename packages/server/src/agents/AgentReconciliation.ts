@@ -84,7 +84,7 @@ export class AgentReconciliation {
 
     for (const expected of expectedAgents) {
       const actual = actualMap.get(expected.agentId);
-      if (actual && !isTerminalStatus(actual.status)) {
+      if (actual && !isProcessTerminalStatus(actual.status)) {
         reconnected.push({
           agentId: expected.agentId,
           role: actual.role,
@@ -101,7 +101,7 @@ export class AgentReconciliation {
     // 5. Walk actual → find discovered (not in expected, not terminal)
     const discovered: DiscoveredAgent[] = [];
     for (const actual of actualAgents) {
-      if (!expectedMap.has(actual.agentId) && !isTerminalStatus(actual.status)) {
+      if (!expectedMap.has(actual.agentId) && !isProcessTerminalStatus(actual.status)) {
         discovered.push({
           agentId: actual.agentId,
           role: actual.role,
@@ -124,8 +124,8 @@ export class AgentReconciliation {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-const TERMINAL_STATUSES = new Set(['exited', 'crashed']);
+const PROCESS_TERMINAL_STATUSES = new Set(['exited', 'crashed']);
 
-function isTerminalStatus(status: string): boolean {
-  return TERMINAL_STATUSES.has(status);
+function isProcessTerminalStatus(status: string): boolean {
+  return PROCESS_TERMINAL_STATUSES.has(status);
 }
