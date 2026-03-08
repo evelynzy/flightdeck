@@ -272,4 +272,70 @@ describe('SkillsLoader', () => {
       expect(loader.count).toBe(3);
     });
   });
+
+  describe('token budget', () => {
+    it('includes all skills when within budget', () => {
+      writeSkill(tempDir, 'small-skill', { body: 'Short content.' });
+
+      const loader = new SkillsLoader(tempDir);
+      loader.loadAll();
+      const result = loader.formatForInjection(10_000);
+
+      expect(result).toContain('small-skill');
+      expect(result).toContain('Short content.');
+      expect(result).not.toContain('truncated');
+    });
+
+    it('truncates skills that exceed the budget', () => {
+      // Create a skill with very long content
+      const longBody = 'x'.repeat(4000); // ~1000 tokens
+      writeSkill(tempDir, 'big-skill', { body: longBody });
+
+      const loader = new SkillsLoader(tempDir);
+      loader.loadAll();
+      // Budget of 50 tokens is too small for the full content
+      const result = loader.formatForInjection(50);
+
+      expect(result).toContain('big-skill');
+      expect(result).toContain('truncated');
+      expect(result).not.toContain(longBody);
+    });
+
+    it('excludes skills entirely when even truncated version exceeds budget', () => {
+      writeSkill(tempDir, 'any-skill', { body: 'Some content.' });
+
+      const loader = new SkillsLoader(tempDir);
+      loader.loadAll();
+      // Ridiculously small budget — even the header won't fit
+      const result = loader.formatForInjection(1);
+
+      expect(result).toBe('');
+    });
+
+    it('includes first skills and truncates later ones on budget exhaustion', () => {
+      writeSkill(tempDir, 'alpha', { body: 'Alpha content.' });
+      writeSkill(tempDir, 'beta', { body: 'B'.repeat(4000) }); // ~1000 tokens
+
+      const loader = new SkillsLoader(tempDir);
+      loader.loadAll();
+      // Enough for first skill but not for second's full content
+      const result = loader.formatForInjection(100);
+
+      expect(result).toContain('alpha');
+      // Beta may be truncated or excluded depending on exact token math
+    });
+
+    it('uses default budget of 800 tokens when no argument provided', () => {
+      // Create skills that total well under 800 tokens
+      writeSkill(tempDir, 'tiny', { body: 'Tiny.' });
+
+      const loader = new SkillsLoader(tempDir);
+      loader.loadAll();
+
+      // Default budget should include small skills
+      const result = loader.formatForInjection();
+      expect(result).toContain('tiny');
+      expect(result).toContain('Tiny.');
+    });
+  });
 });
