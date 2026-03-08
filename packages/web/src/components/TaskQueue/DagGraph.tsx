@@ -43,14 +43,15 @@ interface StatusStyle {
 }
 
 const STATUS_STYLES: Record<DagTaskStatus, StatusStyle> = {
-  pending:  { bg: 'var(--st-pending-bg)', border: 'var(--st-pending)', icon: '⏳', opacity: 1,   pulse: false },
-  ready:    { bg: 'var(--st-ready-bg)', border: 'var(--st-ready)', icon: '🟢', opacity: 1,   pulse: false },
-  running:  { bg: 'var(--st-running-bg)', border: 'var(--st-running)', icon: '🔵', opacity: 1,   pulse: true  },
-  done:     { bg: 'var(--st-done-bg)', border: 'var(--st-done)', icon: '✅', opacity: 0.7, pulse: false },
-  failed:   { bg: 'var(--st-failed-bg)', border: 'var(--st-failed)', icon: '❌', opacity: 1,   pulse: false },
-  blocked:  { bg: 'var(--st-blocked-bg)', border: 'var(--st-blocked)', icon: '🟠', opacity: 1,   pulse: false },
-  paused:   { bg: 'var(--st-paused-bg)', border: 'var(--st-paused)', icon: '⏸️', opacity: 1,   pulse: false },
-  skipped:  { bg: 'var(--st-skipped-bg)', border: 'var(--st-skipped)', icon: '⏭️', opacity: 0.5, pulse: false },
+  pending:    { bg: 'var(--st-pending-bg)', border: 'var(--st-pending)', icon: '⏳', opacity: 1,   pulse: false },
+  ready:      { bg: 'var(--st-ready-bg)', border: 'var(--st-ready)', icon: '🟢', opacity: 1,   pulse: false },
+  running:    { bg: 'var(--st-running-bg)', border: 'var(--st-running)', icon: '🔵', opacity: 1,   pulse: true  },
+  in_review:  { bg: 'var(--st-running-bg)', border: 'var(--st-running)', icon: '🔍', opacity: 1,   pulse: false },
+  done:       { bg: 'var(--st-done-bg)', border: 'var(--st-done)', icon: '✅', opacity: 0.7, pulse: false },
+  failed:     { bg: 'var(--st-failed-bg)', border: 'var(--st-failed)', icon: '❌', opacity: 1,   pulse: false },
+  blocked:    { bg: 'var(--st-blocked-bg)', border: 'var(--st-blocked)', icon: '🟠', opacity: 1,   pulse: false },
+  paused:     { bg: 'var(--st-paused-bg)', border: 'var(--st-paused)', icon: '⏸️', opacity: 1,   pulse: false },
+  skipped:    { bg: 'var(--st-skipped-bg)', border: 'var(--st-skipped)', icon: '⏭️', opacity: 0.5, pulse: false },
 };
 
 // ---------------------------------------------------------------------------
@@ -217,14 +218,15 @@ const nodeTypes = { dagTask: DagTaskNode };
 // Tooltip status colors (top border accent)
 // ---------------------------------------------------------------------------
 const TOOLTIP_STATUS_COLORS: Record<DagTaskStatus, string> = {
-  pending: 'var(--st-pending)',
-  ready:   'var(--st-ready)',
-  running: 'var(--st-running)',
-  done:    'var(--st-done)',
-  failed:  'var(--st-failed)',
-  blocked: 'var(--st-blocked)',
-  paused:  'var(--st-paused)',
-  skipped: 'var(--st-skipped)',
+  pending:    'var(--st-pending)',
+  ready:      'var(--st-ready)',
+  running:    'var(--st-running)',
+  in_review:  'var(--st-running)',
+  done:       'var(--st-done)',
+  failed:     'var(--st-failed)',
+  blocked:    'var(--st-blocked)',
+  paused:     'var(--st-paused)',
+  skipped:    'var(--st-skipped)',
 };
 
 function formatTooltipDuration(ms: number): string {
