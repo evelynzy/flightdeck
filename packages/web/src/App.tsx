@@ -24,6 +24,7 @@ import { OnboardingWizard, useOnboarding } from './components/Onboarding/Onboard
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { VersionBadge } from './components/VersionBadge';
 import { PulseStrip } from './components/Pulse';
+import { AttentionBar } from './components/AttentionBar';
 import { ApprovalBadge, ApprovalSlideOver } from './components/ApprovalQueue';
 import { CatchUpBanner } from './components/CatchUp';
 import { AgentServerStatus } from './components/AgentServerStatus';
@@ -308,6 +309,7 @@ export function App() {
             </div>
           </header>
 
+          <AttentionBar />
           <div data-tour="pulse-strip"><PulseStrip /></div>
           <MobilePulse />
           <AgentServerStatus />
