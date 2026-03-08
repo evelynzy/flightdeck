@@ -3,6 +3,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 
 // Mock apiFetch
 const mockApiFetch = vi.fn();
@@ -16,6 +18,10 @@ vi.mock('../../Toast', () => ({
 }));
 
 import { ProjectsPanel } from '../ProjectsPanel';
+
+function renderPanel() {
+  return render(<MemoryRouter><ProjectsPanel /></MemoryRouter>);
+}
 
 const sampleProjects = [
   {
@@ -52,14 +58,14 @@ describe('ProjectsPanel', () => {
   it('renders loading spinner initially', () => {
     // Make the fetch hang
     mockApiFetch.mockReturnValue(new Promise(() => {}));
-    render(<ProjectsPanel />);
+    renderPanel();
     // The heading should always render
     expect(screen.getByText('Projects')).toBeTruthy();
   });
 
   it('renders empty state when no projects', async () => {
     mockApiFetch.mockResolvedValue([]);
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText(/No projects yet/)).toBeTruthy();
     });
@@ -67,7 +73,7 @@ describe('ProjectsPanel', () => {
 
   it('renders project list with names and descriptions', async () => {
     mockApiFetch.mockResolvedValue(sampleProjects);
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('Alpha Project')).toBeTruthy();
       expect(screen.getByText('First test project')).toBeTruthy();
@@ -77,7 +83,7 @@ describe('ProjectsPanel', () => {
 
   it('shows active agent count badge', async () => {
     mockApiFetch.mockResolvedValue(sampleProjects);
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       // The summary card shows total active agents across projects
       const summaryCards = screen.getAllByText('Active Agents');
@@ -87,7 +93,7 @@ describe('ProjectsPanel', () => {
 
   it('shows storage mode badges', async () => {
     mockApiFetch.mockResolvedValue(sampleProjects);
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('user')).toBeTruthy();
       expect(screen.getByText('local')).toBeTruthy();
@@ -96,7 +102,7 @@ describe('ProjectsPanel', () => {
 
   it('shows summary cards with correct counts', async () => {
     mockApiFetch.mockResolvedValue(sampleProjects);
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       // Total Projects = 2, Active Agents = 3, Active Projects = 1
       expect(screen.getByText('2')).toBeTruthy(); // Total projects count
@@ -105,7 +111,7 @@ describe('ProjectsPanel', () => {
 
   it('filters by active status', async () => {
     mockApiFetch.mockResolvedValue(sampleProjects);
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('Alpha Project')).toBeTruthy();
     });
@@ -121,7 +127,7 @@ describe('ProjectsPanel', () => {
 
   it('filters by archived status', async () => {
     mockApiFetch.mockResolvedValue(sampleProjects);
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('Alpha Project')).toBeTruthy();
     });
@@ -147,7 +153,7 @@ describe('ProjectsPanel', () => {
       return Promise.resolve([]);
     });
 
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('Alpha Project')).toBeTruthy();
     });
@@ -168,7 +174,7 @@ describe('ProjectsPanel', () => {
       return Promise.resolve([]);
     });
 
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('Alpha Project')).toBeTruthy();
     });
@@ -203,7 +209,7 @@ describe('ProjectsPanel', () => {
       return Promise.resolve([]);
     });
 
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('Alpha Project')).toBeTruthy();
     });
@@ -233,7 +239,7 @@ describe('ProjectsPanel', () => {
       return Promise.resolve([]);
     });
 
-    render(<ProjectsPanel />);
+    renderPanel();
     await waitFor(() => {
       expect(screen.getByText('Alpha Project')).toBeTruthy();
     });

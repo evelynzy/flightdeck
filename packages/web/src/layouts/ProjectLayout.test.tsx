@@ -4,6 +4,18 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ProjectLayout } from './ProjectLayout';
 
+// ── localStorage polyfill (jsdom may not provide a working one) ────
+const store: Record<string, string> = {};
+const localStorageMock: Storage = {
+  getItem: (key: string) => store[key] ?? null,
+  setItem: (key: string, value: string) => { store[key] = value; },
+  removeItem: (key: string) => { delete store[key]; },
+  clear: () => { for (const k of Object.keys(store)) delete store[k]; },
+  get length() { return Object.keys(store).length; },
+  key: (i: number) => Object.keys(store)[i] ?? null,
+};
+Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, writable: true });
+
 // ── Mocks ─────────────────────────────────────────────────────────
 
 const mockApiFetch = vi.fn();
@@ -180,5 +192,101 @@ describe('ProjectLayout', () => {
     renderLayout('/projects/proj-123/analytics');
     const btn = screen.getByTestId('overflow-menu');
     expect(btn.className).toContain('text-accent');
+  });
+
+  // ── B-10: Tab persistence ──────────────────────────────────────
+
+  describe('tab persistence (B-10)', () => {
+    beforeEach(() => {
+      localStorage.removeItem('flightdeck-project-tab');
+    });
+
+    it('saves active tab to localStorage on tab change', () => {
+      renderLayout('/projects/proj-123/tasks');
+      const stored = JSON.parse(localStorage.getItem('flightdeck-project-tab') ?? '{}');
+      expect(stored['proj-123']).toBe('tasks');
+    });
+
+    it('does not save overview tab (it is the default)', () => {
+      renderLayout('/projects/proj-123/overview');
+      const stored = JSON.parse(localStorage.getItem('flightdeck-project-tab') ?? '{}');
+      expect(stored['proj-123']).toBeUndefined();
+    });
+
+    it('restores saved tab on project root navigation', () => {
+      localStorage.setItem('flightdeck-project-tab', JSON.stringify({ 'proj-123': 'agents' }));
+      renderLayout('/projects/proj-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/projects/proj-123/agents', { replace: true });
+    });
+
+    it('handles corrupted JSON gracefully', () => {
+      localStorage.setItem('flightdeck-project-tab', 'not-json!!!');
+      // Should not throw
+      renderLayout('/projects/proj-123');
+      expect(screen.getByTestId('project-layout')).toBeInTheDocument();
+    });
+
+    it('ignores invalid tab names from localStorage', () => {
+      localStorage.setItem('flightdeck-project-tab', JSON.stringify({ 'proj-123': 'nonexistent-tab' }));
+      renderLayout('/projects/proj-123');
+      // Should NOT navigate to an invalid tab
+      expect(mockNavigate).not.toHaveBeenCalledWith(
+        expect.stringContaining('nonexistent-tab'),
+        expect.anything(),
+      );
+    });
+
+    it('evicts oldest entries when exceeding max stored projects', () => {
+      const stored: Record<string, string> = {};
+      for (let i = 0; i < 55; i++) {
+        stored[`proj-old-${i}`] = 'tasks';
+      }
+      localStorage.setItem('flightdeck-project-tab', JSON.stringify(stored));
+      renderLayout('/projects/proj-123/agents');
+      const result = JSON.parse(localStorage.getItem('flightdeck-project-tab') ?? '{}');
+      expect(Object.keys(result).length).toBeLessThanOrEqual(51);
+    });
+  });
+
+  // ── B-11: Keyboard shortcuts ───────────────────────────────────
+
+  describe('keyboard shortcuts (B-11)', () => {
+    it('navigates to tab on Alt+1', () => {
+      renderLayout();
+      fireEvent.keyDown(window, { key: '1', altKey: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/projects/proj-123/overview');
+    });
+
+    it('navigates to tab on Alt+3', () => {
+      renderLayout();
+      fireEvent.keyDown(window, { key: '3', altKey: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/projects/proj-123/tasks');
+    });
+
+    it('ignores number keys without Alt', () => {
+      renderLayout();
+      mockNavigate.mockClear();
+      fireEvent.keyDown(window, { key: '1' });
+      // Only the initial render may have called navigate, not from keyboard
+      const kbCalls = mockNavigate.mock.calls.filter(
+        (c: any[]) => typeof c[0] === 'string' && c[0].includes('/overview'),
+      );
+      expect(kbCalls).toHaveLength(0);
+    });
+
+    it('ignores Alt+key for numbers beyond tab count', () => {
+      renderLayout();
+      mockNavigate.mockClear();
+      fireEvent.keyDown(window, { key: '9', altKey: true });
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('cleans up keydown listener on unmount', () => {
+      const spy = vi.spyOn(window, 'removeEventListener');
+      const { unmount } = renderLayout();
+      unmount();
+      expect(spy).toHaveBeenCalledWith('keydown', expect.any(Function));
+      spy.mockRestore();
+    });
   });
 });

@@ -115,7 +115,7 @@ export function Sidebar() {
 
       {/* 4. + New Project */}
       <button
-        onClick={() => navigate('/projects?new=1')}
+        onClick={() => navigate('/projects?action=new')}
         className="flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-lg w-[58px] transition-colors text-th-text-muted hover:text-accent hover:bg-accent/10"
         title="New Project"
         data-testid="sidebar-new-project"

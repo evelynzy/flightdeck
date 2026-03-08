@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   FolderOpen,
   Plus,
@@ -280,6 +281,15 @@ export function ProjectsPanel() {
   const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('all');
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const addToast = useToastStore((s) => s.add);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Consume ?action=new param — show toast prompting user to start a session
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      addToast('info', 'Start a new session from any project to create agents.');
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, addToast]);
 
   const fetchProjects = useCallback(async () => {
     try {
