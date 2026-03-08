@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Crown, Send, Users, CheckCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Pencil, Square, Filter, Download, Settings, Eye, EyeOff, Zap, AlertCircle } from 'lucide-react';
+import { Crown, Send, Users, CheckCircle, Clock, Loader2, Plus, Trash2, Wrench, MessageSquare, GitBranch, PanelRightClose, PanelRightOpen, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Bot, FolderOpen, Check, X, BarChart3, AlertTriangle, RefreshCw, Network, Square, Filter, Download, Settings, Eye, EyeOff, Zap, AlertCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useLeadStore } from '../../stores/leadStore';
 import { useTimerStore, selectActiveTimerCount } from '../../stores/timerStore';
 import type { ActivityEvent, AgentComm, ProgressSnapshot, AgentReport } from '../../stores/leadStore';
-import type { AcpTextChunk, ChatGroup, GroupMessage, DagStatus, Project } from '../../types';
+import type { AcpTextChunk, ChatGroup, GroupMessage, DagStatus } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import { useHistoricalAgents } from '../../hooks/useHistoricalAgents';
 import { MentionText, MarkdownContent, InlineMarkdownWithMentions } from '../../utils/markdown';
@@ -127,11 +127,7 @@ export function LeadDashboard({ api, ws }: Props) {
   const [expandedReport, setExpandedReport] = useState<AgentReport | null>(null);
   const [reportsExpanded, setReportsExpanded] = useState(true);
   const [pendingBannerExpanded, setPendingBannerExpanded] = useState(false);
-  const [renamingLeadId, setRenamingLeadId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
   const isResizing = useRef(false);
-  const [persistedProjects, setPersistedProjects] = useState<Project[]>([]);
-  const [resumingProjectId, setResumingProjectId] = useState<string | null>(null);
 
   // ── Catch-up summary banner ──────────────────────────────────────────
   const lastInteractionRef = useRef(Date.now());
@@ -191,23 +187,12 @@ export function LeadDashboard({ api, ws }: Props) {
     setCatchUpSummary(null);
   }, [selectedLeadId]);
 
-  const leadAgents = agents.filter((a) => a.role.id === 'lead' && !a.parentId);
-  // Map active lead projectIds for merging
-  const activeProjectIds = new Set(leadAgents.map((a) => a.projectId).filter(Boolean));
-  // Inactive persisted projects (no active lead)
-  const inactiveProjects = persistedProjects.filter((p) => !activeProjectIds.has(p.id) && p.status !== 'archived');
   const currentProject = selectedLeadId ? projects[selectedLeadId] : null;
   const leadAgent = agents.find((a) => a.id === selectedLeadId);
   const isActive = leadAgent && (leadAgent.status === 'running' || leadAgent.status === 'idle');
 
-  // On mount, load existing leads and persisted projects from server
+  // On mount, load existing leads from server
   useEffect(() => {
-    // Load persisted projects
-    fetch('/api/projects')
-      .then((r) => r.json())
-      .then((data: Project[]) => { if (Array.isArray(data)) setPersistedProjects(data); })
-      .catch(() => {});
-
     // Load active leads
     fetch('/api/lead').then((r) => r.json()).then((leads: any[]) => {
       if (Array.isArray(leads)) {
@@ -966,244 +951,6 @@ export function LeadDashboard({ api, ws }: Props) {
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      {/* Project list sidebar */}
-      <div className="w-56 border-r border-th-border flex flex-col shrink-0">
-        <div className="px-3 py-2 border-b border-th-border flex items-center justify-between">
-          <span className="text-sm font-semibold flex items-center gap-1.5">
-            <Crown className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-            Projects
-          </span>
-          <button
-            onClick={() => setShowNewProject(true)}
-            className="p-1 rounded hover:bg-th-bg-muted text-th-text-muted hover:text-th-text"
-            title="New Project"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {leadAgents.length === 0 && inactiveProjects.length === 0 && !showNewProject && (
-            <div className="p-4 text-center">
-              <Crown className="w-10 h-10 text-yellow-600/50 dark:text-yellow-400/50 mx-auto mb-2" />
-              <p className="text-xs text-th-text-muted font-mono mb-3">No projects yet</p>
-              <button
-                onClick={() => setShowNewProject(true)}
-                className="text-xs bg-yellow-600 hover:bg-yellow-500 text-black px-3 py-1.5 rounded font-semibold"
-              >
-                Create Project
-              </button>
-            </div>
-          )}
-
-          {leadAgents.map((lead) => {
-            const isSelected = selectedLeadId === lead.id;
-            const isRunning = lead.status === 'running';
-            return (
-              <button
-                key={lead.id}
-                onClick={() => {
-                  useLeadStore.getState().addProject(lead.id);
-                  useLeadStore.getState().selectLead(lead.id);
-                }}
-                className={`w-full text-left px-3 py-2 border-b border-th-border/50 transition-colors group ${
-                  isSelected
-                    ? 'bg-yellow-600/15 border-l-2 border-l-yellow-500'
-                    : 'hover:bg-th-bg-alt border-l-2 border-l-transparent'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${isRunning ? 'bg-green-400' : 'bg-gray-500'}`} />
-                  {renamingLeadId === lead.id ? (
-                    <input
-                      autoFocus
-                      className="text-sm font-mono truncate flex-1 bg-th-bg-muted border border-th-border rounded px-1 py-0 text-th-text focus:outline-none focus:border-accent"
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.nativeEvent.isComposing) return;
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const trimmed = renameValue.trim();
-                          if (trimmed) {
-                            fetch(`/api/lead/${lead.id}`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ projectName: trimmed }),
-                            }).catch(() => {});
-                            useAppStore.getState().updateAgent(lead.id, { projectName: trimmed });
-                          }
-                          setRenamingLeadId(null);
-                        }
-                        if (e.key === 'Escape') setRenamingLeadId(null);
-                      }}
-                      onBlur={() => {
-                        const trimmed = renameValue.trim();
-                        if (trimmed && trimmed !== (lead.projectName || '')) {
-                          fetch(`/api/lead/${lead.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ projectName: trimmed }),
-                          }).catch(() => {});
-                          useAppStore.getState().updateAgent(lead.id, { projectName: trimmed });
-                        }
-                        setRenamingLeadId(null);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <span
-                      className="text-sm font-mono truncate flex-1"
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        setRenamingLeadId(lead.id);
-                        setRenameValue(lead.projectName || lead.task?.slice(0, 40) || '');
-                      }}
-                      title="Double-click to rename"
-                    >
-                      {lead.projectName || lead.task?.slice(0, 40) || lead.id.slice(0, 8)}
-                    </span>
-                  )}
-                  <span
-                    role="button"
-                    title="Rename project"
-                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-th-bg-muted rounded transition-opacity shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRenamingLeadId(lead.id);
-                      setRenameValue(lead.projectName || lead.task?.slice(0, 40) || '');
-                    }}
-                  >
-                    <Pencil className="w-3 h-3 text-th-text-muted hover:text-th-text-alt" />
-                  </span>
-                  <span
-                    role="button"
-                    title="Remove project"
-                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-900/40 rounded transition-opacity shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!confirm('Remove this project? Running agents will be stopped.')) return;
-                      // Kill lead + children on server
-                      fetch(`/api/agents/${lead.id}`, { method: 'DELETE' }).catch(() => {});
-                      lead.childIds.forEach((cid: string) => fetch(`/api/agents/${cid}`, { method: 'DELETE' }).catch(() => {}));
-                      useLeadStore.getState().removeProject(lead.id);
-                    }}
-                  >
-                    <X className="w-3.5 h-3.5 text-th-text-muted hover:text-red-400" />
-                  </span>
-                </div>
-                <div className="text-xs text-th-text-muted mt-0.5 pl-4 font-mono">
-                  {lead.status} · {agents.filter((a: any) => a.parentId === lead.id).length} agents
-                  </div>
-              </button>
-            );
-          })}
-
-          {/* Inactive persisted projects */}
-          {inactiveProjects.length > 0 && (
-            <>
-              {leadAgents.length > 0 && (
-                <div className="px-3 py-1.5 text-[10px] font-medium text-th-text-muted uppercase tracking-wider border-t border-th-border/50">
-                  Past Projects
-                </div>
-              )}
-              {inactiveProjects.map((proj) => {
-                const isSelected = selectedLeadId === `project:${proj.id}`;
-                return (
-                  <div
-                    key={proj.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      const key = `project:${proj.id}`;
-                      useLeadStore.getState().addProject(key);
-                      useLeadStore.getState().selectLead(key);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        const key = `project:${proj.id}`;
-                        useLeadStore.getState().addProject(key);
-                        useLeadStore.getState().selectLead(key);
-                      }
-                    }}
-                    className={`w-full text-left px-3 py-2 border-b border-th-border/50 transition-colors group cursor-pointer ${
-                      isSelected
-                        ? 'bg-yellow-600/15 border-l-2 border-l-yellow-500'
-                        : 'hover:bg-th-bg-alt border-l-2 border-l-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full shrink-0 bg-th-bg-hover" />
-                      <span className="text-sm font-mono truncate flex-1 text-th-text-muted" title={proj.name}>{proj.name}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setResumingProjectId(proj.id);
-                          fetch(`/api/projects/${proj.id}/resume`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({}),
-                          })
-                            .then((r) => r.json())
-                            .then((data) => {
-                              if (data.id) {
-                                useLeadStore.getState().addProject(data.id);
-                                useLeadStore.getState().selectLead(data.id);
-                                fetch('/api/projects').then((r) => r.json()).then((ps: Project[]) => {
-                                  if (Array.isArray(ps)) setPersistedProjects(ps);
-                                }).catch(() => {});
-                              }
-                            })
-                            .catch(() => {})
-                            .finally(() => setResumingProjectId(null));
-                        }}
-                        className="text-[10px] text-yellow-500 hover:text-yellow-600 dark:hover:text-yellow-400 bg-yellow-900/30 hover:bg-yellow-900/50 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                        title="Resume project"
-                      >
-                        {resumingProjectId === proj.id ? <Loader2 size={10} className="animate-spin" /> : 'Resume'}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!confirm(`Delete project "${proj.name}"? This cannot be undone.`)) return;
-                          fetch(`/api/projects/${proj.id}`, { method: 'DELETE' })
-                            .then(() => {
-                              setPersistedProjects((prev) => prev.filter((p) => p.id !== proj.id));
-                              useLeadStore.getState().removeProject(`project:${proj.id}`);
-                            })
-                            .catch(() => {});
-                        }}
-                        className="p-0.5 hover:bg-red-900/40 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                        title="Delete project"
-                      >
-                        <X className="w-3.5 h-3.5 text-th-text-muted hover:text-red-400" />
-                      </button>
-                    </div>
-                    <div className="text-xs text-th-text-muted mt-0.5 pl-4 font-mono">
-                      {proj.status} · {proj.updatedAt?.slice(0, 10)}
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-
-        {/* New project button at bottom of sidebar */}
-        {showNewProject ? null : (
-          <div className="border-t border-th-border p-2">
-            <button
-              onClick={() => setShowNewProject(true)}
-              className="w-full flex items-center justify-center gap-1.5 text-sm text-yellow-600 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300 py-1.5 rounded hover:bg-th-bg-alt transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              New Project
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* New project modal */}
       {showNewProject && (
         <div
@@ -1403,7 +1150,7 @@ export function LeadDashboard({ api, ws }: Props) {
         <>
           {/* Chat area */}
           <div
-            className="flex-1 flex flex-col min-w-0 relative"
+            className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative"
             onDragOver={leadDragOver}
             onDragLeave={leadDragLeave}
             onDrop={leadDrop}
@@ -1746,8 +1493,8 @@ export function LeadDashboard({ api, ws }: Props) {
 
             {/* Queued messages (pending) */}
             {messages.some((m) => m.queued) && (
-              <div className="border-t border-dashed border-th-border px-4 py-2 bg-th-bg-alt/50">
-                <div className="text-[10px] text-th-text-muted uppercase tracking-wider mb-1 flex items-center gap-1">
+              <div className="border-t border-dashed border-th-border px-4 py-2 bg-th-bg-alt/50 max-h-48 overflow-y-auto">
+                <div className="text-[10px] text-th-text-muted uppercase tracking-wider mb-1 flex items-center gap-1 sticky top-0 bg-th-bg-alt/50">
                   <Clock className="w-3 h-3" />
                   Queued ({messages.filter((m) => m.queued).length})
                 </div>

@@ -459,7 +459,7 @@ export function HomeDashboard() {
   // ── Empty state ──────────────────────────────────────────────
   if (!loading && projects.length === 0) {
     return (
-      <div className="flex-1 overflow-auto p-6" data-testid="home-empty">
+      <div className="flex-1 overflow-auto p-6 focus:outline-none" tabIndex={0} data-testid="home-empty">
         <EmptyState
           icon={<LayoutDashboard className="w-12 h-12" />}
           title="Welcome to Flightdeck"
@@ -472,7 +472,8 @@ export function HomeDashboard() {
 
   // ── Dashboard ────────────────────────────────────────────────
   return (
-    <div className="flex-1 overflow-auto p-6 max-w-6xl mx-auto" data-testid="home-dashboard">
+    <div className="flex-1 overflow-auto focus:outline-none" tabIndex={0}>
+    <div className="p-6 max-w-6xl mx-auto" data-testid="home-dashboard">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -685,6 +686,7 @@ export function HomeDashboard() {
           Start New Session
         </button>
       </div>
+    </div>
     </div>
   );
 }

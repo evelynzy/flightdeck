@@ -45,14 +45,7 @@ const TIPS: CoachTip[] = [
   },
   // Idle agents tip removed — idle agents don't cost anything (per-token billing),
   // and the Lead assigns tasks, not the user.
-  {
-    id: 'coach-canvas',
-    trigger: () => !localStorage.getItem('tour-seen-canvas'),
-    title: 'New: Canvas View',
-    body: 'See your agents as a spatial graph. Drag to rearrange.',
-    icon: '✨',
-    cta: { label: 'Take a look', action: '/canvas' },
-  },
+  // Canvas View tip removed — feature was removed.
 ];
 
 const AUTO_DISMISS_MS = 15_000;

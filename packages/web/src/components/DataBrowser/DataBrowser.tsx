@@ -44,7 +44,8 @@ export function DataBrowser() {
   ];
 
   return (
-    <div className="flex-1 overflow-auto p-6 max-w-6xl mx-auto">
+    <div className="flex-1 overflow-auto focus:outline-none" tabIndex={0}>
+    <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Database className="w-6 h-6 text-th-text-muted" />
         <h2 className="text-xl font-semibold">Database</h2>
@@ -66,6 +67,7 @@ export function DataBrowser() {
       {tab === 'conversations' && <ConversationsPanel onCountChange={loadStats} />}
       {tab === 'decisions' && <DecisionsPanel onCountChange={loadStats} />}
       {tab === 'activity' && <ActivityPanel onCountChange={loadStats} />}
+    </div>
     </div>
   );
 }

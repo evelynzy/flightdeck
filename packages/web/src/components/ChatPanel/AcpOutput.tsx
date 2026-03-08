@@ -266,8 +266,8 @@ export function AcpOutput({ agentId }: Props) {
     const FooterComponent = () => (
       <>
         {queuedMessages.length > 0 && (
-          <div className="border-t border-dashed border-th-border px-3 py-2 bg-th-bg-alt/50 mx-3 mb-3">
-            <div className="text-[10px] text-th-text-muted uppercase tracking-wider mb-1 flex items-center gap-1">
+          <div className="border-t border-dashed border-th-border px-3 py-2 bg-th-bg-alt/50 mx-3 mb-3 max-h-48 overflow-y-auto">
+            <div className="text-[10px] text-th-text-muted uppercase tracking-wider mb-1 flex items-center gap-1 sticky top-0 bg-th-bg-alt/50">
               <Clock className="w-3 h-3" />
               Queued ({queuedMessages.length})
             </div>

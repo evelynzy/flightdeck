@@ -378,7 +378,8 @@ export function ProjectsPanel() {
   const totalAgents = projects.reduce((sum, p) => sum + p.activeAgentCount, 0);
 
   return (
-    <div className="flex-1 overflow-auto p-6 max-w-5xl mx-auto">
+    <div className="flex-1 overflow-auto focus:outline-none" tabIndex={0}>
+    <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -472,6 +473,7 @@ export function ProjectsPanel() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }
