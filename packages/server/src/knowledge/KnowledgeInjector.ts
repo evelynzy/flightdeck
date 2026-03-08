@@ -2,6 +2,10 @@ import type { KnowledgeEntry, KnowledgeCategory } from './types.js';
 import type { HybridSearchEngine } from './HybridSearchEngine.js';
 import { estimateTokens } from './HybridSearchEngine.js';
 import type { MemoryCategoryManager } from './MemoryCategoryManager.js';
+import { sanitizeContent, MAX_ENTRY_CHARS } from './sanitize.js';
+
+// Re-export sanitizeContent so existing imports from KnowledgeInjector still work
+export { sanitizeContent } from './sanitize.js';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -43,12 +47,6 @@ interface SelectedEntry {
 /** Default token budget for the entire injection block. */
 const DEFAULT_TOKEN_BUDGET = 1200;
 
-/** Maximum characters per individual knowledge entry. */
-const MAX_ENTRY_CHARS = 500;
-
-/** Suffix appended when content is truncated. */
-const TRUNCATION_SUFFIX = '…';
-
 /** Priority order for categories. Lower index = higher priority. */
 const CATEGORY_PRIORITY: readonly KnowledgeCategory[] = [
   'core',
@@ -67,55 +65,6 @@ const SECTION_LABELS: Record<KnowledgeCategory, string> = {
   semantic: 'Architecture & Facts',
   episodic: 'Recent Context',
 };
-
-/**
- * Patterns that indicate prompt injection attempts.
- * Matched case-insensitively against entry content.
- */
-const INJECTION_PATTERNS: RegExp[] = [
-  /ignore\s+(all\s+)?previous\s+instructions/i,
-  /ignore\s+(all\s+)?prior\s+instructions/i,
-  /disregard\s+(all\s+)?previous/i,
-  /override\s+(system|previous)\s+(prompt|instructions)/i,
-  /you\s+are\s+now\s+a/i,
-  /new\s+instructions?\s*:/i,
-  /system\s*:\s*you/i,
-  /\bdo\s+not\s+follow\b.*\binstructions\b/i,
-  /\bforget\b.*\binstructions\b/i,
-  /\bact\s+as\b.*\binstead\b/i,
-];
-
-// ── Sanitization ────────────────────────────────────────────────────
-
-/**
- * Sanitize knowledge content before prompt injection.
- *
- * 1. Strip control characters (except newline and tab).
- * 2. Strip XML closing tags that could break the trust boundary.
- * 3. Remove prompt-injection-style patterns.
- * 4. Truncate to MAX_ENTRY_CHARS.
- */
-export function sanitizeContent(content: string): string {
-  // Strip control characters (keep \n and \t for readability)
-  // eslint-disable-next-line no-control-regex
-  let sanitized = content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-
-  // Strip XML closing tags that could escape the <project-context> boundary.
-  // Match variations: </project-context>, </ project-context>, case variants, etc.
-  sanitized = sanitized.replace(/<\s*\/?\s*project-context\s*>/gi, '[tag-removed]');
-
-  // Neutralize prompt-injection patterns by replacing with [redacted]
-  for (const pattern of INJECTION_PATTERNS) {
-    sanitized = sanitized.replace(pattern, '[redacted]');
-  }
-
-  // Truncate to max length
-  if (sanitized.length > MAX_ENTRY_CHARS) {
-    sanitized = sanitized.slice(0, MAX_ENTRY_CHARS - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX;
-  }
-
-  return sanitized.trim();
-}
 
 // ── KnowledgeInjector ───────────────────────────────────────────────
 

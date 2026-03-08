@@ -2,6 +2,7 @@ export { KnowledgeStore } from './KnowledgeStore.js';
 export { HybridSearchEngine, fuseResults, fitToBudget, estimateTokens } from './HybridSearchEngine.js';
 export { TrainingCapture } from './TrainingCapture.js';
 export { KnowledgeInjector, sanitizeContent } from './KnowledgeInjector.js';
+export { MAX_ENTRY_CHARS } from './sanitize.js';
 export type { InjectionContext, InjectionResult } from './KnowledgeInjector.js';
 export {
   MemoryCategoryManager,

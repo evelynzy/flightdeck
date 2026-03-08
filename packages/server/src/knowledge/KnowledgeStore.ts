@@ -3,6 +3,7 @@ import type { Database } from '../db/database.js';
 import { knowledge } from '../db/schema.js';
 import type { KnowledgeEntry, KnowledgeCategory, KnowledgeMetadata, SearchOptions, ScoredKnowledgeEntry } from './types.js';
 import { KNOWLEDGE_CATEGORIES } from './types.js';
+import { sanitizeContent } from './sanitize.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -34,6 +35,11 @@ export class KnowledgeStore {
     this.validateCategory(category);
     validateKey(key);
 
+    // Write-boundary sanitization: strip control chars, injection patterns,
+    // and XML boundary escapes before storing. Defense-in-depth with
+    // read-time sanitization in KnowledgeInjector.
+    const sanitized = sanitizeContent(content);
+
     const metadataJson = metadata ? JSON.stringify(metadata) : null;
     const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
@@ -43,7 +49,7 @@ export class KnowledgeStore {
         projectId,
         category,
         key,
-        content,
+        content: sanitized,
         metadata: metadataJson,
         createdAt: now,
         updatedAt: now,
@@ -51,7 +57,7 @@ export class KnowledgeStore {
       .onConflictDoUpdate({
         target: [knowledge.projectId, knowledge.category, knowledge.key],
         set: {
-          content,
+          content: sanitized,
           metadata: metadataJson,
           updatedAt: now,
         },
