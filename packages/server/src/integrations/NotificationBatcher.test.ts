@@ -34,6 +34,13 @@ function createMockAgentManager(): any {
       if (!handlers.has(event)) handlers.set(event, []);
       handlers.get(event)!.push(handler);
     }),
+    off: vi.fn((event: string, handler: (...args: any[]) => void) => {
+      const list = handlers.get(event);
+      if (list) {
+        const idx = list.indexOf(handler);
+        if (idx >= 0) list.splice(idx, 1);
+      }
+    }),
     getProjectIdForAgent: vi.fn().mockReturnValue('project-1'),
     emit(event: string, data: any) {
       for (const h of handlers.get(event) ?? []) {
@@ -386,5 +393,35 @@ describe('NotificationBatcher', () => {
 
     // Falls back to leadId since getProjectIdForAgent returned undefined
     expect(adapter.sentMessages).toHaveLength(1);
+  });
+
+  // ── H-3: Event listener leak prevention ────────────────────
+
+  it('removes AgentManager listeners on stop()', () => {
+    const manager = createMockAgentManager();
+    bridge.wire(manager);
+
+    // 5 events should be wired
+    expect(manager.on).toHaveBeenCalledTimes(5);
+    const totalBefore = Array.from(manager._handlers.values()).reduce((sum, h) => sum + h.length, 0);
+    expect(totalBefore).toBe(5);
+
+    bridge.stop();
+
+    // All listeners should be removed
+    expect(manager.off).toHaveBeenCalledTimes(5);
+    const totalAfter = Array.from(manager._handlers.values()).reduce((sum, h) => sum + h.length, 0);
+    expect(totalAfter).toBe(0);
+  });
+
+  it('does not leak listeners after stop + re-wire', () => {
+    const manager = createMockAgentManager();
+    bridge.wire(manager);
+    bridge.stop();
+    bridge.wire(manager);
+
+    // Should have exactly 5 listeners (not 10)
+    const total = Array.from(manager._handlers.values()).reduce((sum, h) => sum + h.length, 0);
+    expect(total).toBe(5);
   });
 });

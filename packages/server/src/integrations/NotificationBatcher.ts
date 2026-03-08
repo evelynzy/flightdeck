@@ -48,6 +48,9 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
   private subscriptions: ChatSubscription[] = [];
   private pendingEvents: Map<string, PendingEvent[]> = new Map(); // projectId → events
   private flushTimers: Map<string, ReturnType<typeof setTimeout>> = new Map(); // projectId → timer
+  // H-3: Track wired listeners for cleanup
+  private wiredAgentManager: AgentManager | null = null;
+  private wiredHandlers: Array<{ event: string; handler: (...args: any[]) => void }> = [];
 
   static readonly BATCH_WINDOW_MS = 5_000;
 
@@ -91,7 +94,10 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
    * Maps agent lifecycle events to notification categories.
    */
   wire(agentManager: AgentManager): void {
-    agentManager.on('agent:spawned', (data) => {
+    this.wiredAgentManager = agentManager;
+    this.wiredHandlers = [];
+
+    const onSpawned = (data: any) => {
       const projectId = data.projectId ?? 'system';
       const roleName = typeof data.role === 'string' ? data.role : data.role?.id ?? 'unknown';
       this.queueEvent({
@@ -102,10 +108,9 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
         timestamp: Date.now(),
         metadata: { agentId: data.id, role: roleName },
       });
-    });
+    };
 
-    agentManager.on('agent:exit', (data) => {
-      // Agent may already be removed — try to get projectId
+    const onExit = (data: any) => {
       const projectId = agentManager.getProjectIdForAgent(data.agentId) ?? 'system';
       this.queueEvent({
         category: 'agent_completed',
@@ -117,9 +122,9 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
         timestamp: Date.now(),
         metadata: { agentId: data.agentId, code: data.code },
       });
-    });
+    };
 
-    agentManager.on('agent:crashed', (data) => {
+    const onCrashed = (data: any) => {
       const projectId = agentManager.getProjectIdForAgent(data.agentId) ?? 'system';
       this.queueEvent({
         category: 'agent_crashed',
@@ -129,10 +134,9 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
         timestamp: Date.now(),
         metadata: { agentId: data.agentId, code: data.code },
       });
-    });
+    };
 
-    agentManager.on('lead:decision', (data) => {
-      // leadId is the lead agent's ID, not the project ID — resolve it
+    const onDecision = (data: any) => {
       const projectId = agentManager.getProjectIdForAgent(data.leadId) ?? data.leadId;
       const category: NotificationCategory = data.needsConfirmation
         ? 'decision_needs_approval'
@@ -147,9 +151,9 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
         timestamp: Date.now(),
         metadata: { decisionId: data.id, agentRole: data.agentRole },
       });
-    });
+    };
 
-    agentManager.on('agent:completion_reported', (data) => {
+    const onCompletion = (data: any) => {
       this.queueEvent({
         category: 'task_completed',
         projectId: data.parentId ?? 'system',
@@ -158,7 +162,21 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
         timestamp: Date.now(),
         metadata: { childId: data.childId, parentId: data.parentId },
       });
-    });
+    };
+
+    agentManager.on('agent:spawned', onSpawned);
+    agentManager.on('agent:exit', onExit);
+    agentManager.on('agent:crashed', onCrashed);
+    agentManager.on('lead:decision', onDecision);
+    agentManager.on('agent:completion_reported', onCompletion);
+
+    this.wiredHandlers = [
+      { event: 'agent:spawned', handler: onSpawned },
+      { event: 'agent:exit', handler: onExit },
+      { event: 'agent:crashed', handler: onCrashed },
+      { event: 'lead:decision', handler: onDecision },
+      { event: 'agent:completion_reported', handler: onCompletion },
+    ];
 
     logger.info({ module: 'notification-batcher', msg: 'Wired to AgentManager events' });
   }
@@ -192,7 +210,7 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
     }
   }
 
-  /** Stop all timers and clear state. */
+  /** Stop all timers, remove event listeners, and clear state. */
   stop(): void {
     for (const timer of this.flushTimers.values()) {
       clearTimeout(timer);
@@ -200,6 +218,15 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
     this.flushTimers.clear();
     this.pendingEvents.clear();
     this.subscriptions = [];
+
+    // H-3: Remove wired event listeners to prevent leaks
+    if (this.wiredAgentManager) {
+      for (const { event, handler } of this.wiredHandlers) {
+        this.wiredAgentManager.off(event as any, handler);
+      }
+      this.wiredAgentManager = null;
+      this.wiredHandlers = [];
+    }
   }
 
   /** Return the count of pending (unbatched) events. */

@@ -40,6 +40,7 @@ function createMockAgentManager(): any {
   const agents: any[] = [];
   return {
     on: vi.fn(),
+    off: vi.fn(),
     getAll: vi.fn(() => agents),
     getByProject: vi.fn((projectId: string) => agents.filter(a => a.projectId === projectId)),
     getProjectIdForAgent: vi.fn().mockReturnValue('project-1'),
