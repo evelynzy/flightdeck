@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Database } from '../../db/database.js';
 import { KnowledgeStore } from '../KnowledgeStore.js';
 import { HybridSearchEngine, fuseResults, fitToBudget, estimateTokens } from '../HybridSearchEngine.js';
@@ -279,6 +279,46 @@ describe('HybridSearchEngine', () => {
     if (tsResult && otherResults.length > 0) {
       expect(tsResult.fusedScore).toBeGreaterThan(otherResults[0].fusedScore);
     }
+  });
+
+  describe('fetchLimit capping', () => {
+    it('uses DEFAULT_FETCH_LIMIT (100) when no limit option is provided', () => {
+      const searchSpy = vi.spyOn(engine, 'fts5Search');
+      engine.search(projectId, 'TypeScript');
+      expect(searchSpy).toHaveBeenCalledWith(projectId, 'TypeScript', 100, undefined);
+      searchSpy.mockRestore();
+    });
+
+    it('caps fetchLimit at MAX_FETCH_LIMIT (500) for large limit values', () => {
+      const searchSpy = vi.spyOn(engine, 'fts5Search');
+      engine.search(projectId, 'TypeScript', { limit: 1000 });
+      // 1000 * 3 = 3000, but should be clamped to 500
+      expect(searchSpy).toHaveBeenCalledWith(projectId, 'TypeScript', 500, undefined);
+      searchSpy.mockRestore();
+    });
+
+    it('allows fetchLimit below MAX_FETCH_LIMIT without clamping', () => {
+      const searchSpy = vi.spyOn(engine, 'fts5Search');
+      engine.search(projectId, 'TypeScript', { limit: 50 });
+      // 50 * 3 = 150, which is below 500
+      expect(searchSpy).toHaveBeenCalledWith(projectId, 'TypeScript', 150, undefined);
+      searchSpy.mockRestore();
+    });
+
+    it('clamps exactly at boundary (limit=167 → 501 → 500)', () => {
+      const searchSpy = vi.spyOn(engine, 'fts5Search');
+      engine.search(projectId, 'TypeScript', { limit: 167 });
+      // 167 * 3 = 501, clamped to 500
+      expect(searchSpy).toHaveBeenCalledWith(projectId, 'TypeScript', 500, undefined);
+      searchSpy.mockRestore();
+    });
+
+    it('passes capped fetchLimit to vectorSearch as well', () => {
+      const vectorSpy = vi.spyOn(engine, 'vectorSearch');
+      engine.search(projectId, 'TypeScript', { limit: 1000 });
+      expect(vectorSpy).toHaveBeenCalledWith(projectId, 'TypeScript', 500);
+      vectorSpy.mockRestore();
+    });
   });
 
   describe('searchWithScores on KnowledgeStore', () => {

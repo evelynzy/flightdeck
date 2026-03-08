@@ -1,4 +1,5 @@
 import type { KnowledgeStore } from './KnowledgeStore.js';
+import { logger } from '../utils/logger.js';
 import type {
   KnowledgeEntry,
   KnowledgeCategory,
@@ -16,6 +17,12 @@ const DEFAULT_TOKEN_BUDGET = 1200;
 
 /** Default max results. */
 const DEFAULT_LIMIT = 10;
+
+/** Maximum fetchLimit to prevent unbounded FTS5 queries. */
+const MAX_FETCH_LIMIT = 500;
+
+/** Default fetchLimit when caller doesn't specify a limit. */
+const DEFAULT_FETCH_LIMIT = 100;
 
 /** Rough chars-per-token estimate for English text. */
 const CHARS_PER_TOKEN = 4;
@@ -61,7 +68,11 @@ export class HybridSearchEngine {
     const categories = options?.categories;
 
     // Fetch from both sources (over-fetch to allow for deduplication)
-    const fetchLimit = limit * 3;
+    const rawFetchLimit = options?.limit ? limit * 3 : DEFAULT_FETCH_LIMIT;
+    const fetchLimit = Math.min(rawFetchLimit, MAX_FETCH_LIMIT);
+    if (rawFetchLimit > MAX_FETCH_LIMIT) {
+      logger.warn({ module: 'HybridSearchEngine', msg: `fetchLimit clamped from ${rawFetchLimit} to ${MAX_FETCH_LIMIT}` });
+    }
 
     // 1. FTS5 keyword search
     const fts5Results = this.fts5Search(projectId, query, fetchLimit, categories);
