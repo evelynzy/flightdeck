@@ -3,6 +3,7 @@
 // Routes receive AppContext (unchanged). Only index.ts sees ServiceContainer.
 
 import { createServer, type Server as HttpServer } from 'http';
+import { join } from 'node:path';
 import type { ServerConfig } from './config.js';
 import { updateConfig, getConfig } from './config.js';
 import type { AppContext } from './routes/context.js';
@@ -34,6 +35,7 @@ import { TrainingCapture } from './knowledge/TrainingCapture.js';
 import { KnowledgeInjector } from './knowledge/KnowledgeInjector.js';
 import { SessionKnowledgeExtractor } from './knowledge/SessionKnowledgeExtractor.js';
 import { CollectiveMemory } from './coordination/knowledge/CollectiveMemory.js';
+import { SkillsLoader } from './knowledge/SkillsLoader.js';
 import { TeamExporter } from './teams/TeamExporter.js';
 import { TeamImporter } from './teams/TeamImporter.js';
 
@@ -303,6 +305,9 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   );
   agentManager.setProjectRegistry(projectRegistry);
   agentManager.setSessionKnowledgeExtractor(sessionKnowledgeExtractor);
+  const skillsLoader = new SkillsLoader(join(repoRoot, '.github/skills'));
+  skillsLoader.loadAll();
+  agentManager.setSkillsLoader(skillsLoader);
   onShutdown('agentManager', () => agentManager.shutdownAll());
 
   // SessionResumeManager: persists agent roster on lifecycle events, handles resume on startup

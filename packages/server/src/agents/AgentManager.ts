@@ -37,6 +37,7 @@ import { startRemoteBridge } from './ServerClientBridge.js';
 import type { SessionKnowledgeExtractor } from '../knowledge/SessionKnowledgeExtractor.js';
 import type { SessionData, SessionMessage } from '../knowledge/types.js';
 import type { KnowledgeInjector, InjectionContext } from '../knowledge/KnowledgeInjector.js';
+import type { SkillsLoader } from '../knowledge/SkillsLoader.js';
 
 // Re-export Delegation so existing consumers (api.ts, etc.) continue to work
 export type { Delegation } from './CommandDispatcher.js';
@@ -114,6 +115,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
   private activeDelegationRepository?: ActiveDelegationRepository;
   private agentServerClient?: AgentServerClient;
   private knowledgeInjector?: KnowledgeInjector;
+  private skillsLoader?: SkillsLoader;
   private sessionKnowledgeExtractor?: SessionKnowledgeExtractor;
   private _systemPaused = false;
   private _shuttingDown = false;
@@ -253,6 +255,10 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     this.sessionKnowledgeExtractor = extractor;
   }
 
+  setSkillsLoader(loader: SkillsLoader): void {
+    this.skillsLoader = loader;
+  }
+
   /**
    * Resolve the effective model for a role based on project model config.
    *
@@ -358,6 +364,23 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
           role: role.id,
           entriesIncluded: injection.entriesIncluded,
           totalTokens: injection.totalTokens,
+        });
+      }
+    }
+
+    // Inject .github/skills/ content into the agent's system prompt
+    if (this.skillsLoader) {
+      const skillsBlock = this.skillsLoader.formatForInjection();
+      if (skillsBlock) {
+        effectiveRole = {
+          ...effectiveRole,
+          systemPrompt: `${effectiveRole.systemPrompt}\n\n${skillsBlock}`,
+        };
+        logger.info({
+          module: 'knowledge',
+          msg: 'Injected skills into agent prompt',
+          role: role.id,
+          skillCount: this.skillsLoader.count,
         });
       }
     }
@@ -1144,7 +1167,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       const result = this.sessionKnowledgeExtractor.extractFromSession(sessionData);
       if (result.entriesStored > 0) {
         this.activityLedger.log(
-          agent.id, agent.role.id, 'knowledge_extracted',
+          agent.id, agent.role.id, 'task_completed',
           `Extracted ${result.entriesStored} knowledge entries (${result.decisions.length} decisions, ${result.patterns.length} patterns, ${result.errors.length} errors)`,
           { entriesStored: result.entriesStored }, agent.projectId,
         );
