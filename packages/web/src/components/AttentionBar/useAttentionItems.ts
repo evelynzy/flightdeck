@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
+import { useSettingsStore, STALE_THRESHOLDS } from '../../stores/settingsStore';
 import { apiFetch } from '../../hooks/useApi';
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ interface AttentionApiResponse {
 
 const POLL_INTERVAL_MS = 10_000;
 const POLL_INTERVAL_WS_MS = 30_000;  // Slower polling when WS is active
-const REFETCH_DEBOUNCE_MS = 300;     // Debounce rapid WS signals
+const REFETCH_DEBOUNCE_MS = 2_000;   // AC-17.5: ≤1 render per 2s window
 const BLOCKED_THRESHOLD_MS = 30 * 60 * 1000;
 const STALE_THRESHOLD_MS = 15 * 60 * 1000;
 
@@ -61,25 +62,31 @@ const STALE_THRESHOLD_MS = 15 * 60 * 1000;
 /**
  * Fetches attention data from the backend API with hybrid WS+polling.
  * When WebSocket is connected, listens for 'attention:changed' signals
- * and refetches immediately (debounced 300ms). Polling slows to 30s.
+ * and refetches (debounced 2s per AC-17.5). Polling slows to 30s.
  * When WS is disconnected, falls back to 10s polling.
+ * On WS reconnect (connected false→true), triggers immediate full fetch (AC-17.4).
  */
 function useAttentionApi(projectId: string | null): AttentionApiResponse | null {
   const [data, setData] = useState<AttentionApiResponse | null>(null);
   const connected = useAppStore((s) => s.connected);
+  const oversightLevel = useSettingsStore((s) => s.oversightLevel);
+  const staleThresholdMs = STALE_THRESHOLDS[oversightLevel];
 
   const fetchAttention = useCallback(async () => {
     try {
-      const query = projectId
-        ? `?scope=project&projectId=${encodeURIComponent(projectId)}`
-        : '';
-      const result = await apiFetch<AttentionApiResponse>(`/attention${query}`);
+      const params = new URLSearchParams();
+      if (projectId) {
+        params.set('scope', 'project');
+        params.set('projectId', projectId);
+      }
+      params.set('staleThresholdMs', String(staleThresholdMs));
+      const result = await apiFetch<AttentionApiResponse>(`/attention?${params}`);
       setData(result);
     } catch {
       // API unavailable — fall back to client-side derivation
       setData(null);
     }
-  }, [projectId]);
+  }, [projectId, staleThresholdMs]);
 
   useEffect(() => {
     if (!connected) return;
