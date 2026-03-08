@@ -9,7 +9,7 @@
 3. [Page Hierarchy](#page-hierarchy)
 4. [Navigation Model](#navigation-model)
 5. [Top-Level Pages](#top-level-pages)
-   - [Home](#home-dashboard)
+   - [Home Dashboard](#home-dashboard)
    - [Team](#team-management)
    - [Settings](#settings)
 6. [Project View](#project-view)
@@ -22,12 +22,17 @@
    - [Org Chart Tab](#7-org-chart)
    - [Knowledge Tab](#8-knowledge)
    - [Design Tab](#9-design)
-7. [Data Requirements](#data-requirements)
-8. [Routing Scheme](#routing-scheme)
-9. [Store Refactoring](#store-refactoring)
-10. [Relationship to Multi-Team Model](#relationship-to-multi-team-model)
-11. [Migration Plan](#migration-plan)
-12. [Open Questions](#open-questions)
+7. [Interactive Kanban Board](#interactive-kanban-board)
+   - [Per-Project Kanban](#per-project-kanban)
+   - [Accumulated Kanban](#accumulated-kanban-dashboard)
+   - [Interactions](#kanban-interactions)
+   - [Data Model](#kanban-data-model)
+8. [Data Requirements](#data-requirements)
+9. [Routing Scheme](#routing-scheme)
+10. [Store Refactoring](#store-refactoring)
+11. [Relationship to Multi-Team Model](#relationship-to-multi-team-model)
+12. [Migration Plan](#migration-plan)
+13. [Open Questions](#open-questions)
 
 ---
 
@@ -171,43 +176,123 @@ When inside a project, the main content area has a **horizontal tab bar** at the
 
 **Route:** `/`
 
-**Purpose:** Project workspace switcher and cross-project overview.
+**Purpose:** Command center — team status, running projects, and most critically: a priority queue of items needing human attention.
 
-**Layout:**
+**Layout — Four Sections:**
+
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Welcome back, Justin                                        │
-│                                                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │ 3 Projects  │  │ 7 Agents    │  │ 12 Tasks    │         │
-│  │ 2 active    │  │ 5 running   │  │ 8 complete  │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
-│                                                              │
-│  Recent Projects                            + New Project    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ 📁 acme-app          ● 3 agents    Updated 5m ago   │   │
-│  │    Frontend refactor session — 2 tasks remaining     │   │
-│  ├──────────────────────────────────────────────────────┤   │
-│  │ 📁 billing-service    ○ 0 agents    Updated 2h ago  │   │
-│  │    API redesign — completed                          │   │
-│  ├──────────────────────────────────────────────────────┤   │
-│  │ 📁 data-pipeline     ● 2 agents    Updated 12m ago  │   │
-│  │    ETL optimization — 1 task remaining               │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                              │
-│  Recent Decisions (across all projects)                      │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ ⚠️  [acme-app] Architect wants to refactor auth...   │   │
-│  │ ✅  [billing] Developer completed payment module     │   │
-│  └──────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  TEAM STATUS                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ 7 Agents │  │ 5 Active │  │ 2 Idle   │  │ Health:  │       │
+│  │ total    │  │ running  │  │ waiting  │  │ 🟢 Good  │       │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
+│                                                                  │
+│  ─────────────────────────────────────────────────────────────── │
+│                                                                  │
+│  🔴 NEEDS YOUR ATTENTION (4)                              [v All]│
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ ❓ [acme-app] dev-903d asks: "Should I use bcrypt or    │   │
+│  │    argon2 for password hashing?"                         │   │
+│  │    ┌─────────────────────────────────┐                   │   │
+│  │    │ Type your answer...      [Reply]│                   │   │
+│  │    └─────────────────────────────────┘                   │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │ ⚖️  [acme-app] Architect decision: "Refactor auth       │   │
+│  │    module to use middleware pattern"                      │   │
+│  │    [ ✅ Approve ]  [ ❌ Reject ]  [ 💬 Discuss ]        │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │ 👁️ [billing] qa-8e4a: Review request for PR #142        │   │
+│  │    "Payment validation edge cases"                       │   │
+│  │    [ Open in Project → ]                                 │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │ 🚫 [data-pipeline] Task "ETL schema migration" blocked  │   │
+│  │    Waiting on: "Confirm production DB credentials"       │   │
+│  │    [ Unblock → ]                                         │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ─────────────────────────────────────────────────────────────── │
+│                                                                  │
+│  RUNNING PROJECTS                                + New Project   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ 📁 acme-app          ● 3 agents   2/5 tasks done  5m   │   │
+│  │    ████████░░░░░░░░ 40%  Frontend refactor              │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │ 📁 data-pipeline     ● 2 agents   1/3 tasks done  12m  │   │
+│  │    █████░░░░░░░░░░░ 33%  ETL optimization               │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │ 📁 billing-service   ○ idle       4/4 tasks done  2h   │   │
+│  │    ████████████████ 100% API redesign — completed       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ─────────────────────────────────────────────────────────────── │
+│                                                                  │
+│  RECENT ACTIVITY                                                 │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ 10:42  [acme-app]  dev-1 completed "Fix login"          │   │
+│  │ 10:38  [acme-app]  architect generated auth.md           │   │
+│  │ 10:35  [billing]   qa closed PR review ✅                │   │
+│  │ 10:30  [data]      dev-2 started "ETL schema migration"  │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+#### "Needs Your Attention" Priority Queue
+
+This is THE key feature of the dashboard. When a user opens Flightdeck, they immediately see what agents need from them. Items are sorted by urgency:
+
+**Priority ordering (highest first):**
+1. **Agent questions** — agents waiting for a human answer (blocks their work)
+2. **Pending decisions** — approval/rejection needed for an agent's proposed action
+3. **Review requests** — code review or design review waiting for feedback
+4. **Blocked tasks** — DAG tasks stuck on external dependencies (credentials, access, etc.)
+5. **Stale agents** — agents idle for >10 minutes with no task (may need direction)
+
+**Item types and actions:**
+
+| Type | Icon | Inline Action | Source |
+|------|------|---------------|--------|
+| Agent question | ❓ | Inline reply text field → sends to agent | `agent:permission_request` with type=question |
+| Pending decision | ⚖️ | Approve / Reject / Discuss buttons | `appStore.pendingDecisions` |
+| Review request | 👁️ | Link to project context | Custom agent event |
+| Blocked task | 🚫 | Unblock action (navigates to task) | `dagTasks` with `dagStatus='blocked'` |
+| Stale agent | 💤 | Assign task / Terminate buttons | Agent idle timeout detection |
 
 **Data sources:**
-- `GET /api/projects` — project list with status
-- `GET /api/agents` — running agent count per project (via `appStore.agents` filtered by projectId)
-- `GET /api/dag/tasks` — task counts per project
-- WebSocket `lead:decision` events — cross-project decision feed
+- `appStore.pendingDecisions` — decisions across all projects
+- WebSocket `agent:permission_request` — agent questions
+- `GET /api/dag/tasks?status=blocked` — blocked tasks across projects
+- Agent status tracking — idle duration from `appStore.agents`
+
+**Key behavior:**
+- Items auto-remove when resolved (decision approved, question answered, task unblocked)
+- Badge count shown on Home sidebar icon
+- Sound/notification option for new attention items
+- Items are actionable inline — the user can approve a decision or answer a question without navigating away from the dashboard
+
+#### Team Status Section
+
+Shows aggregate health across all agents and projects:
+- **Agent count** — total, active (running), idle (waiting), by role distribution
+- **Health indicator** — green/amber/red from `AgentServerHealth` state machine
+- **Provider status** — which providers are connected (from `ProviderManager.getAllProviderStatuses()`)
+- **Cost summary** — total tokens/cost today (from `taskCostRecords`)
+
+#### Running Projects Section
+
+Project cards with at-a-glance progress:
+- **Progress bar** — computed from DAG task completion ratio
+- **Active agent count** with green dot
+- **Most recent activity** — what happened last, when
+- **Click** → navigates to that project's last-visited tab
+
+#### Recent Activity Section
+
+Cross-project timeline of key events:
+- Task completions, agent spawns/exits, decisions made, files generated
+- Each entry tagged with project name
+- Click any entry → navigates to that project's relevant tab
 
 **When empty (no projects):**
 ```
@@ -225,6 +310,8 @@ When inside a project, the main content area has a **horizontal tab bar** at the
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ```
+
+**When providers not configured:** `SetupWizard` (already implemented, bcf134d) shows before the dashboard.
 
 ### Team Management
 
@@ -369,32 +456,30 @@ This is the heart of the redesign. When a user clicks a project, they enter a sc
 
 ### 3. Tasks
 
-**What it shows:** Task DAG, task statuses, agent assignments.
+**What it shows:** Task DAG, task statuses, agent assignments — with a full interactive Kanban board as the primary task management interface.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Tasks                               View: [ DAG ] [ List ] │
+│  Tasks                    View: [ Kanban ] [ DAG ] [ List ]  │
+│                                                [+ Add Task]  │
+│                                                              │
+│  (Kanban view — default, see Interactive Kanban Board below) │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │                                                      │   │
-│  │  [Design Auth] ──→ [Implement Auth] ──→ [Test Auth]  │   │
-│  │      ✅ done        🔵 in progress       ⬜ waiting  │   │
-│  │      architect       dev-1                qa          │   │
-│  │                                                      │   │
-│  │  [Design API] ──→ [Implement API]                    │   │
-│  │      ✅ done        🔵 in progress                   │   │
-│  │      architect       dev-2                            │   │
-│  │                                                      │   │
+│  │ Pending │ Ready  │ In Prog │ Review │ Done           │   │
+│  │─────────┼────────┼─────────┼────────┼─────────────── │   │
+│  │         │        │ ┌─────┐ │        │ ┌─────┐        │   │
+│  │         │        │ │Auth │ │        │ │Desig│        │   │
+│  │         │        │ │dev-1│ │        │ │arch │        │   │
+│  │         │ ┌─────┐│ └─────┘ │        │ └─────┘        │   │
+│  │ ┌─────┐│ │Test ││ ┌─────┐ │        │ ┌─────┐        │   │
+│  │ │Test ││ │API  ││ │API  │ │        │ │Desig│        │   │
+│  │ │Auth ││ │ qa  ││ │dev-2│ │        │ │arch │        │   │
+│  │ └─────┘│ └─────┘│ └─────┘ │        │ └─────┘        │   │
 │  └──────────────────────────────────────────────────────┘   │
 │                                                              │
-│  Task List                                                   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ ✅ Design Auth     architect   completed 10:32       │   │
-│  │ 🔵 Implement Auth  dev-1       in progress           │   │
-│  │ 🔵 Implement API   dev-2       in progress           │   │
-│  │ ⬜ Test Auth       qa          blocked by: Impl Auth │   │
-│  │ ⬜ Test API        qa          blocked by: Impl API  │   │
-│  └──────────────────────────────────────────────────────┘   │
+│  (DAG view — same as before)                                │
+│  (List view — same as before)                               │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -402,8 +487,10 @@ This is the heart of the redesign. When a user clicks a project, they enter a sc
 - `leadStore.projects[projectId].dagStatus` — DAG state
 - `GET /api/dag/tasks?projectId=X` — full task list with dependencies
 - WebSocket `dag:updated` — real-time task state changes
+- `POST /api/dag/tasks` — create new task
+- `PATCH /api/dag/tasks/:id` — update task (status, assignment, priority)
 
-**Existing code reuse:** `TaskQueuePanel` + DAG visualization from `CanvasPage`. The Canvas view becomes the "DAG" toggle within this tab.
+**Existing code reuse:** `TaskQueuePanel` + DAG visualization from `CanvasPage`. The Canvas view becomes the "DAG" toggle within this tab. Kanban is a new component (~500 LOC, see below).
 
 ### 4. Agents
 
@@ -545,7 +632,215 @@ This is the heart of the redesign. When a user clicks a project, they enter a sc
 
 ---
 
-## Data Requirements
+## Interactive Kanban Board
+
+The Kanban board is the primary way users direct and manage work. It appears in two places: per-project (Project View → Tasks tab) and accumulated (Home Dashboard).
+
+### Per-Project Kanban
+
+Shown as the default view in the Tasks tab within any Project View.
+
+**Columns map to DAG task states:**
+
+| Column | DAG Status | Description |
+|--------|-----------|-------------|
+| **Pending** | `pending` | Task declared but dependencies not met |
+| **Ready** | `ready` | All dependencies satisfied, waiting for assignment |
+| **In Progress** | `in_progress` | Agent actively working |
+| **In Review** | `in_review` (new) | Work complete, awaiting review/approval |
+| **Done** | `done` | Task completed and verified |
+
+**Task Card Layout:**
+```
+┌─────────────────────────────────┐
+│ ≡ (drag handle)     🟡 Priority │
+│                                 │
+│ Fix authentication module       │
+│ #task-a1b2c3                    │
+│                                 │
+│ 👤 dev-903d (developer)         │
+│ ⏱️ 23m active                   │
+│                                 │
+│ Dependencies: [Design Auth ✅]  │
+│ Blocked by:   —                 │
+│                                 │
+│ 💬 2 comments   📎 1 file       │
+│                                 │
+│ [ 💬 Feedback ]                 │
+└─────────────────────────────────┘
+```
+
+**Card information:**
+- Task title and ID
+- Priority indicator (color-coded: 🔴 critical, 🟡 high, 🔵 normal, ⚪ low)
+- Assigned agent with role badge (uses `StatusBadge` component)
+- Active time (wall clock since status changed to `in_progress`)
+- Dependency links (clickable → scrolls to/highlights that card)
+- Comment count and file attachment count
+- Inline feedback button
+
+### Accumulated Kanban (Dashboard)
+
+Shown on the Home Dashboard, aggregating tasks across ALL projects:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ALL TASKS                    Group by: [ Project ▾ ] [ Flat ]  │
+│                                                                  │
+│  Pending (3)  │  Ready (2)  │  In Prog (5) │  Review (1) │ Done │
+│  ─────────────┼─────────────┼──────────────┼─────────────┼───── │
+│  ┌──────────┐ │ ┌──────────┐│ ┌──────────┐ │ ┌──────────┐│     │
+│  │📁 acme   │ │ │📁 acme   ││ │📁 acme   │ │ │📁 billing││     │
+│  │Test Auth │ │ │Test API  ││ │Impl Auth │ │ │PR #142   ││     │
+│  │qa        │ │ │qa        ││ │dev-1     │ │ │qa        ││     │
+│  └──────────┘ │ └──────────┘│ └──────────┘ │ └──────────┘│     │
+│  ┌──────────┐ │             │ ┌──────────┐ │             │     │
+│  │📁 data   │ │             │ │📁 acme   │ │             │     │
+│  │Schema mig│ │             │ │Impl API  │ │             │     │
+│  │blocked   │ │             │ │dev-2     │ │             │     │
+│  └──────────┘ │             │ └──────────┘ │             │     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Grouping modes:**
+- **By project** (default) — cards have a project tag badge, visually grouped
+- **Flat** — all tasks in a single stream, sorted by priority then time
+- **By agent** — group cards by assigned agent (useful for workload balancing)
+
+### Kanban Interactions
+
+The Kanban is fully interactive — not just a view, but the primary way users direct work:
+
+#### 1. Add Tasks
+
+Click the `[+ Add Task]` button (top-right of Kanban) to create a new task directly:
+
+```
+┌───────────────────────────────────────┐
+│  New Task                        [×]  │
+│                                       │
+│  Title: [________________________]    │
+│  Description: [__________________]    │
+│  Priority: [ Normal ▾ ]              │
+│  Assign to: [ Auto (lead decides) ▾] │
+│  Depends on: [ Select tasks... ]     │
+│                                       │
+│  [ Cancel ]  [ Create Task ]          │
+└───────────────────────────────────────┘
+```
+
+- Creates a task via `POST /api/dag/tasks` which inserts into the DAG
+- Default assignment is "Auto" — the lead agent picks the best agent
+- User can explicitly assign to a specific active agent
+- Dependencies selected from existing tasks (autocomplete dropdown)
+- New task appears in the **Pending** or **Ready** column based on dependency state
+
+#### 2. Reorder Priority
+
+- **Drag cards vertically** within a column to change priority order
+- Position within column = relative priority (top = highest)
+- Writes `priority` field to DAG task record
+- Lead agent is notified of priority changes via `lead:task_priority_changed` message
+- Visual feedback: drop shadow during drag, insertion line indicator
+
+#### 3. Send Feedback Per Task
+
+Click the `[ 💬 Feedback ]` button on any task card:
+
+```
+┌──────────────────────────────────────────┐
+│  Feedback on: Fix authentication module  │
+│  Assigned to: dev-903d                   │
+│                                          │
+│  ┌──────────────────────────────────┐    │
+│  │ Please use argon2 instead of     │    │
+│  │ bcrypt for password hashing.     │    │
+│  └──────────────────────────────────┘    │
+│                                          │
+│  Deliver to: ○ Agent  ● Lead            │
+│  [ Cancel ]  [ Send Feedback ]           │
+└──────────────────────────────────────────┘
+```
+
+- Feedback is delivered as a `user:task_feedback` message to the lead agent
+- Lead decides whether to relay to the assigned agent or act on it themselves
+- Feedback history shown in a collapsible section on the task card
+- "Deliver to: Agent" option sends directly to the assigned agent (bypasses lead)
+
+#### 4. Reassign Tasks
+
+- **Drag a card horizontally** to a different column to override status
+- **Drag to a different "agent swim-lane"** to reassign (when agent grouping is active)
+- Alternatively, click the agent badge on a card → dropdown of available agents
+- Reassignment triggers:
+  - `PATCH /api/dag/tasks/:id` with new `assignedAgent`
+  - Message to lead agent: `"User reassigned task X from agent-A to agent-B"`
+  - Message to new agent: task context + instructions
+  - Message to old agent: `"Task X has been reassigned"`
+
+#### 5. Drag-and-Drop State Override
+
+- Dragging a card from one column to another overrides the DAG status
+- **Safeguards:**
+  - Cannot drag to "Done" if task has failing checks (confirmation dialog)
+  - Dragging from "In Progress" to "Pending" shows: "This will interrupt agent work. Continue?"
+  - Dragging a task with unmet dependencies to "Ready" shows a warning but allows override
+- Status override sends `PATCH /api/dag/tasks/:id` with `dagStatus` and `overriddenBy: 'user'`
+- The lead agent is notified of all manual status overrides
+
+### Kanban Data Model
+
+**Mapping to existing `dag_tasks` table:**
+
+| Kanban Concept | Database Field | Notes |
+|---------------|---------------|-------|
+| Column | `dagStatus` | Existing field, add `in_review` value |
+| Card position | `priority` | New field: integer, lower = higher priority |
+| Assignment | `assignedAgent` | Existing field |
+| Dependencies | `dependsOn` | Existing JSON array field |
+| Feedback | — | New: delivered as messages, not stored on task |
+| Override flag | `overriddenBy` | New field: null or 'user' |
+
+**New DAG status: `in_review`**
+
+Add to existing `DagTaskStatus` enum: `'pending' | 'ready' | 'in_progress' | 'in_review' | 'done' | 'failed' | 'blocked'`
+
+Transition rules:
+- `in_progress` → `in_review`: Agent calls `COMPLETE_TASK` with `requestReview: true`
+- `in_review` → `done`: User approves OR lead agent approves
+- `in_review` → `in_progress`: Reviewer sends feedback requiring changes
+
+**New fields on `dag_tasks`:**
+
+```sql
+ALTER TABLE dag_tasks ADD COLUMN priority INTEGER DEFAULT 100;
+ALTER TABLE dag_tasks ADD COLUMN overridden_by TEXT;  -- null | 'user'
+```
+
+**API changes:**
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/api/dag/tasks` | Create task from Kanban |
+| `PATCH` | `/api/dag/tasks/:id` | Update status, priority, assignment |
+| `POST` | `/api/dag/tasks/:id/feedback` | Send feedback on task |
+| `GET` | `/api/dag/tasks?projectId=X&view=kanban` | Tasks with priority ordering |
+
+**WebSocket events:**
+
+| Event | Payload | Trigger |
+|-------|---------|---------|
+| `dag:task_moved` | `{taskId, fromStatus, toStatus, movedBy}` | Column change |
+| `dag:task_reordered` | `{taskId, newPriority, column}` | Priority reorder |
+| `dag:task_reassigned` | `{taskId, fromAgent, toAgent}` | Agent change |
+| `dag:task_feedback` | `{taskId, feedback, deliverTo}` | User feedback |
+
+**Drag-and-drop implementation:**
+- Use `@dnd-kit/core` (already a common React DnD library) or native HTML5 DnD
+- `DndContext` wraps the Kanban board
+- Each column is a `Droppable`, each card is a `Draggable`
+- `onDragEnd` handler dispatches appropriate API calls
+- Optimistic updates: card moves immediately, reverts on API error
 
 ### New API Endpoints
 
@@ -554,6 +849,11 @@ This is the heart of the redesign. When a user clicks a project, they enter a sc
 | GET | `/api/projects/:id/summary` | Stats (agent count, task count, recent activity) | Aggregate from existing tables |
 | GET | `/api/projects/:id/artifacts` | Design files generated by agents | `agentFileHistory` filtered by project + path patterns |
 | GET | `/api/projects/:id/activity` | Recent activity feed | `activityLog` filtered by projectId |
+| GET | `/api/dashboard/attention` | Priority queue of items needing user action | Aggregates decisions, agent questions, blocked tasks |
+| GET | `/api/dashboard/team-status` | Aggregate team health/counts | `agentRoster` + `AgentServerHealth` state |
+| POST | `/api/dag/tasks` | Create new task from Kanban | Insert into `dag_tasks` with DAG wiring |
+| PATCH | `/api/dag/tasks/:id` | Update task status, priority, assignment | Update `dag_tasks` row |
+| POST | `/api/dag/tasks/:id/feedback` | Send feedback to lead/agent about a task | Delivers as agent message |
 
 ### Existing Endpoints (Already Project-Scoped)
 
@@ -573,9 +873,11 @@ This is the heart of the redesign. When a user clicks a project, they enter a sc
 | `GET /api/decisions` | Add optional `?projectId=X` query param |
 | WebSocket `subscribe-project` | Already exists — sends `{ type: 'subscribe-project', projectId }` |
 
-### No New Tables
+### Schema Additions
 
-All data already exists in current schema. The project-centric UI is a **view reorganization**, not a data model change. Key tables already have `projectId`:
+The project-centric UI is primarily a **view reorganization**, not a data model change. Most data already exists.
+
+**Existing tables with `projectId`** (no changes needed):
 - `dagTasks.projectId`
 - `activityLog.projectId`
 - `fileLocks.projectId`
@@ -583,6 +885,14 @@ All data already exists in current schema. The project-centric UI is a **view re
 - `agentRoster.projectId`
 - `chatGroups.projectId` (via `leadId`)
 - `decisions.projectId`
+
+**New columns on `dag_tasks`** (for Kanban):
+```sql
+ALTER TABLE dag_tasks ADD COLUMN priority INTEGER DEFAULT 100;
+ALTER TABLE dag_tasks ADD COLUMN overridden_by TEXT;  -- null | 'user'
+```
+
+**New DAG status value**: Add `'in_review'` to `DagTaskStatus` enum.
 
 ---
 
@@ -757,10 +1067,10 @@ Settings            → global, no scoping
 
 **Goal:** Add the new route structure alongside the old one. Both work simultaneously.
 
-1. Create `ProjectView` layout component with tab bar
+1. Create `ProjectView` layout component with tab bar (uses unified `Tabs` component)
 2. Create wrapper components for each tab that delegate to existing pages:
    - `ProjectSession` → renders `LeadDashboard` center panel
-   - `ProjectTasks` → renders `TaskQueuePanel`
+   - `ProjectTasks` → renders Kanban (default) + DAG + List toggles
    - `ProjectAgents` → renders `FleetOverview` filtered by projectId
    - `ProjectGroups` → renders `GroupChat`
    - `ProjectAnalytics` → renders `AnalyticsPage` with projectId
@@ -768,8 +1078,20 @@ Settings            → global, no scoping
    - `ProjectKnowledge` → renders `KnowledgePanel`
 3. Create `ProjectOverview` as a new composition of existing widgets
 4. Create `ProjectDesign` as new (artifact browser)
-5. Add `/projects/:id/*` routes — old routes still work
-6. Create `navigationStore`
+5. Create `KanbanBoard` component (~500 LOC):
+   - Drag-and-drop columns (Pending/Ready/In Progress/In Review/Done)
+   - Task card component with agent badge, priority, feedback button
+   - Add task modal
+   - Install `@dnd-kit/core` + `@dnd-kit/sortable`
+6. Create `HomeDashboard` component (~400 LOC):
+   - Team Status section (agent counts, health indicator)
+   - "Needs Your Attention" priority queue with inline actions
+   - Running Projects cards with progress bars
+   - Recent Activity timeline
+7. Add `/projects/:id/*` routes — old routes still work
+8. Create `navigationStore`
+9. Run migration: add `priority` and `overridden_by` columns to `dag_tasks`
+10. Add `in_review` to `DagTaskStatus` enum
 
 **Existing pages continue to work at their old URLs.** Zero user disruption.
 
@@ -821,7 +1143,7 @@ Settings            → global, no scoping
 | OverviewPage | 1,683 | **Merge** into ProjectOverview |
 | MissionControlPage | ~800 | **Merge** into ProjectOverview |
 | FleetOverview | 1,284 | **Merge** into ProjectAgents |
-| TaskQueuePanel | ~600 | **Wrap** in ProjectTasks |
+| TaskQueuePanel | ~600 | **Wrap** in ProjectTasks (list view toggle) |
 | GroupChat | ~500 | **Wrap** in ProjectGroups |
 | CanvasPage | ~400 | **Merge** into ProjectTasks (DAG view toggle) |
 | OrgChart | ~400 | **Wrap** in ProjectOrgChart |
@@ -831,14 +1153,17 @@ Settings            → global, no scoping
 | **NEW: ProjectView** | ~150 | Layout + tab bar |
 | **NEW: ProjectOverview** | ~400 | Composition of existing widgets |
 | **NEW: ProjectDesign** | ~300 | File browser + markdown preview |
-| **NEW: Home** | ~400 | Project grid + stats + first-run |
-| **NEW: navigationStore** | ~60 | Project navigation state |
+| **NEW: HomeDashboard** | ~600 | Team status + attention queue + project cards + activity |
+| **NEW: KanbanBoard** | ~500 | Drag-and-drop columns, task cards, interactions |
+| **NEW: TaskCard** | ~150 | Card component with priority, agent badge, feedback |
+| **NEW: AttentionQueue** | ~300 | Priority queue with inline actions |
+| **NEW: navigationStore** | ~80 | Project navigation state + attention badge count |
 
 ---
 
 ## Open Questions
 
-1. **Canvas as a tab or integrated into Tasks?** Canvas currently shows the DAG visually. It could be a toggle within the Tasks tab ("List view" vs "DAG view") rather than a separate tab. This would reduce the tab count from 9 to 8.
+1. **Canvas as a tab or integrated into Tasks?** Canvas currently shows the DAG visually. It could be a toggle within the Tasks tab ("List view" vs "DAG view" vs "Kanban view") rather than a separate tab. With Kanban as default, DAG becomes a secondary toggle. Recommend: 3-way toggle in Tasks tab, drop Canvas as separate page.
 
 2. **Timeline treatment?** The Timeline page shows a chronological agent activity view. It could be: (a) a view mode within the Overview tab, (b) part of the Session tab, or (c) dropped in favor of the activity feed in Overview. Leaning toward (a).
 
@@ -847,3 +1172,11 @@ Settings            → global, no scoping
 4. **Redirect strategy for old bookmarks?** When a user visits `/agents`, should we: (a) redirect to their last active project's agents tab, (b) redirect to Home with a toast "Navigation has moved", or (c) show a "moved" interstitial? Recommend (a) for URLs with project context, (b) for global URLs.
 
 5. **Deep linking into project tabs?** The URL scheme `/projects/:id/tasks` is already deep-linkable. Should we also support query params for specific items? e.g., `/projects/:id/tasks?task=task-123` to open a specific task. Recommend yes — free with React Router's useSearchParams.
+
+6. **Kanban DnD library?** Options: `@dnd-kit/core` (modern, accessible, tree-shakeable), `react-beautiful-dnd` (mature but archived), or native HTML5 DnD (no dependency but less polished). Recommend `@dnd-kit/core` — smaller bundle, better accessibility, active maintenance.
+
+7. **Kanban: swim-lanes by agent?** Should the Kanban support an alternative layout where rows are agents and columns are states? This gives a workload heatmap view. Recommend: optional toggle, not default.
+
+8. **Dashboard polling vs WebSocket?** The "Needs Your Attention" queue needs near-real-time updates. Options: (a) WebSocket push for all attention items (adds new event types), (b) 5s polling of `/api/dashboard/attention`, (c) hybrid — WebSocket for new items, REST for initial load. Recommend (c) — matches existing pattern where WebSocket pushes events and REST provides initial state.
+
+9. **Attention item persistence?** Should dismissed attention items be persisted server-side (prevents re-showing after refresh) or client-side (localStorage)? Recommend: server-side for resolved items (they're naturally removed), client-side for user-dismissed items that aren't truly resolved.
