@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
 import { apiFetch } from '../../hooks/useApi';
-import { LayoutList, Network, Users, CheckCircle2, XCircle, Loader2, Play, Archive, Clock, BarChart2, Columns3 } from 'lucide-react';
+import { LayoutList, Network, Users, CheckCircle2, XCircle, Loader2, Play, Archive, Clock, BarChart2, Columns3, Globe } from 'lucide-react';
 import { EmptyState } from '../Shared';
 import { TaskDagPanelContent } from '../LeadDashboard/TaskDagPanel';
 import { DagGraph } from './DagGraph';
@@ -131,8 +131,55 @@ function DagPanel({
   projectId?: string;
   onTaskUpdated?: () => void;
 }) {
+  const [kanbanScope, setKanbanScope] = useState<'project' | 'global'>('project');
+  const [globalDagStatus, setGlobalDagStatus] = useState<DagStatus | null>(null);
+  const [projectNameMap, setProjectNameMap] = useState<Map<string, string>>(new Map());
   const hasDeps = dagStatus?.tasks.some((t) => t.dependsOn.length > 0) ?? false;
   const effectiveView = dagView ?? (hasDeps ? 'graph' : 'list');
+
+  // Fetch global tasks when scope=global and view=kanban
+  useEffect(() => {
+    if (kanbanScope !== 'global' || effectiveView !== 'kanban') return;
+    let cancelled = false;
+    const fetchGlobal = async () => {
+      try {
+        const data = await apiFetch<{ tasks: any[]; total: number }>('/tasks?scope=global');
+        if (!cancelled && data) {
+          setGlobalDagStatus({
+            tasks: data.tasks,
+            fileLockMap: {},
+            summary: {
+              pending: data.tasks.filter((t: any) => t.dagStatus === 'pending').length,
+              ready: data.tasks.filter((t: any) => t.dagStatus === 'ready').length,
+              running: data.tasks.filter((t: any) => t.dagStatus === 'running').length,
+              blocked: data.tasks.filter((t: any) => t.dagStatus === 'blocked').length,
+              done: data.tasks.filter((t: any) => t.dagStatus === 'done').length,
+              failed: data.tasks.filter((t: any) => t.dagStatus === 'failed').length,
+              paused: data.tasks.filter((t: any) => t.dagStatus === 'paused').length,
+              skipped: data.tasks.filter((t: any) => t.dagStatus === 'skipped').length,
+            },
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to fetch global tasks', err);
+      }
+    };
+    fetchGlobal();
+    const interval = setInterval(fetchGlobal, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [kanbanScope, effectiveView]);
+
+  // Fetch project names for global view
+  useEffect(() => {
+    if (kanbanScope !== 'global') return;
+    apiFetch<Project[]>('/projects')
+      .then(projects => {
+        const map = new Map<string, string>();
+        for (const p of projects) map.set(p.id, p.name);
+        setProjectNameMap(map);
+      })
+      .catch(() => {});
+  }, [kanbanScope]);
 
   const ganttTasks: GanttTask[] = (dagStatus?.tasks ?? []).map((t) => ({
     id:          t.id,
@@ -165,7 +212,20 @@ function DagPanel({
             <span className="text-xs text-th-text-muted font-normal">{dagStatus.tasks.length} total</span>
           )}
         </h3>
-        <div className="flex bg-th-bg rounded p-0.5 border border-th-border">
+        <div className="flex items-center gap-2">
+          {/* Scope switcher (only shown in Kanban view) */}
+          {effectiveView === 'kanban' && (
+            <select
+              value={kanbanScope}
+              onChange={(e) => setKanbanScope(e.target.value as 'project' | 'global')}
+              className="text-[11px] bg-th-bg border border-th-border rounded px-2 py-1 text-th-text cursor-pointer"
+              data-testid="scope-switcher"
+            >
+              <option value="project">📁 This Project</option>
+              <option value="global">🌐 All Projects</option>
+            </select>
+          )}
+          <div className="flex bg-th-bg rounded p-0.5 border border-th-border">
           <button
             onClick={() => setDagView('list')}
             className={`p-1 rounded transition-colors ${
@@ -212,10 +272,17 @@ function DagPanel({
             <Users size={13} />
           </button>
         </div>
+        </div>
       </div>
       {effectiveView === 'kanban' ? (
         <div style={{ minHeight: 400 }}>
-          <KanbanBoard dagStatus={dagStatus} projectId={projectId} onTaskUpdated={onTaskUpdated} />
+          <KanbanBoard
+            dagStatus={kanbanScope === 'global' ? globalDagStatus : dagStatus}
+            projectId={kanbanScope === 'global' ? undefined : projectId}
+            onTaskUpdated={kanbanScope === 'global' ? undefined : onTaskUpdated}
+            scope={kanbanScope}
+            projectNameMap={projectNameMap}
+          />
         </div>
       ) : effectiveView === 'graph' ? (
         <div className="flex-1" style={{ minHeight: 400 }}>
