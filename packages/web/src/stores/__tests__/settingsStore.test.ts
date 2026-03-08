@@ -1,7 +1,7 @@
 // packages/web/src/stores/__tests__/settingsStore.test.ts
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useSettingsStore, STALE_THRESHOLDS, ESCALATION_RULES } from '../settingsStore';
+import { useSettingsStore, STALE_THRESHOLDS, ESCALATION_RULES, shouldNotify } from '../settingsStore';
 import type { OversightLevel } from '../settingsStore';
 
 describe('settingsStore — Trust Dial', () => {
@@ -91,5 +91,34 @@ describe('settingsStore — Trust Dial', () => {
     expect(STALE_THRESHOLDS.detailed).toBe(10 * 60 * 1000);
     expect(STALE_THRESHOLDS.standard).toBe(15 * 60 * 1000);
     expect(STALE_THRESHOLDS.minimal).toBe(30 * 60 * 1000);
+  });
+
+  // ── AC-16.5: Notification gating by oversight level ────────
+
+  it('shouldNotify: critical always notifies regardless of level', () => {
+    expect(shouldNotify('critical', 'detailed')).toBe(true);
+    expect(shouldNotify('critical', 'standard')).toBe(true);
+    expect(shouldNotify('critical', 'minimal')).toBe(true);
+  });
+
+  it('shouldNotify: exception notifies at detailed and standard, not minimal', () => {
+    expect(shouldNotify('exception', 'detailed')).toBe(true);
+    expect(shouldNotify('exception', 'standard')).toBe(true);
+    expect(shouldNotify('exception', 'minimal')).toBe(false);
+  });
+
+  it('shouldNotify: info only notifies at detailed', () => {
+    expect(shouldNotify('info', 'detailed')).toBe(true);
+    expect(shouldNotify('info', 'standard')).toBe(false);
+    expect(shouldNotify('info', 'minimal')).toBe(false);
+  });
+
+  it('shouldNotify reads store level when no explicit level given', () => {
+    useSettingsStore.getState().setOversightLevel('minimal');
+    expect(shouldNotify('info')).toBe(false);
+    expect(shouldNotify('critical')).toBe(true);
+
+    useSettingsStore.getState().setOversightLevel('detailed');
+    expect(shouldNotify('info')).toBe(true);
   });
 });

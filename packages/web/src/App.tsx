@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useApi } from './hooks/useApi';
 import { useAppStore } from './stores/appStore';
-import { useSettingsStore } from './stores/settingsStore';
+import { useSettingsStore, shouldNotify } from './stores/settingsStore';
 import { useCommandPalette } from './hooks/useCommandPalette';
 import { CommandPalette } from './components/CommandPalette/CommandPalette';
 import { ContextualCoach } from './components/Onboarding';
@@ -159,30 +159,41 @@ export function App() {
   }, []);
 
   // Show notifications for agent lifecycle events, sound notifications, and context compaction
+  // Gated by Trust Dial oversight level (AC-16.5): detailed=all, standard=exceptions, minimal=critical only
   useEffect(() => {
     const handler = (event: Event) => {
       const msg = JSON.parse((event as MessageEvent).data);
       if (msg.type === 'agent:spawned') {
-        addToast('info', `${msg.agent.role.icon} ${msg.agent.role.name} agent spawned`);
+        if (shouldNotify('info')) addToast('info', `${msg.agent.role.icon} ${msg.agent.role.name} agent spawned`);
       } else if (msg.type === 'agent:exit') {
-        addToast(msg.code === 0 ? 'success' : 'error', `Agent ${msg.agentId.slice(0, 8)} ${msg.code === 0 ? 'completed' : 'failed'}`);
+        const failed = msg.code !== 0;
+        // Failures are critical — ALWAYS toast regardless of level
+        if (failed) {
+          addToast('error', `Agent ${msg.agentId.slice(0, 8)} failed`);
+        } else if (shouldNotify('info')) {
+          addToast('success', `Agent ${msg.agentId.slice(0, 8)} completed`);
+        }
       } else if (msg.type === 'agent:sub_spawned') {
-        addToast('info', `${msg.child.role.icon} Sub-agent spawned by ${msg.parentId.slice(0, 8)}`);
+        if (shouldNotify('info')) addToast('info', `${msg.child.role.icon} Sub-agent spawned by ${msg.parentId.slice(0, 8)}`);
       } else if (msg.type === 'agent:permission_request' && soundEnabled) {
         playAttentionSound();
       } else if (msg.type === 'agent:context_compacted') {
-        const pct = msg.percentDrop ? ` (${msg.percentDrop}% reduction)` : '';
-        addToast('info', `🔄 Context compacted for agent ${msg.agentId.slice(0, 8)}${pct}`);
+        if (shouldNotify('info')) {
+          const pct = msg.percentDrop ? ` (${msg.percentDrop}% reduction)` : '';
+          addToast('info', `🔄 Context compacted for agent ${msg.agentId.slice(0, 8)}${pct}`);
+        }
       } else if (msg.type === 'activity') {
         const e = msg.entry;
         if (e?.action === 'heartbeat_halted') {
-          addToast('info', `⏸️ Heartbeat halted by ${e.agentId?.slice(0, 8) ?? 'agent'}`);
+          if (shouldNotify('exception')) addToast('info', `⏸️ Heartbeat halted by ${e.agentId?.slice(0, 8) ?? 'agent'}`);
         } else if (e?.action === 'limit_change_requested') {
-          addToast('info', `⚙️ Agent limit change requested: ${e.details ?? ''}`);
+          if (shouldNotify('info')) addToast('info', `⚙️ Agent limit change requested: ${e.details ?? ''}`);
         }
       } else if (msg.type === 'intent:alert') {
-        const label = msg.rule?.label || msg.decision?.title || 'Intent alert triggered';
-        addToast('info', `⚠️ Alert: ${label}`);
+        if (shouldNotify('exception')) {
+          const label = msg.rule?.label || msg.decision?.title || 'Intent alert triggered';
+          addToast('info', `⚠️ Alert: ${label}`);
+        }
       }
     };
     window.addEventListener('ws-message', handler);

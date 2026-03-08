@@ -163,6 +163,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 }));
 
+// ── Trust Dial notification gating (AC-16.5) ────────────────────────
+
+/**
+ * Notification severity used by the toast system.
+ * - critical: failures, crashes → ALWAYS shown regardless of oversight level
+ * - exception: permission requests, heartbeat halted, alerts → standard + detailed
+ * - info: spawned, completed, sub-spawned, context compacted → detailed only
+ */
+export type NotificationSeverity = 'critical' | 'exception' | 'info';
+
+/**
+ * Returns true if a notification of the given severity should be shown
+ * at the current oversight level. Failures (critical) ALWAYS notify.
+ */
+export function shouldNotify(severity: NotificationSeverity, level?: OversightLevel): boolean {
+  const effective = level ?? useSettingsStore.getState().oversightLevel;
+  if (severity === 'critical') return true;
+  if (severity === 'exception') return effective !== 'minimal';
+  // severity === 'info'
+  return effective === 'detailed';
+}
+
 // ── Trust Dial threshold mappings (AC-16.2, AC-16.3) ────────────────
 
 export const STALE_THRESHOLDS: Record<OversightLevel, number> = {
