@@ -102,8 +102,13 @@ export function ContextualCoach({ onNavigate }: Props) {
     handleDismiss();
     if (activeTip.cta.action.startsWith('/') && onNavigate) {
       onNavigate(activeTip.cta.action);
+    } else if (activeTip.cta.action === 'compact') {
+      // Navigate to the agent chat where the user can trigger compaction
+      const pressured = agents.find(a => a.contextWindowSize && a.contextWindowUsed && (a.contextWindowUsed / a.contextWindowSize) > 0.8);
+      if (pressured && onNavigate) {
+        onNavigate(`/projects/${pressured.projectId}/session?agent=${pressured.id}`);
+      }
     }
-    // Special actions like 'compact' can be handled by the parent
   };
 
   if (!activeTip || dismissed) return null;

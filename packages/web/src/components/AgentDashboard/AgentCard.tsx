@@ -196,9 +196,12 @@ export function AgentCard({ agent, api }: Props) {
       })()}
 
       {agent.outputPreview && (
-        <pre className="text-xs text-th-text-muted mt-2 overflow-hidden h-12 font-mono bg-surface/50 rounded p-1">
-          {agent.outputPreview.slice(-200)}
-        </pre>
+        <div className="relative mt-2">
+          <pre className="text-xs text-th-text-muted overflow-hidden h-12 font-mono bg-surface/50 rounded p-1">
+            {agent.outputPreview.slice(-200)}
+          </pre>
+          <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-surface/50 to-transparent rounded-b pointer-events-none" />
+        </div>
       )}
 
       <div className="flex items-center justify-between mt-2">

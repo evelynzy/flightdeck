@@ -66,7 +66,7 @@ export function KanbanColumn({ column, tasks, allTasks, collapsed, onToggleColla
       {/* Task cards */}
       {!collapsed && (
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          <div className="p-2 space-y-2 overflow-y-auto flex-1 max-h-[calc(100vh-220px)]">
+          <div className="p-2 space-y-2 overflow-y-auto flex-1 min-h-0">
             {tasks.length === 0 ? (
               <div className="text-[10px] text-th-text-muted text-center py-4 italic">
                 No tasks

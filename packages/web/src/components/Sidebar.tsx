@@ -73,7 +73,7 @@ export function Sidebar() {
           data-testid="sidebar-project-indicator"
         >
           <FolderOpen size={18} />
-          <span className="text-[10px] leading-tight font-semibold truncate w-full text-center">
+          <span className="text-[10px] leading-tight font-semibold truncate w-full text-center" aria-label={projectName}>
             {projectName}
           </span>
         </NavLink>
@@ -81,8 +81,8 @@ export function Sidebar() {
         <NavItem to="/projects" icon={FolderOpen} label="Projects" />
       )}
 
-      {/* 3. Teams — cross-project team management */}
-      <NavItem to="/team" icon={Users} label="Teams" />
+      {/* 3. Agents — project agent roster */}
+      <NavItem to="/team" icon={Users} label="Agents" />
 
       {/* Spacer */}
       <div className="flex-1" />

@@ -32,8 +32,7 @@ export function PlaybookLibrary() {
   }, [fetchUserPlaybooks]);
 
   const handleApply = useCallback((pb: Playbook) => {
-    add('info', `Applying playbook "${pb.name}"...`);
-    // TODO: Wire to project creation API
+    add('info', `Playbook "${pb.name}" — project creation from playbooks coming soon.`);
   }, [add]);
 
   const handleDuplicate = useCallback(async (pb: Playbook) => {
