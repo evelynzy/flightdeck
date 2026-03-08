@@ -171,7 +171,7 @@ describe('Notification Channels', () => {
     it('CHANNEL_DISPLAY covers all types', () => {
       expect(CHANNEL_DISPLAY.desktop.label).toBe('Desktop Notifications');
       expect(CHANNEL_DISPLAY.slack.label).toBe('Slack');
-      expect(CHANNEL_DISPLAY.webhook.label).toBe('Webhook');
+      expect(CHANNEL_DISPLAY.telegram.label).toBe('Telegram');
     });
 
     it('EVENT_LABELS covers all events', () => {
@@ -182,7 +182,7 @@ describe('Notification Channels', () => {
     it('PRESET_DEFAULTS has correct structure', () => {
       expect(Object.keys(PRESET_DEFAULTS)).toEqual(['conservative', 'moderate', 'everything']);
       expect(PRESET_DEFAULTS.conservative.decision_pending).toEqual(['desktop']);
-      expect(PRESET_DEFAULTS.everything.decision_pending).toContain('webhook');
+      expect(PRESET_DEFAULTS.everything.decision_pending).toContain('telegram');
     });
   });
 });
