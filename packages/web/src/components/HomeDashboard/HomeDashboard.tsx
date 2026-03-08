@@ -18,6 +18,7 @@ import {
   Users,
   AlertCircle,
   AlertTriangle,
+  RefreshCw,
   Play,
   Clock,
   Activity,
@@ -298,11 +299,13 @@ export function HomeDashboard() {
   const [allDecisions, setAllDecisions] = useState<Decision[]>([]);
   const [progressByProject, setProgressByProject] = useState<ProjectProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Fetch projects + decisions + progress
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      setFetchError(null);
       const [projectsData, decisionsData] = await Promise.all([
         apiFetch<EnrichedProject[]>('/projects').catch(() => []),
         apiFetch<Decision[]>('/decisions').catch(() => []),
@@ -333,8 +336,8 @@ export function HomeDashboard() {
         (r): r is ProjectProgress => r !== null,
       );
       setProgressByProject(progressResults);
-    } catch {
-      // Silently fail — empty state shown
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to load projects');
     } finally {
       setLoading(false);
     }
@@ -457,6 +460,26 @@ export function HomeDashboard() {
   }
 
   // ── Empty state ──────────────────────────────────────────────
+  if (!loading && fetchError) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6" data-testid="home-error">
+        <div className="text-center max-w-sm">
+          <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+          <h3 className="text-sm font-semibold text-th-text mb-1">Failed to load projects</h3>
+          <p className="text-xs text-th-text-muted mb-4">{fetchError}</p>
+          <button
+            type="button"
+            onClick={fetchData}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-white hover:bg-accent/80 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!loading && projects.length === 0) {
     return (
       <div className="flex-1 overflow-auto p-6 focus:outline-none" tabIndex={0} data-testid="home-empty">
@@ -679,7 +702,7 @@ export function HomeDashboard() {
       <div className="mt-6 flex items-center justify-center gap-4">
         <button
           type="button"
-          onClick={handleNavigateToProjects}
+          onClick={() => navigate('/projects?action=new')}
           className="flex items-center gap-1.5 px-4 py-2 text-xs text-th-text-muted hover:text-th-text rounded-lg hover:bg-th-bg-muted transition-colors"
         >
           <Play className="w-3.5 h-3.5" />

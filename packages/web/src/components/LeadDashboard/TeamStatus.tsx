@@ -35,7 +35,7 @@ export function TeamStatus({ agents, delegations }: Props) {
         <span className="text-sm font-semibold">Team</span>
         <span className="text-xs text-th-text-muted ml-auto">{agents.length}</span>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
         {agents.length === 0 ? (
           <p className="text-xs text-th-text-muted text-center py-4 font-mono">
             No team members yet

@@ -2,16 +2,12 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
 import { RESOLUTION_DISPLAY, type Debate, type DebateMessage as DebateMsg } from './types';
+import { getRoleIcon } from '../../utils/getRoleIcon';
 
 interface DebateThreadViewerProps {
   debate: Debate;
   onClose: () => void;
 }
-
-const ROLE_ICONS: Record<string, string> = {
-  lead: '👑', architect: '🏗', developer: '👨‍💻', 'code-reviewer': '🔍',
-  'qa-tester': '🧪', designer: '🎨', 'tech-writer': '📝', 'product-manager': '📋',
-};
 
 const DISAGREEMENT_KEYWORDS = /disagree|push back|instead|alternative|concern|however|but I|my recommendation differs/i;
 
@@ -39,7 +35,7 @@ export function DebateThreadViewer({ debate, onClose }: DebateThreadViewerProps)
 
   return (
     <div
-      className="fixed inset-y-0 right-0 w-[480px] bg-th-bg border-l border-th-border shadow-xl z-40 flex flex-col animate-slide-in-right"
+      className="fixed inset-y-0 right-0 w-full max-w-[480px] bg-th-bg border-l border-th-border shadow-xl z-40 flex flex-col animate-slide-in-right"
       data-testid="debate-thread-viewer"
     >
       {/* Header */}
@@ -109,7 +105,7 @@ export function DebateThreadViewer({ debate, onClose }: DebateThreadViewerProps)
 function MessageBubble({ role, content, timestamp, isDisagreement }: {
   role: string; content: string; timestamp: string; isDisagreement: boolean;
 }) {
-  const icon = ROLE_ICONS[role] ?? '🤖';
+  const icon = getRoleIcon(role);
   const time = new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
   return (

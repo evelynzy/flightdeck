@@ -375,7 +375,7 @@ export function App() {
         </div>
 
         {selectedAgentId && (
-          <div className="w-[500px] border-l border-th-border flex flex-col">
+          <div className="w-full max-w-[500px] border-l border-th-border flex flex-col">
             <ChatPanel agentId={selectedAgentId} ws={ws} />
           </div>
         )}
