@@ -95,7 +95,7 @@ describe('GET /tasks — global task query', () => {
   beforeAll(async () => {
     const srv = createTestServer({
       agentManager: mockAgentManager,
-      decisionLog: mockDecisionLog,
+      decisionLog: mockDecisionLog as any,
     });
     baseUrl = await srv.start();
     stop = srv.stop;
@@ -244,7 +244,7 @@ describe('GET /attention — attention items', () => {
   beforeAll(async () => {
     const srv = createTestServer({
       agentManager: mockAgentManager,
-      decisionLog: mockDecisionLog,
+      decisionLog: mockDecisionLog as any,
     });
     baseUrl = await srv.start();
     stop = srv.stop;

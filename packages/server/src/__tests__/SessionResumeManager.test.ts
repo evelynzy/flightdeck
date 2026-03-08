@@ -523,7 +523,7 @@ describe('SessionResumeManager', () => {
       const originalSpawn = slowManager.spawn.bind(slowManager);
       slowManager.spawn = ((...args: any[]) => {
         spawnOrder.push(args[7] ?? 'unknown'); // id param
-        const result = originalSpawn(...args);
+        const result = originalSpawn.apply(slowManager, args as any);
         return result;
       }) as any;
 

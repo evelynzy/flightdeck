@@ -24,7 +24,7 @@ describe('ProviderManager', () => {
   });
 
   function createManager() {
-    return new ProviderManager({ db, execCommand: exec });
+    return new ProviderManager({ db, execCommand: exec as any });
   }
 
   // ── detectInstalled ──────────────────────────────────────
@@ -150,7 +150,7 @@ describe('ProviderManager', () => {
     });
 
     it('works without db (always enabled)', () => {
-      const mgr = new ProviderManager({ execCommand: exec });
+      const mgr = new ProviderManager({ execCommand: exec as any });
       expect(mgr.isProviderEnabled('claude')).toBe(true);
     });
   });
@@ -183,7 +183,7 @@ describe('ProviderManager', () => {
     });
 
     it('works without db (empty prefs)', () => {
-      const mgr = new ProviderManager({ execCommand: exec });
+      const mgr = new ProviderManager({ execCommand: exec as any });
       expect(mgr.getModelPreferences('claude')).toEqual({});
     });
   });

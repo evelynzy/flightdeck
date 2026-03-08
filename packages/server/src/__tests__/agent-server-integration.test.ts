@@ -47,10 +47,11 @@ function createMockConnection(): TransportConnection & {
   simulateMessage: (msg: OrchestratorMessage) => void;
 } {
   const handlers: Array<(msg: OrchestratorMessage) => void> = [];
-  const disconnectHandlers: Array<() => void> = [];
+  const disconnectHandlers: Array<(reason: string) => void> = [];
   const sent: AgentServerMessage[] = [];
 
   return {
+    id: `mock-${Math.random().toString(36).slice(2, 8)}`,
     get isConnected() { return true; },
     _sentMessages: sent,
     send(msg: AgentServerMessage) { sent.push(msg); },
@@ -58,7 +59,7 @@ function createMockConnection(): TransportConnection & {
       handlers.push(handler);
       return () => { handlers.splice(handlers.indexOf(handler), 1); };
     },
-    onDisconnect(handler: () => void) {
+    onDisconnect(handler: (reason: string) => void) {
       disconnectHandlers.push(handler);
       return () => { disconnectHandlers.splice(disconnectHandlers.indexOf(handler), 1); };
     },

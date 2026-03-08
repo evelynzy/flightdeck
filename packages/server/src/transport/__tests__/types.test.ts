@@ -245,7 +245,7 @@ describe('type completeness', () => {
         case 'ping': return 'ping';
         case 'authenticate': return 'auth';
       }
-      // TypeScript ensures this is unreachable if all cases handled
+      return 'unknown'; // unreachable if switch is exhaustive
     }
 
     function handleServer(msg: AgentServerMessage): string {

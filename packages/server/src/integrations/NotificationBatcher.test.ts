@@ -403,14 +403,14 @@ describe('NotificationBatcher', () => {
 
     // 5 events should be wired
     expect(manager.on).toHaveBeenCalledTimes(5);
-    const totalBefore = Array.from(manager._handlers.values()).reduce((sum, h) => sum + h.length, 0);
+    const totalBefore = (Array.from(manager._handlers.values()) as any[][]).reduce((sum, h) => sum + h.length, 0);
     expect(totalBefore).toBe(5);
 
     bridge.stop();
 
     // All listeners should be removed
     expect(manager.off).toHaveBeenCalledTimes(5);
-    const totalAfter = Array.from(manager._handlers.values()).reduce((sum, h) => sum + h.length, 0);
+    const totalAfter = (Array.from(manager._handlers.values()) as any[][]).reduce((sum, h) => sum + h.length, 0);
     expect(totalAfter).toBe(0);
   });
 
@@ -421,7 +421,7 @@ describe('NotificationBatcher', () => {
     bridge.wire(manager);
 
     // Should have exactly 5 listeners (not 10)
-    const total = Array.from(manager._handlers.values()).reduce((sum, h) => sum + h.length, 0);
+    const total = (Array.from(manager._handlers.values()) as any[][]).reduce((sum, h) => sum + h.length, 0);
     expect(total).toBe(5);
   });
 });

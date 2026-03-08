@@ -38,6 +38,7 @@ function createIpcChannel() {
 function wrapAsConnection(side: EventEmitter & { send: (msg: any) => void }): TransportConnection {
   const handlers: Array<(msg: any) => void> = [];
   const conn: TransportConnection = {
+    id: `mock-${Math.random().toString(36).slice(2, 8)}`,
     get isConnected() { return true; },
     send(msg: AgentServerMessage | OrchestratorMessage) {
       side.send(msg);
@@ -51,7 +52,7 @@ function wrapAsConnection(side: EventEmitter & { send: (msg: any) => void }): Tr
         if (idx >= 0) handlers.splice(idx, 1);
       };
     },
-    onDisconnect(_handler: () => void) {
+    onDisconnect(_handler: (reason: string) => void) {
       return () => {};
     },
     close() {
@@ -88,7 +89,7 @@ describe('Transport Integration — IPC channel', () => {
       type: 'ping',
       requestId: 'req-1',
     };
-    orchestratorConn.send(pingMsg);
+    orchestratorConn.send(pingMsg as any);
 
     expect(received).toHaveLength(1);
     expect(received[0].type).toBe('ping');
@@ -125,7 +126,7 @@ describe('Transport Integration — IPC channel', () => {
       role: 'developer',
       model: 'gpt-4',
       task: 'implement feature',
-    } as OrchestratorMessage);
+    } as any);
 
     expect(serverReceived).toHaveLength(1);
     expect(serverReceived[0].type).toBe('spawn_agent');
@@ -153,8 +154,8 @@ describe('Transport Integration — IPC channel', () => {
     orchestratorConn.onMessage((msg) => orchestratorReceived.push(msg));
 
     // Send multiple messages both ways
-    orchestratorConn.send({ type: 'ping', requestId: 'p1' } as OrchestratorMessage);
-    orchestratorConn.send({ type: 'ping', requestId: 'p2' } as OrchestratorMessage);
+    orchestratorConn.send({ type: 'ping', requestId: 'p1' } as any);
+    orchestratorConn.send({ type: 'ping', requestId: 'p2' } as any);
     serverConn.send({ type: 'pong', requestId: 'p1', timestamp: 1 } as AgentServerMessage);
     serverConn.send({ type: 'pong', requestId: 'p2', timestamp: 2 } as AgentServerMessage);
 
@@ -183,11 +184,11 @@ describe('Transport Integration — IPC channel', () => {
     const received: any[] = [];
     const unsub = serverConn.onMessage((msg) => received.push(msg));
 
-    orchestratorConn.send({ type: 'ping', requestId: '1' } as OrchestratorMessage);
+    orchestratorConn.send({ type: 'ping', requestId: '1' } as any);
     expect(received).toHaveLength(1);
 
     unsub();
-    orchestratorConn.send({ type: 'ping', requestId: '2' } as OrchestratorMessage);
+    orchestratorConn.send({ type: 'ping', requestId: '2' } as any);
     expect(received).toHaveLength(1); // No new messages after unsub
   });
 
@@ -196,11 +197,11 @@ describe('Transport Integration — IPC channel', () => {
     serverConn.onMessage((msg) => received.push(msg));
     serverConn.onMessage((msg) => received.push(msg)); // Two handlers
 
-    orchestratorConn.send({ type: 'ping', requestId: '1' } as OrchestratorMessage);
+    orchestratorConn.send({ type: 'ping', requestId: '1' } as any);
     expect(received).toHaveLength(2); // Both handlers fire
 
     serverConn.close();
-    orchestratorConn.send({ type: 'ping', requestId: '2' } as OrchestratorMessage);
+    orchestratorConn.send({ type: 'ping', requestId: '2' } as any);
     expect(received).toHaveLength(2); // No new messages
   });
 
@@ -215,7 +216,7 @@ describe('Transport Integration — IPC channel', () => {
       eventType: 'exit',
       eventId: 'evt-exit',
       data: { exitCode: 0, reason: 'completed' },
-    } as AgentServerMessage);
+    } as unknown as AgentServerMessage);
 
     expect(orchestratorReceived).toHaveLength(1);
     expect(orchestratorReceived[0].eventType).toBe('exit');

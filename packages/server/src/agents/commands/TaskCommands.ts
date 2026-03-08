@@ -131,7 +131,7 @@ function handleTaskStatus(ctx: CommandHandlerContext, agent: Agent, _data: strin
   if (summary.skipped > 0) msg += `, ${summary.skipped} skipped`;
   msg += '\n\nTasks:';
   for (const task of tasks) {
-    const statusIcon = { pending: '⏳', ready: '🟢', running: '🔵', done: '✅', failed: '❌', blocked: '🚫', paused: '⏸️', skipped: '⏭️' }[task.dagStatus] || '?';
+    const statusIcon = { pending: '⏳', ready: '🟢', running: '🔵', done: '✅', failed: '❌', blocked: '🚫', paused: '⏸️', skipped: '⏭️', in_review: '🔍' }[task.dagStatus] || '?';
     msg += `\n  ${statusIcon} [${task.dagStatus.toUpperCase()}] ${task.id} (${task.role})`;
     if (task.description) msg += ` — ${task.description.slice(0, 80)}`;
     if (task.assignedAgentId) msg += ` [agent: ${task.assignedAgentId.slice(0, 8)}]`;
