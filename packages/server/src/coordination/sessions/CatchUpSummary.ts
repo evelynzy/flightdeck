@@ -90,11 +90,14 @@ export class CatchUpService {
     // Count currently pending decisions
     const decisionsPending = this.countPendingDecisions(leadId);
 
+    // Count failed tasks from DAG (not tracked via activity events)
+    const tasksFailed = this.countFailedTasks(leadId);
+
     return {
       since: sinceTimestamp,
       generatedAt: new Date().toISOString(),
       tasksCompleted,
-      tasksFailed: 0, // No task_failed ActionType — derive from error events if needed
+      tasksFailed,
       decisionsPending,
       decisionsResolved,
       commitsLanded: 0, // No commit ActionType — tracked via git, not activity ledger
@@ -108,8 +111,17 @@ export class CatchUpService {
   private countPendingDecisions(leadId: string): number {
     try {
       const pending = this.decisionLog.getNeedingConfirmation();
-      // Filter to this lead's decisions
       return pending.filter(d => d.leadId === leadId || !d.leadId).length;
+    } catch {
+      return 0;
+    }
+  }
+
+  private countFailedTasks(leadId: string): number {
+    try {
+      if (!this.taskDAG) return 0;
+      const status = this.taskDAG.getStatus(leadId);
+      return status.summary.failed;
     } catch {
       return 0;
     }
