@@ -63,6 +63,16 @@ const providerSchema = z.object({
   envOverride: z.record(z.string(), z.string()).optional(),
 });
 
+const telegramSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Bot token — prefer TELEGRAM_BOT_TOKEN env var over config file. */
+  botToken: z.string().default(''),
+  /** Chat IDs allowed to interact with the bot. Empty = allow all. */
+  allowedChatIds: z.array(z.string()).default([]),
+  /** Max inbound messages per minute per user. */
+  rateLimitPerMinute: z.number().int().min(1).max(120).default(20),
+});
+
 // ── Top-level config ───────────────────────────────────────
 // Use z.preprocess to coerce undefined sections to {} before validation,
 // so that each section's field-level .default() values are applied.
@@ -80,6 +90,7 @@ export const flightdeckConfigSchema = z.preprocess(
     roles: z.preprocess((val) => val ?? {}, z.record(z.string(), roleOverrideSchema)),
     budget: sectionDefault(budgetSchema),
     provider: sectionDefault(providerSchema),
+    telegram: sectionDefault(telegramSchema),
   }),
 );
 

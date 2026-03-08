@@ -89,6 +89,8 @@ import { SessionRetro } from './coordination/sessions/SessionRetro.js';
 import { SessionExporter } from './coordination/sessions/SessionExporter.js';
 import { PerformanceTracker } from './coordination/reporting/PerformanceScorecard.js';
 import { SessionResumeManager } from './agents/SessionResumeManager.js';
+import { IntegrationAgent } from './integrations/IntegrationAgent.js';
+import { NotificationBridge } from './integrations/NotificationBridge.js';
 
 // ── Imports: Tier 6 (HTTP/WS) ──────────────────────────────
 import { WebSocketServer } from './comms/WebSocketServer.js';
@@ -326,6 +328,20 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   const sessionExporter = new SessionExporter(agentManager, activityLedger, decisionLog, taskDAG, chatGroupRegistry);
   const performanceTracker = new PerformanceTracker(activityLedger, agentManager);
 
+  // ── Integration Agent (Telegram/Slack messaging) ────────
+  const notificationBridge = new NotificationBridge();
+  const integrationAgent = new IntegrationAgent(
+    agentManager,
+    projectRegistry,
+    configStore,
+    notificationBridge,
+  );
+  // Start asynchronously — don't block container creation
+  integrationAgent.start().catch(err => {
+    logger.warn({ module: 'container', msg: 'IntegrationAgent failed to start', error: (err as Error).message });
+  });
+  onShutdown('integrationAgent', () => { integrationAgent.stop().catch(() => {}); });
+
   // ── Timers & Scheduler ─────────────────────────────────
   timerRegistry.start();
   onShutdown('timerRegistry', () => timerRegistry.stop());
@@ -422,6 +438,7 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
     agentRoster: agentRosterRepository,
     teamExporter,
     teamImporter,
+    integrationAgent,
 
     // Lifecycle
     async shutdown() {
