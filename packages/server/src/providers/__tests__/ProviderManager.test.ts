@@ -82,10 +82,10 @@ describe('ProviderManager', () => {
       expect(exec).toHaveBeenCalledWith('gh auth status');
     });
 
-    it('runs --version for claude', () => {
-      exec.mockReturnValue('claude 1.0');
-      createManager().checkAuthenticated('claude');
-      expect(exec).toHaveBeenCalledWith('claude --version');
+    it('assumes authenticated for providers without auth command (e.g., claude)', () => {
+      const result = createManager().checkAuthenticated('claude');
+      expect(result.authenticated).toBe(true);
+      expect(exec).not.toHaveBeenCalled();
     });
   });
 

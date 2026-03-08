@@ -38,14 +38,13 @@ export interface ModelPreferences {
 }
 
 // ── Auth status commands per provider ────────────────────────────
+// Only copilot has a genuine auth-status command. For other providers,
+// we verify the binary is functional with a safe, quick command.
+// Some CLIs (e.g. claude) crash on --version, so we only check what works.
 
 const AUTH_COMMANDS: Partial<Record<ProviderId, string>> = {
   copilot: 'gh auth status',
-  claude:  'claude --version',
   gemini:  'gemini --version',
-  codex:   'codex --version',
-  cursor:  'agent --version',
-  opencode: 'opencode --version',
 };
 
 // ── Constants ────────────────────────────────────────────────────
@@ -84,7 +83,8 @@ export class ProviderManager {
   /** Run a quick auth/status check for a provider. */
   checkAuthenticated(provider: ProviderId): AuthCheckResult {
     const cmd = AUTH_COMMANDS[provider];
-    if (!cmd) return { authenticated: false, error: `No auth check for ${provider}` };
+    // No auth command → assume authenticated if installed (provider manages own auth)
+    if (!cmd) return { authenticated: true };
 
     try {
       this.exec(cmd);
