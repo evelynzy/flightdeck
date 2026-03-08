@@ -47,14 +47,15 @@ describe('PulseStrip', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('shows token count when agents exist', () => {
+  it('renders agent data when agents exist (token section hidden per issue #106)', () => {
     setAgents([
       makeAgent({ inputTokens: 50_000, outputTokens: 10_000, status: 'running' }),
       makeAgent({ inputTokens: 30_000, outputTokens: 5_000, status: 'idle' }),
     ]);
-    render(<MemoryRouter><PulseStrip /></MemoryRouter>);
-    // Token count: 50k + 10k + 30k + 5k = 95k
-    expect(screen.getByText('~95k')).toBeDefined();
+    const { container } = render(<MemoryRouter><PulseStrip /></MemoryRouter>);
+    expect(container.firstChild).not.toBeNull();
+    // Token display is intentionally hidden (issue #106)
+    expect(screen.queryByText('~95k')).toBeNull();
   });
 
   it('shows status breakdown with running and idle counts', () => {

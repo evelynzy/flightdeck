@@ -32,6 +32,11 @@ vi.mock('../../../stores/leadStore', () => ({
   useLeadStore: (selector: (s: typeof mockLeadState) => any) => selector(mockLeadState),
 }));
 
+vi.mock('../../../stores/settingsStore', () => ({
+  useSettingsStore: (sel: any) => sel({ oversightLevel: 'standard' }),
+  STALE_THRESHOLDS: { detailed: 600000, standard: 900000, minimal: 1800000 },
+}));
+
 // Mock apiFetch — defaults to rejecting (triggers fallback to client-side)
 const mockApiFetch = vi.fn().mockRejectedValue(new Error('API unavailable'));
 vi.mock('../../../hooks/useApi', () => ({
@@ -388,7 +393,7 @@ describe('AttentionBar', () => {
 
       renderBar();
       await vi.waitFor(() => {
-        expect(mockApiFetch).toHaveBeenCalledWith('/attention?scope=project&projectId=proj-1');
+        expect(mockApiFetch).toHaveBeenCalledWith(expect.stringContaining('/attention?scope=project&projectId=proj-1'));
       });
     });
   });
