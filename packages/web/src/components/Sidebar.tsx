@@ -51,12 +51,12 @@ function NavItem({ to, icon: Icon, label, badge, end }: {
       <div className="relative">
         <Icon size={18} />
         {badge != null && badge > 0 && (
-          <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-accent text-[8px] font-bold text-white px-0.5">
+          <span className="absolute -top-1.5 -right-2 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-accent text-[11px] font-bold text-white px-0.5">
             {badge}
           </span>
         )}
       </div>
-      <span className="text-[9px] leading-tight font-medium truncate w-full text-center">
+      <span className="text-[11px] leading-tight font-medium truncate w-full text-center" title={label}>
         {label}
       </span>
     </NavLink>
@@ -66,7 +66,7 @@ function NavItem({ to, icon: Icon, label, badge, end }: {
 function SectionLabel({ label }: { label: string }) {
   return (
     <div className="w-full px-2 pt-2 pb-0.5">
-      <span className="text-[8px] uppercase tracking-wider font-semibold text-th-text-muted/60 text-center block">{label}</span>
+      <span className="text-[11px] uppercase tracking-wider font-semibold text-th-text-muted/60 text-center block">{label}</span>
     </div>
   );
 }
@@ -119,7 +119,7 @@ export function Sidebar() {
         data-testid="sidebar-more-toggle"
       >
         {moreOpen ? <ChevronDown size={16} /> : <MoreHorizontal size={16} />}
-        <span className="text-[9px] leading-tight font-medium">More</span>
+        <span className="text-[11px] leading-tight font-medium">More</span>
       </button>
 
       {moreOpen && moreLinks.map(({ to, icon, label }) => (

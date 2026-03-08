@@ -165,12 +165,12 @@ function EntryCard({
         <Icon className={`w-4 h-4 ${meta.color} shrink-0`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-th-text-alt truncate">{entry.key}</span>
+            <span className="text-sm font-medium text-th-text-alt truncate" title={entry.key}>{entry.key}</span>
             {isReadOnly && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500">read-only</span>
             )}
           </div>
-          <div className="text-xs text-th-text-muted truncate mt-0.5">
+          <div className="text-xs text-th-text-muted truncate mt-0.5" title={entry.content.slice(0, 200)}>
             {entry.content.slice(0, 100)}{entry.content.length > 100 ? '...' : ''}
           </div>
         </div>
@@ -225,13 +225,13 @@ function EntryCard({
                   </span>
                   <button
                     onClick={() => onConfirmDelete(entry.id)}
-                    className="px-2.5 py-1 text-xs bg-red-500 text-white rounded font-medium hover:bg-red-600 transition-colors"
+                    className="px-2 py-1 text-xs bg-red-500 text-white rounded font-medium hover:bg-red-600 transition-colors"
                   >
                     Delete
                   </button>
                   <button
                     onClick={onCancelDelete}
-                    className="px-2.5 py-1 text-xs text-th-text-muted rounded hover:bg-th-bg-muted transition-colors"
+                    className="px-2 py-1 text-xs text-th-text-muted rounded hover:bg-th-bg-muted transition-colors"
                   >
                     Cancel
                   </button>
@@ -370,7 +370,7 @@ function TrainingOverview({ summary }: { summary: TrainingSummary }) {
           <div className="space-y-1">
             {summary.agentStats.map((a) => (
               <div key={a.agentId} className="flex items-center gap-2 text-xs">
-                <span className="font-mono text-th-text-muted w-20 truncate">{a.agentId.slice(0, 8)}</span>
+                <span className="font-mono text-th-text-muted w-20 truncate" title={a.agentId}>{a.agentId.slice(0, 8)}</span>
                 <span className="text-th-text-alt">{a.corrections} corrections</span>
                 <span className="text-green-500">{a.positive}+</span>
                 <span className="text-red-500">{a.negative}−</span>
@@ -526,7 +526,7 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
           )}
           <button
             onClick={() => setShowNewForm(!showNewForm)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-accent text-black rounded-lg font-medium hover:bg-accent-muted transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs bg-accent text-black rounded-lg font-medium hover:bg-accent-muted transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Entry
@@ -534,7 +534,7 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-th-text-muted hover:text-th-text rounded-lg hover:bg-th-bg-muted transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-th-text-muted hover:text-th-text rounded-lg hover:bg-th-bg-muted transition-colors"
             title="Refresh"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -552,7 +552,7 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
           <button
             key={tab.id}
             onClick={() => setPageTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               pageTab === tab.id
                 ? 'border-accent text-accent'
                 : 'border-transparent text-th-text-muted hover:text-th-text'
