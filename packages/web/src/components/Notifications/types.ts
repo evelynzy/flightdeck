@@ -42,9 +42,12 @@ export const CHANNEL_DISPLAY: Record<ChannelType, { icon: string; label: string;
   desktop: { icon: '🖥', label: 'Desktop Notifications', description: 'Browser push notifications' },
   slack: { icon: '💬', label: 'Slack', description: 'Post alerts to a Slack channel' },
   discord: { icon: '🎮', label: 'Discord', description: 'Post alerts to Discord' },
-  webhook: { icon: '🔗', label: 'Webhook', description: 'POST events to a custom URL' },
+  webhook: { icon: '🔗', label: 'Webhook', description: 'POST events to a custom URL — coming soon' },
   telegram: { icon: '📱', label: 'Telegram', description: 'Send alerts to a Telegram chat' },
 };
+
+/** Channels disabled in the UI (not yet production-ready). */
+export const DISABLED_CHANNELS: ReadonlySet<ChannelType> = new Set(['webhook']);
 
 export const EVENT_LABELS: Record<NotifiableEvent, string> = {
   decision_pending: 'Decision pending',
@@ -84,14 +87,14 @@ export const PRESET_DEFAULTS: Record<PresetName, Record<NotifiableEvent, Channel
     handoff_ready: ['desktop', 'slack'],
   },
   everything: {
-    decision_pending: ['desktop', 'slack', 'webhook', 'telegram'],
-    agent_crashed: ['desktop', 'slack', 'webhook', 'telegram'],
-    agent_recovered: ['desktop', 'slack', 'webhook'],
-    budget_warning: ['desktop', 'slack', 'webhook', 'telegram'],
-    budget_exceeded: ['desktop', 'slack', 'webhook', 'telegram'],
-    session_completed: ['desktop', 'slack', 'webhook'],
-    task_completed: ['desktop', 'webhook'],
-    context_critical: ['desktop', 'webhook', 'telegram'],
-    handoff_ready: ['desktop', 'slack', 'webhook', 'telegram'],
+    decision_pending: ['desktop', 'slack', 'telegram'],
+    agent_crashed: ['desktop', 'slack', 'telegram'],
+    agent_recovered: ['desktop', 'slack'],
+    budget_warning: ['desktop', 'slack', 'telegram'],
+    budget_exceeded: ['desktop', 'slack', 'telegram'],
+    session_completed: ['desktop', 'slack'],
+    task_completed: ['desktop'],
+    context_critical: ['desktop', 'telegram'],
+    handoff_ready: ['desktop', 'slack', 'telegram'],
   },
 };

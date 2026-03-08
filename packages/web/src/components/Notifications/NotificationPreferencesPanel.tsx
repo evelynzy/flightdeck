@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../../hooks/useApi';
 import {
-  CHANNEL_DISPLAY, EVENT_LABELS, PRESET_DEFAULTS,
+  CHANNEL_DISPLAY, EVENT_LABELS, PRESET_DEFAULTS, DISABLED_CHANNELS,
   type NotificationChannel, type ChannelType, type NotifiableEvent, type PresetName,
 } from './types';
 
 const ALL_EVENTS = Object.keys(EVENT_LABELS) as NotifiableEvent[];
-const CHANNEL_ORDER: ChannelType[] = ['desktop', 'slack', 'telegram', 'webhook'];
+const CHANNEL_ORDER: ChannelType[] = ['desktop', 'slack', 'telegram'];
 
 export function NotificationPreferencesPanel() {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
