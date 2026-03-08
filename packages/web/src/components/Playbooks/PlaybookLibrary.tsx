@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BookOpen, Plus } from 'lucide-react';
 import { PlaybookCard } from './PlaybookCard';
 import { BUILT_IN_PLAYBOOKS } from './types';
@@ -11,7 +12,9 @@ import { useToastStore } from '../Toast';
 export function PlaybookLibrary() {
   const [userPlaybooks, setUserPlaybooks] = useState<Playbook[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const add = useToastStore((s) => s.add);
+  const navigate = useNavigate();
 
   const fetchUserPlaybooks = useCallback(async () => {
     try {
@@ -31,9 +34,30 @@ export function PlaybookLibrary() {
     fetchUserPlaybooks();
   }, [fetchUserPlaybooks]);
 
-  const handleApply = useCallback((pb: Playbook) => {
-    add('info', `Playbook "${pb.name}" — project creation from playbooks coming soon.`);
-  }, [add]);
+  const handleApply = useCallback(async (pb: Playbook) => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const agentRoles = pb.agents.map((a) => a.role).join(', ');
+      const description = `Created from playbook "${pb.name}". Agents: ${agentRoles}`;
+      const resp = await apiFetch('/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: pb.name, description }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(body.error || `HTTP ${resp.status}`);
+      }
+      const project = await resp.json();
+      add('success', `Project "${pb.name}" created`);
+      navigate(`/projects/${project.id}`);
+    } catch (err: any) {
+      add('error', `Failed to create project: ${err.message}`);
+    } finally {
+      setCreating(false);
+    }
+  }, [creating, add, navigate]);
 
   const handleDuplicate = useCallback(async (pb: Playbook) => {
     try {
