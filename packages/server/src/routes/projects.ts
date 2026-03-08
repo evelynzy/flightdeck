@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { eq, inArray, desc } from 'drizzle-orm';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { join, normalize, sep, extname, relative } from 'node:path';
 import { logger } from '../utils/logger.js';
 import type { AppContext } from './context.js';
@@ -581,11 +581,26 @@ export function projectsRoutes(ctx: AppContext): Router {
 
   // ── Design tab: file tree + file contents ──────────────────────
 
-  /** Ensure a resolved path stays within the project root (prevent traversal) */
-  function isInsideRoot(root: string, target: string): boolean {
-    const normRoot = normalize(root) + sep;
-    const normTarget = normalize(target);
-    return normTarget === normalize(root) || normTarget.startsWith(normRoot);
+  /**
+   * Resolve a path with symlink resolution and verify it stays within root.
+   * Uses realpathSync to follow symlinks before comparison — prevents
+   * symlink-based escapes (e.g., symlink inside project dir → /etc/).
+   * Returns { resolved, rootReal } on success, or null if path escapes.
+   */
+  function resolveAndValidate(root: string, subPath: string): { resolved: string; rootReal: string } | null {
+    try {
+      const rootReal = realpathSync(root);
+      const candidate = join(rootReal, subPath);
+      const resolved = realpathSync(candidate);
+      const normRoot = normalize(rootReal) + sep;
+      const normResolved = normalize(resolved);
+      if (normResolved !== normalize(rootReal) && !normResolved.startsWith(normRoot)) {
+        return null;
+      }
+      return { resolved, rootReal };
+    } catch {
+      return null; // Path doesn't exist or is inaccessible
+    }
   }
 
   /**
@@ -601,18 +616,18 @@ export function projectsRoutes(ctx: AppContext): Router {
     const subPath = typeof req.query.path === 'string' ? req.query.path : '';
     if (subPath.includes('\0')) return res.status(400).json({ error: 'Invalid path' });
 
-    const resolved = normalize(join(project.cwd, subPath));
-    if (!isInsideRoot(project.cwd, resolved)) {
+    const result = resolveAndValidate(project.cwd, subPath);
+    if (!result) {
       return res.status(403).json({ error: 'Path outside project directory' });
     }
 
     try {
-      const entries = readdirSync(resolved, { withFileTypes: true });
+      const entries = readdirSync(result.resolved, { withFileTypes: true });
       const items = entries
         .filter((e) => !e.name.startsWith('.') || e.name === '.flightdeck')
         .map((e) => ({
           name: e.name,
-          path: relative(project.cwd!, join(resolved, e.name)),
+          path: relative(result.rootReal, join(result.resolved, e.name)),
           type: e.isDirectory() ? 'directory' as const : 'file' as const,
           ext: e.isFile() ? extname(e.name).slice(1) : undefined,
         }))
@@ -622,7 +637,8 @@ export function projectsRoutes(ctx: AppContext): Router {
         });
       res.json({ path: subPath || '.', items });
     } catch (err: any) {
-      res.status(400).json({ error: `Cannot read directory: ${err.message}` });
+      logger.warn({ module: 'project-files', msg: 'Cannot read directory', error: err.message, projectId: project.id });
+      res.status(400).json({ error: 'Cannot read directory' });
     }
   });
 
@@ -640,22 +656,23 @@ export function projectsRoutes(ctx: AppContext): Router {
     if (!filePath) return res.status(400).json({ error: 'path query parameter required' });
     if (filePath.includes('\0')) return res.status(400).json({ error: 'Invalid path' });
 
-    const resolved = normalize(join(project.cwd, filePath));
-    if (!isInsideRoot(project.cwd, resolved)) {
+    const result = resolveAndValidate(project.cwd, filePath);
+    if (!result) {
       return res.status(403).json({ error: 'Path outside project directory' });
     }
 
     try {
-      const stat = statSync(resolved);
+      const stat = statSync(result.resolved);
       if (!stat.isFile()) return res.status(400).json({ error: 'Not a file' });
       if (stat.size > 512 * 1024) return res.status(413).json({ error: 'File too large (max 512 KB)' });
 
-      const content = readFileSync(resolved, 'utf-8');
+      const content = readFileSync(result.resolved, 'utf-8');
       const ext = extname(filePath).slice(1);
       res.json({ path: filePath, content, size: stat.size, ext });
     } catch (err: any) {
+      logger.warn({ module: 'project-files', msg: 'Cannot read file', error: err.message, projectId: project.id });
       if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
-      res.status(400).json({ error: `Cannot read file: ${err.message}` });
+      res.status(400).json({ error: 'Cannot read file' });
     }
   });
 
