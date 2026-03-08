@@ -4,6 +4,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import type { ThemeMode } from '../../stores/settingsStore';
 import { Trash2, Plus, Sun, Moon, Monitor, Settings, Cpu, Users, Terminal, ChevronDown, ChevronRight, Zap, Volume2 } from 'lucide-react';
 import { DashboardCustomizer } from './DashboardCustomizer';
+import { ProvidersSection } from './ProvidersSection';
 import { PlaybookLibrary } from '../Playbooks';
 import { IntentRulesDashboard } from '../IntentRules';
 import { RecoverySettingsPanel, RecoveryMetricsCard } from '../Recovery';
@@ -184,6 +185,9 @@ export function SettingsPanel({ api }: Props) {
           Set via <code className="text-th-text-muted">COPILOT_CLI_PATH</code> environment variable
         </p>
       </section>
+
+      {/* Providers */}
+      <ProvidersSection />
 
       {/* Dashboard Layout */}
       <DashboardCustomizer />

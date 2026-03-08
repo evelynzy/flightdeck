@@ -30,6 +30,7 @@ import { dataRoutes } from './data.js';
 import { knowledgeRoutes } from './knowledge.js';
 import { teamsRoutes } from './teams.js';
 import { agentServerRoutes } from './agent-server.js';
+import { settingsRoutes } from './settings.js';
 
 export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(agentsRoutes(ctx));
@@ -62,4 +63,5 @@ export function mountAllRoutes(router: Router, ctx: AppContext): void {
   router.use(knowledgeRoutes(ctx));
   router.use(teamsRoutes(ctx));
   router.use(agentServerRoutes(ctx));
+  router.use(settingsRoutes(ctx));
 }
