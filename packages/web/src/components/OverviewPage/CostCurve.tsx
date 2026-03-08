@@ -66,10 +66,52 @@ export function CostCurve({ data, width = 260, height = 180 }: CostCurveProps) {
       <h3 className="text-[11px] font-medium text-th-text-muted uppercase tracking-wider mb-1">
         Token Usage
       </h3>
-      {/* Token chart hidden — estimation accuracy insufficient (issue #106) */}
-      <div className="flex items-center justify-center h-[calc(100%-32px)] text-th-text-muted text-[10px]">
-        Token estimation temporarily hidden
-      </div>
+      <svg width={width} height={height - 32}>
+        <Group left={MARGIN.left} top={MARGIN.top}>
+          <AreaClosed
+            data={data}
+            x={(d) => xScale(new Date(d.time)) ?? 0}
+            y={(d) => yScale(d.cumulativeCost) ?? 0}
+            yScale={yScale}
+            fill={areaColor}
+            fillOpacity={0.15}
+          />
+          <LinePath
+            data={data}
+            x={(d) => xScale(new Date(d.time)) ?? 0}
+            y={(d) => yScale(d.cumulativeCost) ?? 0}
+            stroke={areaColor}
+            strokeWidth={1.5}
+          />
+          <AxisBottom
+            top={innerH}
+            scale={xScale}
+            numTicks={4}
+            tickLabelProps={() => ({
+              fill: 'var(--th-text-muted)',
+              fontSize: 9,
+              textAnchor: 'middle' as const,
+              dy: '0.25em',
+            })}
+            stroke="var(--th-border)"
+            tickStroke="var(--th-border)"
+          />
+          <AxisLeft
+            scale={yScale}
+            numTicks={4}
+            tickFormat={formatTokenAxis}
+            tickLabelProps={() => ({
+              fill: 'var(--th-text-muted)',
+              fontSize: 9,
+              textAnchor: 'end' as const,
+              dx: '-0.25em',
+              dy: '0.33em',
+            })}
+            stroke="var(--th-border)"
+            tickStroke="var(--th-border)"
+          />
+        </Group>
+      </svg>
     </div>
   );
 }

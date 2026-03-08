@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useLeadStore } from '../stores/leadStore';
+import { useNavigationStore } from '../stores/navigationStore';
 import { useProjects } from '../hooks/useProjects';
 import { ProjectContext } from '../contexts/ProjectContext';
 import { Tabs, type TabItem } from '../components/ui/Tabs';
@@ -172,7 +173,18 @@ export function ProjectLayout() {
     }
   }, [id, agents]);
 
-  // Close overflow on outside click
+  // Sync project context → navigationStore
+  useEffect(() => {
+    const nav = useNavigationStore.getState();
+    nav.setProject(id ?? null, projectName);
+    nav.setActiveTab(activeTab);
+    nav.pushEntry({
+      path: location.pathname,
+      projectId: id,
+      tab: activeTab,
+      label: projectName,
+    });
+  }, [id, projectName, activeTab, location.pathname]);
   useEffect(() => {
     if (!overflowOpen) return;
     function handleClick(e: MouseEvent) {
@@ -185,14 +197,55 @@ export function ProjectLayout() {
   }, [overflowOpen]);
 
   // Navigation
-  const handleTabChange = (tabId: string) => {
+  const handleTabChange = useCallback((tabId: string) => {
     navigate(`/projects/${id}/${tabId}`);
-  };
+  }, [navigate, id]);
 
   const handleOverflowSelect = (itemId: string) => {
     setOverflowOpen(false);
     handleTabChange(itemId);
   };
+
+  // B-10: Persist last active tab per project to localStorage
+  const TAB_STORAGE_KEY = 'flightdeck-project-tab';
+  useEffect(() => {
+    if (!id || activeTab === 'overview') return;
+    try {
+      const stored = JSON.parse(localStorage.getItem(TAB_STORAGE_KEY) ?? '{}');
+      stored[id] = activeTab;
+      localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(stored));
+    } catch {}
+  }, [id, activeTab]);
+
+  // Restore last tab on initial navigation to project root
+  useEffect(() => {
+    if (!id) return;
+    const isProjectRoot = location.pathname === `/projects/${id}` || location.pathname === `/projects/${id}/overview`;
+    if (!isProjectRoot) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem(TAB_STORAGE_KEY) ?? '{}');
+      const lastTab = stored[id];
+      if (lastTab && ALL_TAB_IDS.has(lastTab) && lastTab !== 'overview') {
+        navigate(`/projects/${id}/${lastTab}`, { replace: true });
+      }
+    } catch {}
+  // Only run on project ID change, not on every location change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // B-11: Keyboard shortcuts — Cmd/Ctrl+1-5 for primary tabs
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= PRIMARY_TABS.length) {
+        e.preventDefault();
+        handleTabChange(PRIMARY_TABS[num - 1].id);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleTabChange]);
 
   if (!id) return null;
 
