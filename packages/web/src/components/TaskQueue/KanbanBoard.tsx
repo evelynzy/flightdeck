@@ -13,6 +13,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { Plus, Search, Archive } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
+import { useSettingsStore } from '../../stores/settingsStore';
 import type { DagStatus, DagTask, DagTaskStatus } from '../../types';
 import { COLUMNS, UNDROP_TARGETS, resolveColumnStatus, type FilterState, EMPTY_FILTERS, hasActiveFilters } from './kanbanConstants';
 import { TaskCard } from './TaskCard';
@@ -36,6 +37,7 @@ interface KanbanBoardProps {
 
 function KanbanBoard({ dagStatus, projectId, onTaskUpdated, scope = 'project', projectNameMap, hasMore, onLoadMore, showArchived = false, onShowArchivedChange }: KanbanBoardProps) {
   const storageKey = projectId ? `kanban-${projectId}` : 'kanban-global';
+  const oversightLevel = useSettingsStore(s => s.oversightLevel);
 
   // Load persisted state
   const loadPersistedState = useCallback(() => {
@@ -354,7 +356,7 @@ function KanbanBoard({ dagStatus, projectId, onTaskUpdated, scope = 'project', p
             />
             Hide empty
           </label>
-          {onShowArchivedChange && (
+          {onShowArchivedChange && oversightLevel !== 'minimal' && (
             <label className="flex items-center gap-1.5 text-[11px] text-th-text-muted cursor-pointer" data-testid="show-archived-toggle">
               <Archive size={11} />
               <input
