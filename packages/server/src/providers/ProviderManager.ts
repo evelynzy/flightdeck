@@ -1,27 +1,32 @@
 /**
- * ProviderManager — Detect, configure, and test CLI provider connections.
+ * ProviderManager — Detect provider availability and test connections.
  *
- * Reads provider configuration from presets, checks environment variables
- * for API keys, persists enabled/disabled state in the database, and
- * performs lightweight connection tests.
+ * Detection strategy per provider:
+ * - claude: check ANTHROPIC_API_KEY env var
+ * - codex: check OPENAI_API_KEY env var
+ * - copilot: check `gh auth status` (GitHub CLI authenticated)
+ * - gemini/opencode/cursor: check if CLI binary is installed (which <binary>)
  */
 
+import { execSync } from 'node:child_process';
 import type { Database } from '../db/database.js';
 import { PROVIDER_PRESETS, type ProviderId, type ProviderPreset } from '../adapters/presets.js';
 
 // ── Types ────────────────────────────────────────────────────────
 
+export type DetectionMethod = 'env_var' | 'cli_auth' | 'cli_installed';
+
 export interface ProviderStatus {
   id: ProviderId;
   name: string;
-  /** Whether the required API key / env var is set. */
+  /** Whether the provider is available (key set, CLI installed, or CLI authenticated). */
   configured: boolean;
-  /** Masked API key (e.g., 'sk-ant-...****'), or null if not set. */
-  maskedKey: string | null;
+  /** How availability was determined. */
+  detectionMethod: DetectionMethod;
+  /** Masked API key for env-var providers, CLI version for binary providers, or null. */
+  detail: string | null;
   /** Whether the provider is enabled in settings. */
   enabled: boolean;
-  /** Names of required env vars for this provider. */
-  requiredEnvVars: string[];
 }
 
 export interface ConnectionTestResult {
@@ -30,17 +35,26 @@ export interface ConnectionTestResult {
   latencyMs: number;
 }
 
+// ── Detection strategies ─────────────────────────────────────────
+
+interface DetectionStrategy {
+  method: DetectionMethod;
+  envVar?: string;
+}
+
+const DETECTION_STRATEGIES: Record<ProviderId, DetectionStrategy> = {
+  claude:   { method: 'env_var', envVar: 'ANTHROPIC_API_KEY' },
+  codex:    { method: 'env_var', envVar: 'OPENAI_API_KEY' },
+  copilot:  { method: 'cli_auth' },
+  gemini:   { method: 'cli_installed' },
+  opencode: { method: 'cli_installed' },
+  cursor:   { method: 'cli_installed' },
+};
+
 // ── Constants ────────────────────────────────────────────────────
 
 const SETTING_PREFIX = 'provider:';
 const SETTING_SUFFIX = ':enabled';
-
-/** Extra env vars checked for providers beyond what presets declare. */
-const EXTRA_ENV_VARS: Partial<Record<ProviderId, string[]>> = {
-  copilot: ['GITHUB_TOKEN', 'COPILOT_TOKEN'],
-  gemini: ['GOOGLE_API_KEY'],
-};
-
 const CONNECTION_TIMEOUT_MS = 10_000;
 
 // ── ProviderManager ──────────────────────────────────────────────
@@ -48,10 +62,17 @@ const CONNECTION_TIMEOUT_MS = 10_000;
 export class ProviderManager {
   private readonly db: Database | undefined;
   private readonly env: Record<string, string | undefined>;
+  /** Override for testing — avoids calling real `which`/`gh auth status`. */
+  private readonly execCommand: (cmd: string) => string;
 
-  constructor(opts: { db?: Database; env?: Record<string, string | undefined> } = {}) {
+  constructor(opts: {
+    db?: Database;
+    env?: Record<string, string | undefined>;
+    execCommand?: (cmd: string) => string;
+  } = {}) {
     this.db = opts.db;
     this.env = opts.env ?? process.env;
+    this.execCommand = opts.execCommand ?? ((cmd) => execSync(cmd, { encoding: 'utf8', timeout: 5_000 }).trim());
   }
 
   // ── Status ───────────────────────────────────────────────
@@ -61,16 +82,16 @@ export class ProviderManager {
     const preset = PROVIDER_PRESETS[provider];
     if (!preset) throw new Error(`Unknown provider: ${provider}`);
 
-    const envVars = this.getEnvVarsForProvider(provider, preset);
-    const keyValue = this.findFirstEnvVar(envVars);
+    const strategy = DETECTION_STRATEGIES[provider];
+    const { configured, detail } = this.detect(provider, preset, strategy);
 
     return {
       id: provider,
       name: preset.name,
-      configured: keyValue !== undefined,
-      maskedKey: keyValue ? maskApiKey(keyValue) : null,
+      configured,
+      detectionMethod: strategy.method,
+      detail,
       enabled: this.isProviderEnabled(provider),
-      requiredEnvVars: envVars,
     };
   }
 
@@ -99,122 +120,105 @@ export class ProviderManager {
   // ── Connection Testing ───────────────────────────────────
 
   /**
-   * Test connectivity to a provider's API.
-   * Uses a lightweight API call (list models or minimal request).
-   * Times out after 10 seconds.
+   * Test connectivity to a provider.
+   * - env_var providers: call their API (list models)
+   * - cli_auth: run `gh auth status`
+   * - cli_installed: run `<binary> --version`
    */
   async testConnection(provider: ProviderId): Promise<ConnectionTestResult> {
     const preset = PROVIDER_PRESETS[provider];
     if (!preset) return { success: false, error: `Unknown provider: ${provider}`, latencyMs: 0 };
 
-    const envVars = this.getEnvVarsForProvider(provider, preset);
-    const apiKey = this.findFirstEnvVar(envVars);
-    if (!apiKey && envVars.length > 0) {
-      return {
-        success: false,
-        error: `Missing API key. Set one of: ${envVars.join(', ')}`,
-        latencyMs: 0,
-      };
-    }
-
+    const strategy = DETECTION_STRATEGIES[provider];
     const start = Date.now();
+
     try {
-      await this.doConnectionTest(provider, apiKey);
+      switch (strategy.method) {
+        case 'env_var': {
+          const apiKey = this.env[strategy.envVar!];
+          if (!apiKey) return { success: false, error: `${strategy.envVar} not set`, latencyMs: 0 };
+          await this.testApiConnection(provider, apiKey);
+          break;
+        }
+        case 'cli_auth':
+          this.execCommand('gh auth status');
+          break;
+        case 'cli_installed':
+          this.execCommand(`which ${preset.binary}`);
+          break;
+      }
       return { success: true, latencyMs: Date.now() - start };
     } catch (err: any) {
-      return {
-        success: false,
-        error: err.message || String(err),
-        latencyMs: Date.now() - start,
-      };
+      return { success: false, error: err.message || String(err), latencyMs: Date.now() - start };
     }
   }
 
-  // ── Internals ────────────────────────────────────────────
+  // ── Detection logic ──────────────────────────────────────
 
-  /** Get all env var names to check for a provider. */
-  private getEnvVarsForProvider(provider: ProviderId, preset: ProviderPreset): string[] {
-    const vars = [...(preset.requiredEnvVars ?? [])];
-    const extra = EXTRA_ENV_VARS[provider];
-    if (extra) vars.push(...extra);
-    return vars;
-  }
-
-  /** Return the value of the first set env var, or undefined. */
-  private findFirstEnvVar(varNames: string[]): string | undefined {
-    for (const name of varNames) {
-      const val = this.env[name];
-      if (val) return val;
+  private detect(
+    provider: ProviderId,
+    preset: ProviderPreset,
+    strategy: DetectionStrategy,
+  ): { configured: boolean; detail: string | null } {
+    switch (strategy.method) {
+      case 'env_var': {
+        const val = this.env[strategy.envVar!];
+        return { configured: !!val, detail: val ? maskApiKey(val) : null };
+      }
+      case 'cli_auth':
+        return this.detectCliAuth();
+      case 'cli_installed':
+        return this.detectCliBinary(preset.binary);
     }
-    return undefined;
   }
 
-  /** Perform a provider-specific connection test. */
-  private async doConnectionTest(provider: ProviderId, apiKey?: string): Promise<void> {
+  /** Check if `gh auth status` succeeds (copilot). */
+  private detectCliAuth(): { configured: boolean; detail: string | null } {
+    try {
+      const output = this.execCommand('gh auth status');
+      return { configured: true, detail: output.split('\n')[0] || 'authenticated' };
+    } catch {
+      return { configured: false, detail: null };
+    }
+  }
+
+  /** Check if a CLI binary is on PATH. */
+  private detectCliBinary(binary: string): { configured: boolean; detail: string | null } {
+    try {
+      const path = this.execCommand(`which ${binary}`);
+      return { configured: true, detail: path };
+    } catch {
+      return { configured: false, detail: null };
+    }
+  }
+
+  /** API-based connection test for env_var providers. */
+  private async testApiConnection(provider: ProviderId, apiKey: string): Promise<void> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
 
     try {
+      let res: Response;
       switch (provider) {
         case 'claude':
-          await this.testAnthropicConnection(apiKey!, controller.signal);
-          break;
-        case 'gemini':
-          await this.testGeminiConnection(apiKey!, controller.signal);
+          res = await fetch('https://api.anthropic.com/v1/models', {
+            headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+            signal: controller.signal,
+          });
           break;
         case 'codex':
-        case 'opencode':
-          await this.testOpenAIConnection(apiKey!, controller.signal);
-          break;
-        case 'copilot':
-          // Copilot uses GitHub token — just verify the token is valid
-          await this.testGitHubConnection(apiKey!, controller.signal);
-          break;
-        case 'cursor':
-          // Cursor doesn't have a public API to test — check key format
-          if (!apiKey) throw new Error('CURSOR_API_KEY not set');
+          res = await fetch('https://api.openai.com/v1/models', {
+            headers: { Authorization: `Bearer ${apiKey}` },
+            signal: controller.signal,
+          });
           break;
         default:
-          throw new Error(`Connection testing not supported for provider: ${provider}`);
+          return; // No API test for other providers
       }
+      if (!res.ok) throw new Error(`API returned ${res.status}: ${res.statusText}`);
     } finally {
       clearTimeout(timeout);
     }
-  }
-
-  private async testAnthropicConnection(apiKey: string, signal: AbortSignal): Promise<void> {
-    const res = await fetch('https://api.anthropic.com/v1/models', {
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      signal,
-    });
-    if (!res.ok) throw new Error(`Anthropic API returned ${res.status}: ${res.statusText}`);
-  }
-
-  private async testGeminiConnection(apiKey: string, signal: AbortSignal): Promise<void> {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-      { signal },
-    );
-    if (!res.ok) throw new Error(`Gemini API returned ${res.status}: ${res.statusText}`);
-  }
-
-  private async testOpenAIConnection(apiKey: string, signal: AbortSignal): Promise<void> {
-    const res = await fetch('https://api.openai.com/v1/models', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal,
-    });
-    if (!res.ok) throw new Error(`OpenAI API returned ${res.status}: ${res.statusText}`);
-  }
-
-  private async testGitHubConnection(token: string, signal: AbortSignal): Promise<void> {
-    const res = await fetch('https://api.github.com/user', {
-      headers: { Authorization: `Bearer ${token}` },
-      signal,
-    });
-    if (!res.ok) throw new Error(`GitHub API returned ${res.status}: ${res.statusText}`);
   }
 }
 
