@@ -4,6 +4,23 @@ import { logger } from '../utils/logger.js';
 import type { AppContext } from './context.js';
 import { KNOWN_MODEL_IDS, DEFAULT_MODEL_CONFIG, validateModelConfig, validateModelConfigShape } from '../projects/ModelConfigDefaults.js';
 import { dagTasks, projectSessions, chatGroups, chatGroupMessages, chatGroupMembers, conversations, messages } from '../db/schema.js';
+import { slugify } from '../utils/projectId.js';
+
+const PROJECT_TITLE_MAX = 100;
+
+/** Validate a project title. Returns an error string or null if valid. */
+function validateProjectTitle(name: unknown): string | null {
+  if (!name || typeof name !== 'string') return 'name is required';
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return 'name is required';
+  if (trimmed.length > PROJECT_TITLE_MAX) return `name must be ${PROJECT_TITLE_MAX} characters or less`;
+  // Ensure title produces a usable slug (not just the default "project" fallback)
+  const slug = slugify(trimmed);
+  if (slug === 'project' && !/project/i.test(trimmed)) {
+    return 'name must contain at least one letter or number';
+  }
+  return null;
+}
 
 export function projectsRoutes(ctx: AppContext): Router {
   const { agentManager, roleRegistry, projectRegistry, db: _db, storageManager } = ctx;
@@ -207,9 +224,11 @@ export function projectsRoutes(ctx: AppContext): Router {
   router.post('/projects', (req, res) => {
     if (!projectRegistry) return res.status(500).json({ error: 'Projects not available' });
     const { name, description, cwd } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required' });
-    const project = projectRegistry.create(name, description, cwd);
-    logger.info({ module: 'project', msg: 'Project created', projectId: project.id, name });
+    const titleError = validateProjectTitle(name);
+    if (titleError) return res.status(400).json({ error: titleError });
+    const trimmedName = (name as string).trim();
+    const project = projectRegistry.create(trimmedName, description, cwd);
+    logger.info({ module: 'project', msg: 'Project created', projectId: project.id, name: trimmedName });
     res.status(201).json(project);
   });
 

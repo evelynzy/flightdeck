@@ -70,6 +70,7 @@ export function LeadDashboard({ api, ws }: Props) {
   const [starting, setStarting] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectNameTouched, setNewProjectNameTouched] = useState(false);
   const [newProjectTask, setNewProjectTask] = useState('');
   const [newProjectModel, setNewProjectModel] = useState('');
   const [newProjectCwd, setNewProjectCwd] = useState('');
@@ -799,6 +800,7 @@ export function LeadDashboard({ api, ws }: Props) {
         }
         setShowNewProject(false);
         setNewProjectName('');
+        setNewProjectNameTouched(false);
         setNewProjectTask('');
         setNewProjectModel('');
         setNewProjectCwd('');
@@ -1217,15 +1219,27 @@ export function LeadDashboard({ api, ws }: Props) {
             </div>
             <div className="px-5 py-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
               <div>
-                <label className="block text-xs text-th-text-muted mb-1 font-medium">Project Name</label>
+                <label className="block text-xs text-th-text-muted mb-1 font-medium">Project Name <span className="text-red-400">*</span></label>
                 <input
                   type="text"
                   value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onChange={(e) => { setNewProjectName(e.target.value); setNewProjectNameTouched(true); }}
+                  onBlur={() => setNewProjectNameTouched(true)}
                   placeholder="My Feature"
-                  className="w-full bg-th-bg border border-th-border rounded-md px-3 py-2 text-sm font-mono text-th-text-alt focus:outline-none focus:border-yellow-500"
+                  maxLength={100}
+                  className={`w-full bg-th-bg border rounded-md px-3 py-2 text-sm font-mono text-th-text-alt focus:outline-none ${
+                    newProjectNameTouched && !newProjectName.trim()
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-th-border focus:border-yellow-500'
+                  }`}
                   autoFocus
                 />
+                {newProjectNameTouched && !newProjectName.trim() && (
+                  <p className="text-xs text-red-400 mt-1">Project name is required</p>
+                )}
+                {newProjectName.trim().length > 100 && (
+                  <p className="text-xs text-red-400 mt-1">Must be 100 characters or less</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-th-text-muted mb-1 font-medium">Task / Prompt</label>
@@ -1346,16 +1360,19 @@ export function LeadDashboard({ api, ws }: Props) {
                 Cancel
               </button>
               <button
-                onClick={() => startLead(
-                  newProjectName || 'Untitled',
-                  newProjectTask.trim() || undefined,
-                  newProjectModel || undefined,
-                  newProjectCwd.trim() || undefined,
-                  resumeSessionId.trim() || undefined,
-                  selectedRoles.size > 0 ? Array.from(selectedRoles) : undefined,
-                )}
-                disabled={starting}
-                className="px-5 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:bg-th-bg-hover text-black text-sm font-semibold rounded-md flex items-center gap-1.5 transition-colors"
+                onClick={() => {
+                  if (!newProjectName.trim()) { setNewProjectNameTouched(true); return; }
+                  startLead(
+                    newProjectName.trim(),
+                    newProjectTask.trim() || undefined,
+                    newProjectModel || undefined,
+                    newProjectCwd.trim() || undefined,
+                    resumeSessionId.trim() || undefined,
+                    selectedRoles.size > 0 ? Array.from(selectedRoles) : undefined,
+                  );
+                }}
+                disabled={starting || !newProjectName.trim()}
+                className="px-5 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:bg-th-bg-hover disabled:text-th-text-muted text-black text-sm font-semibold rounded-md flex items-center gap-1.5 transition-colors"
               >
                 {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
                 {starting ? 'Starting...' : resumeSessionId.trim() ? 'Resume Project' : 'Create Project'}
