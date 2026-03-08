@@ -16,6 +16,7 @@ import {
   ListChecks,
   Users,
   Brain,
+  Paintbrush,
   GanttChart,
   MessageSquare,
   Network,
@@ -30,6 +31,8 @@ import { useProjects } from '../hooks/useProjects';
 import { ProjectContext } from '../contexts/ProjectContext';
 import { Tabs, type TabItem } from '../components/ui/Tabs';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { Breadcrumb } from '../components/Breadcrumb';
+import { PageTransition } from '../components/PageTransition';
 import { apiFetch } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -49,6 +52,7 @@ const PRIMARY_TABS: TabItem[] = [
   { id: 'tasks',     label: 'Tasks',      icon: <ListChecks size={14} /> },
   { id: 'agents',    label: 'Agents',     icon: <Users size={14} /> },
   { id: 'knowledge', label: 'Knowledge',  icon: <Brain size={14} /> },
+  { id: 'design',    label: 'Design',     icon: <Paintbrush size={14} /> },
 ];
 
 interface OverflowItem {
@@ -354,10 +358,13 @@ export function ProjectLayout() {
           </div>
         </div>
 
-        {/* Route content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Breadcrumb trail */}
+        <Breadcrumb />
+
+        {/* Route content with transition animation */}
+        <PageTransition transitionKey={activeTab}>
           <Outlet />
-        </div>
+        </PageTransition>
       </div>
     </ProjectContext.Provider>
   );
