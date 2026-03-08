@@ -133,6 +133,9 @@ function DagPanel({
 }) {
   const [kanbanScope, setKanbanScope] = useState<'project' | 'global'>('project');
   const [globalDagStatus, setGlobalDagStatus] = useState<DagStatus | null>(null);
+  const [globalHasMore, setGlobalHasMore] = useState(false);
+  const [globalOffset, setGlobalOffset] = useState(0);
+  const GLOBAL_PAGE_SIZE = 200;
   const [projectNameMap, setProjectNameMap] = useState<Map<string, string>>(new Map());
   const hasDeps = dagStatus?.tasks.some((t) => t.dependsOn.length > 0) ?? false;
   const effectiveView = dagView ?? (hasDeps ? 'graph' : 'list');
@@ -143,22 +146,25 @@ function DagPanel({
     let cancelled = false;
     const fetchGlobal = async () => {
       try {
-        const data = await apiFetch<{ tasks: any[]; total: number }>('/tasks?scope=global');
+        const data = await apiFetch<{ tasks: any[]; total: number; hasMore: boolean; offset: number; limit: number }>(`/tasks?scope=global&limit=${GLOBAL_PAGE_SIZE}&offset=0`);
         if (!cancelled && data) {
+          const tasks = data.tasks;
           setGlobalDagStatus({
-            tasks: data.tasks,
+            tasks,
             fileLockMap: {},
             summary: {
-              pending: data.tasks.filter((t: any) => t.dagStatus === 'pending').length,
-              ready: data.tasks.filter((t: any) => t.dagStatus === 'ready').length,
-              running: data.tasks.filter((t: any) => t.dagStatus === 'running').length,
-              blocked: data.tasks.filter((t: any) => t.dagStatus === 'blocked').length,
-              done: data.tasks.filter((t: any) => t.dagStatus === 'done').length,
-              failed: data.tasks.filter((t: any) => t.dagStatus === 'failed').length,
-              paused: data.tasks.filter((t: any) => t.dagStatus === 'paused').length,
-              skipped: data.tasks.filter((t: any) => t.dagStatus === 'skipped').length,
+              pending: tasks.filter((t: any) => t.dagStatus === 'pending').length,
+              ready: tasks.filter((t: any) => t.dagStatus === 'ready').length,
+              running: tasks.filter((t: any) => t.dagStatus === 'running').length,
+              blocked: tasks.filter((t: any) => t.dagStatus === 'blocked').length,
+              done: tasks.filter((t: any) => t.dagStatus === 'done').length,
+              failed: tasks.filter((t: any) => t.dagStatus === 'failed').length,
+              paused: tasks.filter((t: any) => t.dagStatus === 'paused').length,
+              skipped: tasks.filter((t: any) => t.dagStatus === 'skipped').length,
             },
           });
+          setGlobalHasMore(data.hasMore);
+          setGlobalOffset(data.offset + data.limit);
         }
       } catch (err) {
         console.warn('Failed to fetch global tasks', err);
@@ -180,6 +186,35 @@ function DagPanel({
       })
       .catch(() => {});
   }, [kanbanScope]);
+
+  // Load next page of global tasks (appends to existing)
+  const loadMoreGlobalTasks = async () => {
+    if (!globalHasMore || !globalDagStatus) return;
+    try {
+      const data = await apiFetch<{ tasks: any[]; total: number; hasMore: boolean; offset: number; limit: number }>(`/tasks?scope=global&limit=${GLOBAL_PAGE_SIZE}&offset=${globalOffset}`);
+      if (data) {
+        const merged = [...globalDagStatus.tasks, ...data.tasks];
+        setGlobalDagStatus({
+          tasks: merged,
+          fileLockMap: {},
+          summary: {
+            pending: merged.filter((t: any) => t.dagStatus === 'pending').length,
+            ready: merged.filter((t: any) => t.dagStatus === 'ready').length,
+            running: merged.filter((t: any) => t.dagStatus === 'running').length,
+            blocked: merged.filter((t: any) => t.dagStatus === 'blocked').length,
+            done: merged.filter((t: any) => t.dagStatus === 'done').length,
+            failed: merged.filter((t: any) => t.dagStatus === 'failed').length,
+            paused: merged.filter((t: any) => t.dagStatus === 'paused').length,
+            skipped: merged.filter((t: any) => t.dagStatus === 'skipped').length,
+          },
+        });
+        setGlobalHasMore(data.hasMore);
+        setGlobalOffset(data.offset + data.limit);
+      }
+    } catch (err) {
+      console.warn('Failed to load more global tasks', err);
+    }
+  };
 
   const ganttTasks: GanttTask[] = (dagStatus?.tasks ?? []).map((t) => ({
     id:          t.id,
@@ -282,6 +317,8 @@ function DagPanel({
             onTaskUpdated={kanbanScope === 'global' ? undefined : onTaskUpdated}
             scope={kanbanScope}
             projectNameMap={projectNameMap}
+            hasMore={kanbanScope === 'global' ? globalHasMore : false}
+            onLoadMore={kanbanScope === 'global' ? loadMoreGlobalTasks : undefined}
           />
         </div>
       ) : effectiveView === 'graph' ? (

@@ -28,9 +28,11 @@ interface KanbanBoardProps {
   onTaskUpdated?: () => void;
   scope?: 'global' | 'project';
   projectNameMap?: Map<string, string>;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-function KanbanBoard({ dagStatus, projectId, onTaskUpdated, scope = 'project', projectNameMap }: KanbanBoardProps) {
+function KanbanBoard({ dagStatus, projectId, onTaskUpdated, scope = 'project', projectNameMap, hasMore, onLoadMore }: KanbanBoardProps) {
   const storageKey = projectId ? `kanban-${projectId}` : 'kanban-global';
 
   // Load persisted state
@@ -417,6 +419,19 @@ function KanbanBoard({ dagStatus, projectId, onTaskUpdated, scope = 'project', p
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Load More button for paginated results */}
+      {hasMore && onLoadMore && (
+        <div className="px-3 pb-3">
+          <button
+            onClick={onLoadMore}
+            className="w-full py-2 text-xs text-th-text-muted hover:text-th-text bg-th-bg-muted hover:bg-th-bg-muted/80 rounded border border-th-border/50 transition-colors"
+            data-testid="load-more-tasks"
+          >
+            Load more tasks…
+          </button>
+        </div>
+      )}
     </div>
   );
 }
