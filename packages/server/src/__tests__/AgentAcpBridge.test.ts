@@ -171,11 +171,11 @@ describe('AgentAcpBridge — startAcp', () => {
     );
   });
 
-  it('passes correct cliArgs to AcpConnection.start', () => {
+  it('passes correct cliArgs to AcpConnection.start', async () => {
     const agent = createFakeAgent({ model: 'claude-sonnet-4' });
     mockStart.mockResolvedValue('session-123');
 
-    startAcp(agent, fakeConfig);
+    await startAcp(agent, fakeConfig);
 
     expect(mockStart).toHaveBeenCalledWith(
       expect.objectContaining({
