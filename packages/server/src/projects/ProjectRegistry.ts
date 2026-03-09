@@ -1,4 +1,4 @@
-import { eq, desc, and, isNotNull, ne, sql } from 'drizzle-orm';
+import { eq, desc, and, isNotNull, ne, sql, inArray } from 'drizzle-orm';
 import type { Database } from '../db/database.js';
 import { projects, projectSessions, dagTasks, decisions, agentMemory } from '../db/schema.js';
 import { generateProjectId } from '../utils/projectId.js';
@@ -125,26 +125,37 @@ export class ProjectRegistry {
 
     // Task summary across all sessions for this project
     let taskSummary = { total: 0, done: 0, failed: 0, pending: 0 };
-    const taskRows = this.db.all<{ dag_status: string; cnt: number }>(
-      `SELECT dag_status, count(*) as cnt FROM dag_tasks WHERE project_id = ? GROUP BY dag_status`,
-      [projectId],
-    );
+    const taskRows = this.db.drizzle
+      .select({
+        dagStatus: dagTasks.dagStatus,
+        cnt: sql<number>`count(*)`.as('cnt'),
+      })
+      .from(dagTasks)
+      .where(eq(dagTasks.projectId, projectId))
+      .groupBy(dagTasks.dagStatus)
+      .all();
     for (const row of taskRows) {
       const count = Number(row.cnt);
       taskSummary.total += count;
-      if (row.dag_status === 'done') taskSummary.done += count;
-      else if (row.dag_status === 'failed') taskSummary.failed += count;
+      if (row.dagStatus === 'done') taskSummary.done += count;
+      else if (row.dagStatus === 'failed') taskSummary.failed += count;
       else taskSummary.pending += count;
     }
 
     // Recent decisions across all sessions
     let recentDecisions: Array<{ title: string; rationale: string; status: string }> = [];
     if (allLeadIds.length > 0) {
-      const placeholders = allLeadIds.map(() => '?').join(',');
-      recentDecisions = this.db.all<{ title: string; rationale: string; status: string }>(
-        `SELECT title, COALESCE(rationale,'') as rationale, COALESCE(status,'recorded') as status FROM decisions WHERE lead_id IN (${placeholders}) ORDER BY created_at DESC LIMIT 20`,
-        allLeadIds,
-      );
+      recentDecisions = this.db.drizzle
+        .select({
+          title: decisions.title,
+          rationale: sql<string>`COALESCE(${decisions.rationale}, '')`.as('rationale'),
+          status: sql<string>`COALESCE(${decisions.status}, 'recorded')`.as('status'),
+        })
+        .from(decisions)
+        .where(inArray(decisions.leadId, allLeadIds))
+        .orderBy(desc(decisions.createdAt))
+        .limit(20)
+        .all();
     }
 
     // Aggregate memories from the most recent session's lead

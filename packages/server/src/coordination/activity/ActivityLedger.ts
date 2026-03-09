@@ -200,10 +200,10 @@ export class ActivityLedger extends EventEmitter {
 
   prune(keepCount: number = 10000): number {
     this.flush();
-    const result = this.db.run(
-      'DELETE FROM activity_log WHERE id NOT IN (SELECT id FROM activity_log ORDER BY id DESC LIMIT ?)',
-      [keepCount],
-    );
+    const result = this.db.drizzle
+      .delete(activityLog)
+      .where(sql`${activityLog.id} NOT IN (SELECT id FROM ${activityLog} ORDER BY id DESC LIMIT ${keepCount})`)
+      .run();
     this._version++;
     return result.changes;
   }
@@ -212,10 +212,10 @@ export class ActivityLedger extends EventEmitter {
   pruneByAge(maxAgeDays: number = 7): number {
     this.flush();
     const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
-    const result = this.db.run(
-      'DELETE FROM activity_log WHERE timestamp < ?',
-      [cutoff],
-    );
+    const result = this.db.drizzle
+      .delete(activityLog)
+      .where(lte(activityLog.timestamp, cutoff))
+      .run();
     if (result.changes > 0) this._version++;
     return result.changes;
   }

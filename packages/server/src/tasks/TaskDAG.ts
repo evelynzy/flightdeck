@@ -579,10 +579,15 @@ export class TaskDAG extends EventEmitter {
     // Resolve newly ready tasks (skipped counts as "done" for dependency resolution)
     const newlyReady = this.resolveReady(leadId);
     for (const t of newlyReady) {
-      this.db.run(
-        `UPDATE dag_tasks SET dag_status = 'ready' WHERE id = ? AND lead_id = ? AND dag_status IN ('pending', 'blocked')`,
-        [t.id, leadId],
-      );
+      this.db.drizzle
+        .update(dagTasks)
+        .set({ dagStatus: 'ready' })
+        .where(and(
+          eq(dagTasks.id, t.id),
+          eq(dagTasks.leadId, leadId),
+          inArray(dagTasks.dagStatus, ['pending', 'blocked']),
+        ))
+        .run();
     }
     this.emit('dag:updated', { leadId });
     if (wasRunning && previousAgentId) {
@@ -602,10 +607,15 @@ export class TaskDAG extends EventEmitter {
     // Resolve dependents — cancelled task no longer blocks them
     const newlyReady = this.resolveReady(leadId);
     for (const t of newlyReady) {
-      this.db.run(
-        `UPDATE dag_tasks SET dag_status = 'ready' WHERE id = ? AND lead_id = ? AND dag_status IN ('pending', 'blocked')`,
-        [t.id, leadId],
-      );
+      this.db.drizzle
+        .update(dagTasks)
+        .set({ dagStatus: 'ready' })
+        .where(and(
+          eq(dagTasks.id, t.id),
+          eq(dagTasks.leadId, leadId),
+          inArray(dagTasks.dagStatus, ['pending', 'blocked']),
+        ))
+        .run();
     }
     this.emit('dag:updated', { leadId });
     return true;
