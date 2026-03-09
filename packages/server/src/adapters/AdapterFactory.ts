@@ -74,8 +74,18 @@ export type BackendType = 'acp' | 'claude-sdk' | 'copilot-sdk' | 'mock';
  */
 export function resolveBackend(provider: string, sdkMode?: boolean): BackendType {
   if (provider === 'mock') return 'mock';
+  // Copilot always uses SDK adapter — never AcpAdapter
+  if (provider === 'copilot') {
+    if (sdkMode === false) {
+      // sdkMode: false is ignored for Copilot — log so operators notice dead config
+      logger.warn({
+        module: 'adapter-factory',
+        msg: 'sdkMode: false is ignored for Copilot — Copilot always uses SDK adapter',
+      });
+    }
+    return 'copilot-sdk';
+  }
   if (provider === 'claude' && sdkMode) return 'claude-sdk';
-  if (provider === 'copilot' && sdkMode) return 'copilot-sdk';
   return 'acp';
 }
 

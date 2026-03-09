@@ -269,7 +269,13 @@ export class WebSocketServer {
 
     this.track(agentManager, 'agent:session_resume_failed', (data: any) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
-      this.broadcastToProject({ type: 'agent:session_resume_failed', ...data }, projectId);
+      // Sanitize error before broadcasting — internal paths/stack frames must not leak to clients
+      const { error: _internalError, ...safeData } = data;
+      this.broadcastToProject({
+        type: 'agent:session_resume_failed',
+        ...safeData,
+        error: 'Session resume failed — started new session',
+      }, projectId);
     });
 
     this.track(agentManager, 'agent:context_compacted', (data: any) => {
