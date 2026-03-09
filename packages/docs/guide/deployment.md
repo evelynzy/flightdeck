@@ -76,6 +76,7 @@ See `flightdeck.config.example.yaml` for the full annotated config.
 | `FLIGHTDECK_DB_PATH` | `./flightdeck.db` | SQLite database path |
 | `AUTH` | (auto-generated) | Auth mode: `'none'` to disable, or env var name containing token |
 | `SERVER_SECRET` | (auto-generated) | Fixed auth token (overrides random generation) |
+| `LOG_ALL_HTTP` | `false` | Set to `true` to log all HTTP requests including successful GETs |
 
 ### Provider API Keys
 
@@ -89,6 +90,28 @@ Each CLI provider may need its own API key:
 | Codex | `OPENAI_API_KEY` | Required for Codex CLI |
 | Cursor | `CURSOR_API_KEY` | Required for Cursor |
 | OpenCode | — | No API key required |
+
+### HTTP Request Logging
+
+Flightdeck uses structured HTTP request logging via the `httpLogger` middleware, which runs on both the main API server and the agent server.
+
+**Default behavior (optimized for low noise):**
+
+| Request type | Logged? |
+|-------------|---------|
+| GET with 2xx/3xx response | ❌ Suppressed (polling/status checks are noisy) |
+| GET with 4xx/5xx response | ✅ Always logged (errors matter) |
+| POST, PUT, DELETE, PATCH | ✅ Always logged (state-changing operations) |
+
+Each log entry includes the HTTP method, path, status code, and response time in milliseconds. Entries are logged at the appropriate level: `info` for success, `warn` for 4xx, `error` for 5xx.
+
+**To enable full logging** (including successful GET requests):
+
+```bash
+LOG_ALL_HTTP=true npm start
+```
+
+This is useful for debugging routing issues, slow endpoints, or understanding traffic patterns. Not recommended for production — GET polling generates significant log volume.
 
 ## Building from Source
 
