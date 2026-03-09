@@ -46,7 +46,7 @@ const MODE_OPTIONS: Array<{ value: ResumeMode; icon: typeof Users; label: string
     value: 'resume-all',
     icon: Users,
     label: 'Resume all agents',
-    description: 'Respawn the full team from the previous session',
+    description: 'Respawn the full crew from the previous session',
   },
   {
     value: 'select',

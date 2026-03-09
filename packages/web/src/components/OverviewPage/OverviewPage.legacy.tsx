@@ -770,7 +770,7 @@ export function OverviewPage({ api, ws }: Props) {
                 value={feedbackText}
                 onChange={(e) => setFeedbackText(e.target.value)}
                 onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { handleFeedback(feedbackText); } }}
-                placeholder="Tell the team what you'd like done differently..."
+                placeholder="Tell the crew what you'd like done differently..."
                 rows={3}
                 className="w-full bg-th-bg border border-th-border rounded px-3 py-2 text-sm text-th-text-alt focus:outline-none focus:border-blue-500 resize-y"
                 autoFocus
