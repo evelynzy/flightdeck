@@ -11,6 +11,7 @@ import { CostCurve } from './CostCurve';
 import { KeyStats } from './KeyStats';
 import { AgentHeatmap } from './AgentHeatmap';
 import { MilestoneTimeline } from './MilestoneTimeline';
+import { SessionHistory } from '../SessionHistory';
 import type { TimelineDataPoint } from './ProgressTimeline';
 import type { FlowPoint } from './TaskBurndown';
 import type { CostPoint } from './CostCurve';
@@ -46,6 +47,12 @@ export function OverviewPage(_props: Props) {
     if (lead) return lead.projectId || lead.id;
     return projects.length > 0 ? projects[0].id : null;
   }, [selectedLeadId, agents, projects]);
+
+  // Check if project has an active running lead
+  const hasActiveLead = useMemo(() => {
+    return agents.some(a => a.role?.id === 'lead' && a.projectId === effectiveId &&
+      (a.status === 'running' || a.status === 'idle'));
+  }, [agents, effectiveId]);
 
   // ── Data state ─────────────────────────────────────────────────
   const [timelineData, setTimelineData] = useState<TimelineDataPoint[]>([]);
@@ -204,6 +211,11 @@ export function OverviewPage(_props: Props) {
 
       {/* Agent Activity Heatmap */}
       <AgentHeatmap agents={displayAgents} buckets={heatmapBuckets} />
+
+      {/* Session History */}
+      {effectiveId && (
+        <SessionHistory projectId={effectiveId} hasActiveLead={hasActiveLead} />
+      )}
       </div>
     </div>
   );
