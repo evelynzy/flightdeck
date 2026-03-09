@@ -765,11 +765,10 @@ export function projectsRoutes(ctx: AppContext): Router {
         // Find last completed session (skip current active one we just created)
         const lastSession = sessions.find((s) => s.leadId !== agent.id);
         if (lastSession && (resumeAll || agentIds)) {
-          const allRosterAgents = agentRoster.getAllAgents();
+          const allRosterAgents = agentRoster.getByProject(project.id);
           const previousAgents = allRosterAgents.filter((a) => {
             const meta = a.metadata as Record<string, unknown> | undefined;
             return (
-              a.projectId === project.id &&
               meta?.parentId === lastSession.leadId &&
               a.role !== 'lead'
             );

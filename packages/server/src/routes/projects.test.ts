@@ -158,6 +158,7 @@ describe('GET /projects/:id/sessions/detail', () => {
       } as any,
       agentRoster: {
         getAllAgents: mockGetAllAgents,
+        getByProject: mockGetAllAgents,
       } as any,
       sessionRetro: {
         getRetros: mockGetRetros,
@@ -277,6 +278,7 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
       } as any,
       agentRoster: {
         getAllAgents: mockGetAllAgents,
+        getByProject: mockGetAllAgents,
       } as any,
     });
     baseUrl = await srv.start();

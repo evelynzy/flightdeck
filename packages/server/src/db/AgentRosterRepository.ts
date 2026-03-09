@@ -99,6 +99,16 @@ export class AgentRosterRepository {
     return rows.map((r) => this.rowToRecord(r));
   }
 
+  /** Get all agents for a specific project (uses idx_agent_roster_project index). */
+  getByProject(projectId: string): AgentRecord[] {
+    const rows = this.db.drizzle
+      .select()
+      .from(agentRoster)
+      .where(eq(agentRoster.projectId, projectId))
+      .all();
+    return rows.map((r) => this.rowToRecord(r));
+  }
+
   updateStatus(agentId: string, status: AgentStatus): boolean {
     const result = this.db.drizzle
       .update(agentRoster)
