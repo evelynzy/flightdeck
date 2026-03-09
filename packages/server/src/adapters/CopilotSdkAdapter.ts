@@ -9,7 +9,7 @@
  * The SDK spawns/connects to a Copilot CLI server and communicates via
  * JSON-RPC, but from our perspective it's an in-process call.
  *
- * Design: .flightdeck/shared/architect-3973583e/copilot-sdk-adapter-design.md
+ * Design: docs/design/copilot-sdk-adapter-design.md
  */
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
