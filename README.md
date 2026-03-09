@@ -151,69 +151,120 @@ npm run dev
 
 ## Architecture
 
-**Monorepo** (`npm workspaces`):
+Flightdeck uses a **three-tier architecture** with clear separation of concerns:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                      Web Client (Vite/React)                     │
+│  Dashboard · Project Views · Session Management · Real-time UI   │
+│  React 19 · TailwindCSS 4 · Zustand · WebSocket client          │
+└───────────────────────┬──────────────────────────────────────────┘
+                        │ REST API + WebSocket (/ws)
+┌───────────────────────▼──────────────────────────────────────────┐
+│                  Orchestration Server (Express 5)                 │
+│  Session mgmt · Project mgmt · GovernancePipeline · Task DAG     │
+│  Knowledge · Decisions · File locks · Chat groups · Integrations │
+│  SQLite/Drizzle · Zod validation · Pino logging                  │
+└───────────────────────┬──────────────────────────────────────────┘
+                        │ stdio + PID file (detached child process)
+┌───────────────────────▼──────────────────────────────────────────┐
+│                    Agent Server (Daemon)                          │
+│  Spawns & manages CLI agent processes via ACP protocol           │
+│  Copilot CLI · Claude CLI · Gemini CLI · Codex · Cursor          │
+│  Per-agent lifecycle · Auto-restart · Heartbeat monitoring        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### How the tiers interact
+
+1. **Client ↔ Orchestration Server** — The React frontend communicates with the Express server via REST endpoints (43 route modules covering agents, projects, sessions, tasks, decisions, knowledge, etc.) and a persistent WebSocket connection on `/ws` for real-time updates. WebSocket events are batched and throttled (agent text flushed every 100ms).
+
+2. **Orchestration Server ↔ Agent Server** — The orchestration server forks the agent server as a detached child process, communicating via stdio and monitoring health with heartbeat pings. The agent server manages individual CLI agent processes (Copilot, Claude, Gemini, Codex, Cursor, OpenCode) through the ACP (Agent Client Protocol) — each agent runs as a separate subprocess with its own context window and role.
+
+3. **Command flow** — Agents emit structured commands (wrapped in doubled Unicode brackets) in their output stream. The `CommandDispatcher` parses these and routes them to 10 domain-specific command modules (`AgentCommands`, `TaskCommands`, `CommCommands`, etc.). The `GovernancePipeline` intercepts commands through ordered hooks: security → permission → validation → rate-limit → policy → approval, with post-hooks for audit and metrics.
+
+### Monorepo structure
 
 | Package | Description |
 |---------|-------------|
-| `packages/server` | Express 5 + WebSocket server, multi-SDK agent adapters, SQLite/Drizzle ORM, knowledge pipeline |
-| `packages/web` | React 19 + Vite frontend, Tailwind CSS 4, Zustand state, interactive Kanban, AttentionBar |
+| `packages/shared` | TypeScript types, Zod schemas, protocol definitions (shared between server and client) |
+| `packages/server` | Express 5 orchestration server, agent management, SQLite/Drizzle ORM, knowledge pipeline |
+| `packages/web` | React 19 + Vite frontend, Tailwind CSS 4, Zustand state management |
+| `packages/docs` | Documentation website |
 
-**Tech stack**: Node.js · TypeScript · Express 5 · SQLite (WAL) · Drizzle ORM · React 19 · Vite · Tailwind CSS 4 · Zustand · @dnd-kit · WebSocket (ws)
-
-```
-React UI ←→ WebSocket ←→ Node.js Server ←→ SDK Adapters ←→ Copilot/Claude/ACP ×N
-                              │
-                         AgentManager (TypedEmitter)
-                        ┌─────┴──────┐
-                   MessageBus    ActivityLedger (batched writes)
-                   DecisionLog   FileLockRegistry
-                   Scheduler     ContextRefresher
-                   ProjectRegistry  ChatGroupRegistry
-                   CommandDispatcher  TimelineStore
-                   DeferredIssueRegistry  EventPipeline
-                   AlertEngine  TimerRegistry
-                    KnowledgeInjector  NotificationBatcher
-                    IntegrationRouter  SkillsLoader
-```
-
-### Key Components
+### Key server components
 
 | Component | Responsibility |
 |-----------|---------------|
-| **AgentManager** | Spawns agents, routes messages, manages delegations. Cascade termination with visited-set guard. |
-| **CommandDispatcher** | Thin router that delegates to 10 command modules. Parses doubled Unicode-bracket commands (U+27E6/U+27E7) from agent output. |
-| **Command Modules** | `AgentCommands`, `CommCommands`, `DirectMessageCommands`, `TaskCommands`, `CoordCommands`, `SystemCommands`, `DeferredCommands`, `TimerCommands`, `CapabilityCommands`, `TemplateCommands` — domain-grouped command handlers |
-| **Agent** | Wraps a Copilot CLI process (ACP) with lifecycle management, message buffering, and memory bounds |
-| **RoleRegistry** | Role definitions with system prompts, icons, colors, default models. `receivesStatusUpdates` flag for secretary auto-refresh. |
-| **MessageBus** | Routes inter-agent messages and group chats |
+| **AgentManager** | Spawns agents, routes messages, manages delegations. 25+ typed events. Cascade termination with visited-set guard. |
+| **CommandDispatcher** | Parses doubled Unicode-bracket commands (U+27E6/U+27E7) from agent output, routes to 10 command modules. |
+| **GovernancePipeline** | Single interception point for all commands — pre-hooks (security, permission, validation, rate-limit, policy, approval) and post-hooks (audit, metrics). |
+| **TaskDAG + EagerScheduler** | Directed acyclic graph for task scheduling with dependency resolution, parallel analysis, and eager pre-assignment of ready tasks. |
+| **ProjectRegistry** | Persistent project management — CRUD, session tracking, briefing generation. |
+| **SessionResumeManager** | Restores agent state after server restart with full context recovery. |
+| **KnowledgeInjector** | Injects session knowledge, skills, and collective memory into agent context on spawn. |
 | **FileLockRegistry** | Pessimistic file locking with TTL, glob support, expiry notifications. SQLite-backed. |
-| **WorktreeManager** | ⚠️ _In development._ Per-agent git worktrees — create/merge/cleanup lifecycle. Wired into AgentManager but not yet enabled. |
-| **ChatGroupRegistry** | Group lifecycle — create, archive, role-based membership, auto-creation for parallel work. Auto-adds new agents matching group role criteria. |
-| **ActivityLedger** | Batched activity logging (flushes every 250ms or 64 entries) |
-| **DecisionLog** | Decision tracking with accept/reject/reason workflow |
-| **AlertEngine** | Proactive detection: stuck agents (with exemptions for leads, new agents, prompting agents), context pressure, duplicate edits, idle+ready mismatch, stale decisions |
-| **ContextRefresher** | Re-injects crew context with health header after compaction events. Auto-refreshes secretary roles. |
-| **Scheduler** | Background tasks: expired lock cleanup, activity pruning, delegation cleanup |
-| **ProjectRegistry** | Persistent project management — CRUD, session tracking, briefing generation |
-| **HeartbeatMonitor** | DAG-aware stall detection — nudges idle leads with remaining work |
-| **EventPipeline** | Reactive event handlers: run CI after commits, log summaries on task completion, trigger webhooks |
-| **CapabilityRegistry** | Tracks acquired agent expertise (files, technologies, domains) for smart matching |
-| **EagerScheduler** | Pre-assigns upcoming tasks to idle agents before they become active |
-| **TaskTemplates** | Reusable task templates with natural-language decomposition |
-| **SearchEngine** | Full-text search across messages, tasks, decisions, and activity |
-| **PerformanceScorecard** | Agent performance metrics: throughput, first-pass rate, velocity, token efficiency |
-| **DecisionRecords** | ADR-style structured decision records with status tracking |
-| **CoverageTracker** | Test coverage monitoring with regression detection and trend analysis |
-| **ComplexityMonitor** | File complexity analysis with 4-tier scoring and hotspot detection |
-| **NotificationManager** | User notification preferences, quiet hours, priority-based routing |
-| **EscalationManager** | Auto-escalation for stale decisions and blocked tasks |
-| **ModelSelector** | Auto-picks optimal model based on task complexity, agent role, and budget |
-| **TokenBudgetOptimizer** | Priority-weighted token allocation across active agents |
-| **ParallelAnalyzer** | DAG bottleneck detection with critical path analysis |
-| **ReportGenerator** | Session report generation in HTML and Markdown |
-| **KnowledgeTransfer** | Cross-project knowledge sharing and context reuse |
+| **MessageBus + ChatGroupRegistry** | Inter-agent messaging, group chat lifecycle, role-based auto-membership. |
+| **DecisionLog** | Decision tracking with accept/reject/reason workflow and approval queue. |
+| **ActivityLedger** | Event-sourced activity logging (batched flushes every 250ms or 64 entries). |
+| **AlertEngine** | Proactive detection: stuck agents, context pressure, duplicate edits, stale decisions. |
+| **IntegrationRouter** | External platform routing — Telegram bot with batched notifications. |
+| **AdapterFactory** | Selects agent backend (Copilot CLI, Claude SDK, Gemini, Codex, Cursor, OpenCode) based on configuration. |
 
 > See the [Architecture Decisions](packages/docs/reference/architecture-decisions.md) page for the rationale behind key design choices.
+
+### Configuration
+
+Flightdeck uses layered configuration: **hardcoded defaults ← YAML config ← environment variables ← runtime API**.
+
+**Config file** (`flightdeck.config.yaml`):
+
+```yaml
+server:
+  maxConcurrentAgents: 50        # 1–200
+
+heartbeat:
+  idleThresholdMs: 60000         # Idle agent detection threshold
+  crewUpdateIntervalMs: 180000   # Crew status push interval
+
+models:
+  defaults:                      # Default model per role
+    lead: [claude-opus-4.6]
+    developer: [claude-opus-4.6]
+    architect: [claude-opus-4.6]
+    code-reviewer: [gemini-3-pro-preview]
+    # ... (14 roles total)
+
+provider:
+  id: copilot                    # Active provider: copilot | claude | gemini | codex | cursor | opencode
+  sdkMode: false                 # Use in-process SDK (Claude/Copilot only)
+
+budget:
+  limit: null                    # null = unlimited; set a dollar amount to cap spend
+  thresholds:
+    warning: 0.7
+    critical: 0.9
+    pause: 1.0
+```
+
+See [`flightdeck.config.example.yaml`](flightdeck.config.example.yaml) for the full reference.
+
+**Key environment variables:**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `3001` | Server port |
+| `HOST` | `127.0.0.1` | Bind address |
+| `DB_PATH` | `./flightdeck.db` | SQLite database location |
+| `CLI_PROVIDER` | `copilot` | Agent provider (`copilot`, `claude`, `gemini`, `codex`, `cursor`, `opencode`) |
+| `ANTHROPIC_API_KEY` | — | Required for Claude provider |
+| `GEMINI_API_KEY` | — | Required for Gemini provider |
+| `OPENAI_API_KEY` | — | Required for Codex provider |
+| `TELEGRAM_BOT_TOKEN` | — | Telegram integration (optional) |
+| `AUTH` | enabled | Set to `none` to disable authentication |
+| `SERVER_SECRET` | auto-generated | Fixed auth token (optional) |
+| `MAX_AGENTS` | `50` | Max concurrent agents (1–200) |
+| `FLIGHTDECK_CONFIG` | — | Path to YAML config file |
 
 ## Agent Roles
 
