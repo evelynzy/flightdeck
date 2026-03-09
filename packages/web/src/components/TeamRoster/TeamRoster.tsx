@@ -25,7 +25,7 @@ import type { TabItem } from '../ui/Tabs';
 
 // ── Types ─────────────────────────────────────────────────
 
-type RosterStatus = 'idle' | 'busy' | 'terminated';
+type RosterStatus = 'idle' | 'busy' | 'terminated' | 'retired';
 type LiveStatus = 'creating' | 'running' | 'idle' | 'completed' | 'failed' | 'terminated' | null;
 type ProfileTab = 'overview' | 'history' | 'knowledge' | 'skills' | 'settings';
 type SortField = 'role' | 'status' | 'updatedAt';
@@ -356,9 +356,9 @@ export function TeamRoster() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="flex flex-col h-full min-h-0 p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <Users className="w-6 h-6 text-th-accent" />
           <h1 className="text-xl font-bold text-th-text">Team Roster</h1>
@@ -384,7 +384,7 @@ export function TeamRoster() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 mt-6 shrink-0">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-th-text-alt" />
           <input
@@ -397,7 +397,7 @@ export function TeamRoster() {
         </div>
 
         <div className="flex gap-1">
-          {(['all', 'idle', 'busy', 'terminated'] as const).map(s => (
+          {(['all', 'idle', 'busy', 'terminated', 'retired'] as const).map(s => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -422,7 +422,7 @@ export function TeamRoster() {
       </div>
 
       {/* Content: List + Profile */}
-      <div className="flex gap-6">
+      <div className="flex gap-6 flex-1 min-h-0 overflow-y-auto mt-6">
         {/* Agent List */}
         <div className={`space-y-2 ${selectedAgent ? 'w-1/2' : 'w-full'}`}>
           {filtered.length === 0 ? (
