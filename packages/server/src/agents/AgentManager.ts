@@ -768,11 +768,13 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     const startAgent = () => {
       if (this.agentServerClient) {
         const isResume = !!agent.resumeSessionId;
-        let initialPrompt: string | undefined;
-        if (!isResume) {
-          const contextManifest = agent.buildContextManifest(peers, agent.budget);
-          const taskAssignment = `You are acting as the "${effectiveRole.name}" role. ${task ? `Your assigned task is: ${task}` : 'Awaiting task assignment.'}`;
-          initialPrompt = `${effectiveRole.systemPrompt}\n\n${contextManifest}\n\n${taskAssignment}`;
+        // Always send system prompt — even on resume, the agent needs role
+        // instructions and context manifest for the LLM to function correctly.
+        const contextManifest = agent.buildContextManifest(peers, agent.budget);
+        const taskAssignment = `You are acting as the "${effectiveRole.name}" role. ${task ? `Your assigned task is: ${task}` : 'Awaiting task assignment.'}`;
+        let initialPrompt = `${effectiveRole.systemPrompt}\n\n${contextManifest}\n\n${taskAssignment}`;
+        if (isResume) {
+          initialPrompt += '\n\n[System] You are resuming from a previous session. Your conversation history has been restored. Continue from where you left off.';
         }
         startRemoteBridge(agent, this.agentServerClient, initialPrompt);
       } else {

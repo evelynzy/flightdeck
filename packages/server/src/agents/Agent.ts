@@ -167,13 +167,17 @@ export class Agent {
     ensureSharedWorkspace(this);
     const isResume = !!this.resumeSessionId;
 
+    // Always send the system prompt — even on resume, the agent needs role
+    // instructions and context manifest. The CLI's loadSession() restores
+    // conversation history, but the LLM still needs its system prompt.
+    let initialPrompt = `${this.role.systemPrompt}\n\n${this.buildContextManifest(this.peers, this.budget)}\n\nYou are acting as the "${this.role.name}" role. ${this.task ? `Your assigned task is: ${this.task}` : 'Awaiting task assignment.'}`;
+    if (isResume) {
+      initialPrompt += '\n\n[System] You are resuming from a previous session. Your conversation history has been restored. Continue from where you left off.';
+    }
+
     // startAcpBridge is async (adapter creation uses dynamic imports).
     // Errors are handled internally by the bridge (sets agent status to 'failed').
-    const bridgePromise = isResume
-      ? startAcpBridge(this, this.config, undefined)
-      : startAcpBridge(this, this.config,
-          `${this.role.systemPrompt}\n\n${this.buildContextManifest(this.peers, this.budget)}\n\nYou are acting as the "${this.role.name}" role. ${this.task ? `Your assigned task is: ${this.task}` : 'Awaiting task assignment.'}`);
-
+    const bridgePromise = startAcpBridge(this, this.config, initialPrompt);
     bridgePromise.catch((err) => {
       logger.error({ module: 'agent', msg: 'Bridge startup failed', agentId: this.id, err: (err as Error).message });
       this.exitError = (err as Error).message;
