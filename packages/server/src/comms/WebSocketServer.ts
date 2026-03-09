@@ -418,9 +418,10 @@ export class WebSocketServer {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw JSON from client, validated by switch cases
   private handleMessage(
     client: ClientConnection,
-    msg: any,
+    msg: Record<string, any>,
   ): void {
     runWithWsContext(client.id, client.subscribedProject ?? undefined, () => {
     switch (msg.type) {

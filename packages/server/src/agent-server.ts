@@ -10,7 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import { writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { EventBuffer } from './transport/EventBuffer.js';
+import { EventBuffer, type BufferedEventType } from './transport/EventBuffer.js';
 import { MassFailureDetector } from './transport/MassFailureDetector.js';
 import { createAdapterForProvider, buildStartOptions } from './adapters/AdapterFactory.js';
 import type { AdapterConfig } from './adapters/AdapterFactory.js';
@@ -93,11 +93,12 @@ import type {
   SpawnAgentMessage,
   SendMessageMessage,
   TerminateAgentMessage,
+  CancelAgentMessage,
   ListAgentsMessage,
   SubscribeMessage,
   ErrorCode,
 } from './transport/types.js';
-import { hasScope, isValidScope } from './transport/types.js';
+import { hasRequestId, hasScope, isValidScope } from './transport/types.js';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -319,13 +320,11 @@ export class AgentServer {
   private dispatchMessage(msg: OrchestratorMessage, conn: TransportConnection): void {
     // Bind connection scope from first scoped message
     if (!this.connectionScope && 'scope' in msg) {
-      const rawScope = (msg as any).scope;
-      if (rawScope && typeof rawScope === 'object') {
-        this.connectionScope = {
-          projectId: (typeof rawScope.projectId === 'string' && rawScope.projectId) || DEFAULT_PROJECT_ID,
-          teamId: (typeof rawScope.teamId === 'string' && rawScope.teamId) || DEFAULT_TEAM_ID,
-        };
-      }
+      const scoped = msg as OrchestratorMessage & { scope: MessageScope };
+      this.connectionScope = {
+        projectId: scoped.scope.projectId || DEFAULT_PROJECT_ID,
+        teamId: scoped.scope.teamId || DEFAULT_TEAM_ID,
+      };
     }
 
     // Enforce scope on all scoped messages
@@ -334,7 +333,8 @@ export class AgentServer {
         enforceScope(msg, this.connectionScope);
       } catch (err) {
         if (err instanceof ScopeMismatchError) {
-          this.sendError(conn, 'INVALID_MESSAGE', err.message, (msg as any).requestId);
+          const reqId = hasRequestId(msg) ? msg.requestId : undefined;
+          this.sendError(conn, 'INVALID_MESSAGE', err.message, reqId);
           return;
         }
         throw err;
@@ -345,12 +345,15 @@ export class AgentServer {
       case 'spawn_agent':     this.handleSpawn(msg, conn).catch(err => logger.error({ module: 'agent-server', msg: 'handleSpawn failed', err: (err as Error).message })); return;
       case 'send_message':    return this.handleSendMessage(msg, conn);
       case 'terminate_agent': return this.handleTerminate(msg, conn);
+      case 'cancel_agent':    return this.handleTerminate(msg, conn);
       case 'list_agents':     return this.handleListAgents(msg, conn);
       case 'subscribe':       return this.handleSubscribe(msg, conn);
       case 'ping':            return void conn.send({ type: 'pong', requestId: msg.requestId, timestamp: Date.now() });
       case 'authenticate':    return void conn.send({ type: 'auth_result', requestId: msg.requestId, success: true });
-      default:
-        this.sendError(conn, 'INVALID_MESSAGE', `Unknown message type: ${(msg as any).type}`, (msg as any).requestId);
+      default: {
+        const unhandled: never = msg;
+        this.sendError(conn, 'INVALID_MESSAGE', `Unknown message type: ${(unhandled as OrchestratorMessage).type}`);
+      }
     }
   }
 
@@ -445,7 +448,7 @@ export class AgentServer {
     });
   }
 
-  private handleTerminate(msg: TerminateAgentMessage, conn: TransportConnection): void {
+  private handleTerminate(msg: TerminateAgentMessage | CancelAgentMessage, conn: TransportConnection): void {
     const agent = this.agents.get(msg.agentId);
     if (!agent) {
       this.sendError(conn, 'AGENT_NOT_FOUND', `Agent ${msg.agentId} not found`, msg.requestId);
@@ -583,10 +586,11 @@ export class AgentServer {
     if (this.connection?.isConnected) {
       this.connection.send(msg);
     } else if (msg.type === 'agent_event') {
+      const bufferedType = `agent:${msg.eventType}` as BufferedEventType;
       this.eventBuffer.push({
         eventId: msg.eventId,
         timestamp: new Date().toISOString(),
-        type: `agent:${msg.eventType}` as any,
+        type: bufferedType,
         agentId: msg.agentId,
         data: msg.data,
       });

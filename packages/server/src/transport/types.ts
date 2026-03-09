@@ -263,12 +263,12 @@ export function isAgentServerMessage(msg: TransportMessage): msg is AgentServerM
 
 /** Check if a message has a requestId for request/response matching. */
 export function hasRequestId(msg: TransportMessage): msg is TransportMessage & { requestId: string } {
-  return 'requestId' in msg && typeof (msg as any).requestId === 'string';
+  return 'requestId' in msg && typeof (msg as Record<string, unknown>).requestId === 'string';
 }
 
 /** Check if a message has a scope. */
 export function hasScope(msg: TransportMessage): msg is TransportMessage & { scope: MessageScope } {
-  return 'scope' in msg && isValidScope((msg as any).scope);
+  return 'scope' in msg && isValidScope((msg as Record<string, unknown>).scope);
 }
 
 /** Validate a MessageScope object. */
