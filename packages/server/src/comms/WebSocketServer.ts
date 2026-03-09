@@ -1,11 +1,12 @@
 import { Server as HttpServer } from 'http';
 import { v4 as uuid } from 'uuid';
 import { WebSocketServer as WsServer, WebSocket } from 'ws';
-import type { AgentManager } from '../agents/AgentManager.js';
+import type { AgentManager, AgentManagerEvents } from '../agents/AgentManager.js';
 import type { FileLockRegistry } from '../coordination/files/FileLockRegistry.js';
 import type { ActivityLedger } from '../coordination/activity/ActivityLedger.js';
-import type { DecisionLog, Decision } from '../coordination/decisions/DecisionLog.js';
-import type { ChatGroupRegistry } from '../comms/ChatGroupRegistry.js';
+import type { DecisionLog, Decision, IntentRule } from '../coordination/decisions/DecisionLog.js';
+import type { ChatGroupRegistry, ChatGroup, GroupMessage } from '../comms/ChatGroupRegistry.js';
+import type { ActivityEntry } from '@flightdeck/shared';
 import { getAuthSecret } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 import { redactWsMessage } from '../utils/redaction.js';
@@ -27,7 +28,7 @@ export class WebSocketServer {
   private lockRegistry: FileLockRegistry;
   private decisionLog: DecisionLog;
   private statusThrottleTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private statusPending = new Map<string, any>();
+  private statusPending = new Map<string, AgentManagerEvents['agent:status'] & { type: string; _projectId: string | undefined }>();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   // agent:text batching — buffer per agent, flush every 100ms
   private textBuffer = new Map<string, { texts: string[]; projectId?: string }>();
@@ -128,13 +129,13 @@ export class WebSocketServer {
   }
 
   /** Track an event listener so close() can remove it */
-  private track(emitter: any, event: string, handler: (...args: any[]) => void): void {
+  private track(emitter: { on(event: string, handler: (...args: unknown[]) => void): unknown; off(event: string, handler: (...args: unknown[]) => void): unknown }, event: string, handler: (...args: any[]) => void): void {
     emitter.on(event, handler);
     this.eventCleanups.push(() => emitter.off(event, handler));
   }
 
   private wireAgentEvents(agentManager: AgentManager): void {
-    this.track(agentManager, 'agent:spawned', (agentJson: any) => {
+    this.track(agentManager, 'agent:spawned', (agentJson: AgentManagerEvents['agent:spawned']) => {
       this.broadcastToProject({ type: 'agent:spawned', agent: agentJson }, agentJson.projectId);
     });
 
@@ -148,7 +149,7 @@ export class WebSocketServer {
       this.broadcastToProject({ type: 'agent:exit', agentId, code, error }, projectId);
     });
 
-    this.track(agentManager, 'agent:status', (data: any) => {
+    this.track(agentManager, 'agent:status', (data: AgentManagerEvents['agent:status']) => {
       const agentId = data.agentId;
       const projectId = this.resolveAgentProjectId(agentId);
       // Throttle: buffer latest status per agent, flush every 500ms
@@ -166,33 +167,33 @@ export class WebSocketServer {
       }
     });
 
-    this.track(agentManager, 'agent:crashed', (data: any) => {
+    this.track(agentManager, 'agent:crashed', (data: AgentManagerEvents['agent:crashed']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:crashed', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:auto_restarted', (data: any) => {
+    this.track(agentManager, 'agent:auto_restarted', (data: AgentManagerEvents['agent:auto_restarted']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:auto_restarted', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:restart_limit', (data: any) => {
+    this.track(agentManager, 'agent:restart_limit', (data: AgentManagerEvents['agent:restart_limit']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:restart_limit', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:sub_spawned', (data: any) => {
+    this.track(agentManager, 'agent:sub_spawned', (data: AgentManagerEvents['agent:sub_spawned']) => {
       const projectId = this.resolveAgentProjectId(data.parentId);
       this.broadcastToProject({ type: 'agent:sub_spawned', parentId: data.parentId, child: data.child }, projectId);
     });
 
-    this.track(agentManager, 'agent:tool_call', (data: any) => {
+    this.track(agentManager, 'agent:tool_call', (data: AgentManagerEvents['agent:tool_call']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:tool_call', ...data }, projectId);
     });
 
     // Broadcast immediately (not batched) so it arrives before any text from the new turn
-    this.track(agentManager, 'agent:response_start', (data: any) => {
+    this.track(agentManager, 'agent:response_start', (data: AgentManagerEvents['agent:response_start']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:response_start', ...data }, projectId);
     });
@@ -217,116 +218,116 @@ export class WebSocketServer {
       }
     });
 
-    this.track(agentManager, 'agent:content', (data: any) => {
+    this.track(agentManager, 'agent:content', (data: AgentManagerEvents['agent:content']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:content', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:thinking', (data: any) => {
+    this.track(agentManager, 'agent:thinking', (data: AgentManagerEvents['agent:thinking']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:thinking', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:plan', (data: any) => {
+    this.track(agentManager, 'agent:plan', (data: AgentManagerEvents['agent:plan']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:plan', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:usage', (data: any) => {
+    this.track(agentManager, 'agent:usage', (data: AgentManagerEvents['agent:usage']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:usage', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:permission_request', (data: any) => {
+    this.track(agentManager, 'agent:permission_request', (data: AgentManagerEvents['agent:permission_request']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:permission_request', ...data }, projectId);
     });
 
-    this.track(agentManager, 'lead:decision', (data: any) => {
+    this.track(agentManager, 'lead:decision', (data: AgentManagerEvents['lead:decision']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'lead:decision', ...data }, projectId);
     });
 
-    this.track(agentManager, 'lead:progress', (data: any) => {
+    this.track(agentManager, 'lead:progress', (data: AgentManagerEvents['lead:progress']) => {
       const projectId = this.resolveAgentProjectId(data.agentId ?? data.leadId);
       this.broadcastToProject({ type: 'lead:progress', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:delegated', (data: any) => {
-      const projectId = this.resolveAgentProjectId(data.agentId);
+    this.track(agentManager, 'agent:delegated', (data: AgentManagerEvents['agent:delegated']) => {
+      const projectId = this.resolveAgentProjectId(data.parentId);
       this.broadcastToProject({ type: 'agent:delegated', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:completion_reported', (data: any) => {
-      const projectId = this.resolveAgentProjectId(data.agentId);
+    this.track(agentManager, 'agent:completion_reported', (data: AgentManagerEvents['agent:completion_reported']) => {
+      const projectId = this.resolveAgentProjectId(data.childId);
       this.broadcastToProject({ type: 'agent:completion_reported', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:message_sent', (data: any) => {
+    this.track(agentManager, 'agent:message_sent', (data: AgentManagerEvents['agent:message_sent']) => {
       const projectId = this.resolveAgentProjectId(data.from);
       this.broadcastToProject({ type: 'agent:message_sent', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:session_ready', (data: any) => {
+    this.track(agentManager, 'agent:session_ready', (data: AgentManagerEvents['agent:session_ready']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:session_ready', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:session_resume_failed', (data: any) => {
+    this.track(agentManager, 'agent:session_resume_failed', (data: AgentManagerEvents['agent:session_resume_failed']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:session_resume_failed', ...data }, projectId);
     });
 
-    this.track(agentManager, 'agent:context_compacted', (data: any) => {
+    this.track(agentManager, 'agent:context_compacted', (data: AgentManagerEvents['agent:context_compacted']) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:context_compacted', ...data }, projectId);
     });
 
-    this.track(agentManager, 'dag:updated', (data: any) => {
+    this.track(agentManager, 'dag:updated', (data: AgentManagerEvents['dag:updated']) => {
       const projectId = this.resolveAgentProjectId(data.leadId);
       this.broadcastToProject({ type: 'dag:updated', ...data }, projectId);
     });
 
     // system:paused is global — always broadcast to all clients
-    this.track(agentManager, 'system:paused', (data: any) => {
+    this.track(agentManager, 'system:paused', (data: AgentManagerEvents['system:paused']) => {
       this.broadcastAll({ type: 'system:paused', ...data });
     });
   }
 
   private wireCoordinationEvents(lockRegistry: FileLockRegistry, activityLedger: ActivityLedger): void {
-    this.track(lockRegistry, 'lock:acquired', (data: any) => {
+    this.track(lockRegistry, 'lock:acquired', (data: { filePath: string; agentId: string; agentRole: string; reason: string; projectId: string }) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'lock:acquired', ...data }, projectId);
     });
 
-    this.track(lockRegistry, 'lock:released', (data: any) => {
+    this.track(lockRegistry, 'lock:released', (data: { filePath: string; agentId: string }) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'lock:released', ...data }, projectId);
     });
 
-    this.track(lockRegistry, 'lock:expired', (data: any) => {
+    this.track(lockRegistry, 'lock:expired', (data: { filePath: string; agentId: string; agentRole: string }) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'lock:expired', ...data }, projectId);
     });
 
-    this.track(activityLedger, 'activity', (entry: any) => {
+    this.track(activityLedger, 'activity', (entry: ActivityEntry) => {
       const projectId = this.resolveAgentProjectId(entry.agentId);
       this.broadcastToProject({ type: 'activity', entry }, projectId);
     });
   }
 
   private wireDecisionEvents(decisionLog: DecisionLog): void {
-    this.track(decisionLog, 'decision:confirmed', (decision: any) => {
+    this.track(decisionLog, 'decision:confirmed', (decision: Decision) => {
       const projectId = decision.projectId ?? this.resolveAgentProjectId(decision.agentId);
       this.broadcastToProject({ type: 'decision:confirmed', decision }, projectId);
     });
 
-    this.track(decisionLog, 'decision:rejected', (decision: any) => {
+    this.track(decisionLog, 'decision:rejected', (decision: Decision) => {
       const projectId = decision.projectId ?? this.resolveAgentProjectId(decision.agentId);
       this.broadcastToProject({ type: 'decision:rejected', decision }, projectId);
     });
 
-    this.track(decisionLog, 'decision:dismissed', (decision: any) => {
+    this.track(decisionLog, 'decision:dismissed', (decision: Decision) => {
       const projectId = decision.projectId ?? this.resolveAgentProjectId(decision.agentId);
       this.broadcastToProject({ type: 'decision:dismissed', decision }, projectId);
     });
@@ -349,35 +350,35 @@ export class WebSocketServer {
       this.broadcastToProject({ type: 'decisions:batch', action: 'dismiss', decisions }, projectId);
     });
 
-    this.track(decisionLog, 'intent:alert', (data: any) => {
+    this.track(decisionLog, 'intent:alert', (data: { decision: Decision; rule: IntentRule }) => {
       const projectId = data.decision.projectId ?? this.resolveAgentProjectId(data.decision.agentId);
       this.broadcastToProject({
         type: 'intent:alert',
         decision: data.decision,
-        rule: { pattern: data.rule.pattern, action: data.rule.action, label: data.rule.label },
+        rule: { pattern: data.rule.name, action: data.rule.action, label: data.rule.name },
       }, projectId);
     });
   }
 
   private wireGroupEvents(chatGroupRegistry: ChatGroupRegistry): void {
-    this.track(chatGroupRegistry, 'group:created', (data: any) => {
+    this.track(chatGroupRegistry, 'group:created', (data: ChatGroup) => {
       const projectId = data.projectId ?? this.resolveAgentProjectId(data.leadId);
       this.broadcastToProject({ type: 'group:created', ...data }, projectId);
     });
-    this.track(chatGroupRegistry, 'group:message', (data: any) => {
-      const projectId = data.projectId ?? this.resolveAgentProjectId(data.message?.leadId ?? data.leadId);
+    this.track(chatGroupRegistry, 'group:message', (data: { message: GroupMessage; recipientIds: string[] }) => {
+      const projectId = this.resolveAgentProjectId(data.message.leadId);
       this.broadcastToProject({ type: 'group:message', ...data }, projectId);
     });
-    this.track(chatGroupRegistry, 'group:member_added', (data: any) => {
-      const projectId = data.projectId ?? this.resolveAgentProjectId(data.leadId);
+    this.track(chatGroupRegistry, 'group:member_added', (data: { group: string; leadId: string; agentId: string }) => {
+      const projectId = this.resolveAgentProjectId(data.leadId);
       this.broadcastToProject({ type: 'group:member_added', ...data }, projectId);
     });
-    this.track(chatGroupRegistry, 'group:member_removed', (data: any) => {
-      const projectId = data.projectId ?? this.resolveAgentProjectId(data.leadId);
+    this.track(chatGroupRegistry, 'group:member_removed', (data: { group: string; leadId: string; agentId: string }) => {
+      const projectId = this.resolveAgentProjectId(data.leadId);
       this.broadcastToProject({ type: 'group:member_removed', ...data }, projectId);
     });
-    this.track(chatGroupRegistry, 'group:reaction', (data: any) => {
-      const projectId = data.projectId ?? this.resolveAgentProjectId(data.leadId);
+    this.track(chatGroupRegistry, 'group:reaction', (data: { messageId: string; groupName: string; leadId: string; agentId: string; emoji: string; action: 'add' | 'remove' }) => {
+      const projectId = this.resolveAgentProjectId(data.leadId);
       this.broadcastToProject({ type: 'group:reaction', ...data }, projectId);
     });
   }
@@ -388,7 +389,7 @@ export class WebSocketServer {
    * No debounce server-side — client debounces at 300ms.
    */
   private wireAttentionEvents(agentManager: AgentManager, decisionLog: DecisionLog): void {
-    this.track(agentManager, 'dag:updated', (data: any) => {
+    this.track(agentManager, 'dag:updated', (data: AgentManagerEvents['dag:updated']) => {
       this.broadcastAll({ type: 'attention:changed', trigger: 'dag', leadId: data.leadId });
     });
     this.track(agentManager, 'agent:crashed', () => {
@@ -499,7 +500,7 @@ export class WebSocketServer {
     }); // end runWithWsContext
   }
 
-  private broadcast(msg: any, filter: (c: ClientConnection) => boolean): void {
+  private broadcast(msg: Record<string, unknown>, filter: (c: ClientConnection) => boolean): void {
     const payload = JSON.stringify(redactWsMessage(msg));
     for (const client of this.clients.values()) {
       if (client.ws.readyState === WebSocket.OPEN && filter(client)) {
@@ -512,12 +513,12 @@ export class WebSocketServer {
     }
   }
 
-  private broadcastAll(msg: any): void {
+  private broadcastAll(msg: Record<string, unknown>): void {
     this.broadcast(msg, () => true);
   }
 
   /** Broadcast only to clients subscribed to the given project (or all if no project filter) */
-  private broadcastToProject(msg: any, projectId?: string): void {
+  private broadcastToProject(msg: Record<string, unknown>, projectId?: string): void {
     this.broadcast(msg, (c) =>
       !c.subscribedProject || !projectId || c.subscribedProject === projectId,
     );
@@ -530,7 +531,7 @@ export class WebSocketServer {
   }
 
   /** Public broadcast for external event sources (e.g., AlertEngine, TimerRegistry) */
-  broadcastEvent(msg: any, projectId?: string): void {
+  broadcastEvent(msg: Record<string, unknown>, projectId?: string): void {
     this.broadcastToProject(msg, projectId);
   }
 
