@@ -39,6 +39,10 @@ interface TelegramConfig {
   botToken: string;
   allowedChatIds: string[];
   rateLimitPerMinute: number;
+  notifications?: {
+    enabledCategories?: NotificationCategory[];
+    quietHours?: QuietHours | null;
+  };
 }
 
 interface TestResult {
@@ -88,7 +92,7 @@ export function TelegramSettings() {
 
   // Notification preferences
   const [enabledCategories, setEnabledCategories] = useState<Set<NotificationCategory>>(
-    new Set(NOTIFICATION_CATEGORIES.map(c => c.id)),
+    new Set(NOTIFICATION_CATEGORIES.filter(c => c.critical).map(c => c.id)),
   );
   const [quietHours, setQuietHours] = useState<QuietHours>({
     enabled: false,
@@ -130,6 +134,12 @@ export function TelegramSettings() {
         setBotToken(data.telegram.botToken || '');
         setAllowedChatIds(data.telegram.allowedChatIds || []);
         setRateLimitPerMinute(data.telegram.rateLimitPerMinute || 20);
+        if (data.telegram.notifications?.enabledCategories) {
+          setEnabledCategories(new Set(data.telegram.notifications.enabledCategories));
+        }
+        if (data.telegram.notifications?.quietHours) {
+          setQuietHours(data.telegram.notifications.quietHours);
+        }
       }
     } catch {
       // Config may not have telegram section yet — use defaults
@@ -150,6 +160,10 @@ export function TelegramSettings() {
             botToken,
             allowedChatIds,
             rateLimitPerMinute,
+            notifications: {
+              enabledCategories: Array.from(enabledCategories),
+              quietHours: quietHours.enabled ? quietHours : null,
+            },
           },
         }),
       });
@@ -162,7 +176,7 @@ export function TelegramSettings() {
     } finally {
       setSaving(false);
     }
-  }, [enabled, botToken, allowedChatIds, rateLimitPerMinute, loadStatus]);
+  }, [enabled, botToken, allowedChatIds, rateLimitPerMinute, enabledCategories, quietHours, loadStatus]);
 
   // ── Test connection ────────────────────────────────────
 
