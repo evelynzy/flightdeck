@@ -395,19 +395,89 @@ export class CopilotSdkAdapter extends EventEmitter implements AgentAdapter {
       }
 
       case 'assistant.usage': {
-        const data = event.data as { inputTokens?: number; outputTokens?: number };
+        const data = event.data as {
+          inputTokens?: number;
+          outputTokens?: number;
+          totalCostUsd?: number;
+          durationMs?: number;
+          cacheReadInputTokens?: number;
+          cacheCreationInputTokens?: number;
+          model?: string;
+        };
         if (data.inputTokens !== undefined || data.outputTokens !== undefined) {
           const usage: UsageInfo = {
             inputTokens: data.inputTokens ?? 0,
             outputTokens: data.outputTokens ?? 0,
+            ...(data.totalCostUsd != null ? { costUsd: data.totalCostUsd } : {}),
+            ...(data.durationMs != null ? { durationMs: data.durationMs } : {}),
+            ...(data.cacheReadInputTokens != null ? { cacheReadTokens: data.cacheReadInputTokens } : {}),
+            ...(data.cacheCreationInputTokens != null ? { cacheWriteTokens: data.cacheCreationInputTokens } : {}),
+            ...(data.model ? { model: data.model } : {}),
           };
           this.emit('usage', usage);
         }
         break;
       }
 
+      case 'session.usage_info': {
+        const data = event.data as { currentTokens?: number; tokenLimit?: number };
+        if (data.currentTokens != null || data.tokenLimit != null) {
+          this.emit('usage_update', {
+            size: data.tokenLimit ?? 0,
+            used: data.currentTokens ?? 0,
+            cost: null,
+          });
+        }
+        break;
+      }
+
       case 'session.compaction_complete': {
+        const data = event.data as { preTokens?: number; postTokens?: number };
         this.emit('text', '\n[Context compacted — older history summarized]\n');
+        if (data.preTokens != null && data.postTokens != null) {
+          this.emit('context_compacted', {
+            previousUsed: data.preTokens,
+            currentUsed: data.postTokens,
+            percentDrop: data.preTokens > 0
+              ? Math.round(((data.preTokens - data.postTokens) / data.preTokens) * 100)
+              : 0,
+          });
+        }
+        break;
+      }
+
+      case 'session.truncation': {
+        const data = event.data as { tokensRemoved?: number; messagesRemoved?: number };
+        if (data.tokensRemoved) {
+          logger.info({
+            module: 'copilot-sdk',
+            msg: 'Session truncated',
+            tokensRemoved: data.tokensRemoved,
+            messagesRemoved: data.messagesRemoved,
+          });
+        }
+        break;
+      }
+
+      case 'session.shutdown': {
+        const data = event.data as {
+          totalInputTokens?: number;
+          totalOutputTokens?: number;
+          totalCostUsd?: number;
+          totalRequests?: number;
+          totalApiDurationMs?: number;
+        };
+        if (data.totalInputTokens != null) {
+          logger.info({
+            module: 'copilot-sdk',
+            msg: 'Session totals',
+            inputTokens: data.totalInputTokens,
+            outputTokens: data.totalOutputTokens,
+            costUsd: data.totalCostUsd,
+            requests: data.totalRequests,
+            apiDurationMs: data.totalApiDurationMs,
+          });
+        }
         break;
       }
 

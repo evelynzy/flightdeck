@@ -122,6 +122,9 @@ export interface AgentInfo {
   cwd?: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
   contextWindowSize?: number;
   contextWindowUsed?: number;
   contextBurnRate?: number;
@@ -196,6 +199,7 @@ export interface AgentCostSummary {
   agentId: string;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalCostUsd: number;
   taskCount: number;
 }
 
@@ -204,6 +208,7 @@ export interface TaskCostSummary {
   leadId: string;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalCostUsd: number;
   agentCount: number;
-  agents: Array<{ agentId: string; inputTokens: number; outputTokens: number }>;
+  agents: Array<{ agentId: string; inputTokens: number; outputTokens: number; costUsd: number }>;
 }

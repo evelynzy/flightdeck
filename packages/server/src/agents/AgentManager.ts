@@ -63,6 +63,7 @@ export interface AgentManagerEvents {
   'agent:session_resume_failed': { agentId: string; requestedSessionId: string; error: string };
   'agent:message_sent': { from: string; fromRole: string; to: string; toRole: string; content: string };
   'agent:context_compacted': { agentId: string; previousUsed: number; currentUsed: number; percentDrop: number };
+  'agent:usage': { agentId: string; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; costUsd?: number };
   'agent:status': { agentId: string; status: string };
   'agent:crashed': { agentId: string; code: number };
   'agent:auto_restarted': { agentId: string; previousAgentId: string; crashCount: number };
@@ -592,10 +593,17 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     // Wire cost tracking: attribute token usage to the agent's current dagTaskId
     if (this.costTracker) {
       const tracker = this.costTracker;
-      agent.onUsage(({ agentId, inputTokens, outputTokens, dagTaskId }) => {
+      agent.onUsage(({ agentId, inputTokens, outputTokens, dagTaskId, cacheReadTokens, cacheWriteTokens, costUsd }) => {
         if (dagTaskId && agent.parentId) {
-          tracker.recordUsage(agentId, dagTaskId, agent.parentId, inputTokens, outputTokens);
+          tracker.recordUsage(agentId, dagTaskId, agent.parentId, inputTokens, outputTokens, {
+            cacheReadTokens, cacheWriteTokens, costUsd,
+          });
         }
+        this.emit('agent:usage', { agentId, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd });
+      });
+    } else {
+      agent.onUsage((info) => {
+        this.emit('agent:usage', info);
       });
     }
 

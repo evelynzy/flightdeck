@@ -232,6 +232,11 @@ export class WebSocketServer {
       this.broadcastToProject({ type: 'agent:plan', ...data }, projectId);
     });
 
+    this.track(agentManager, 'agent:usage', (data: any) => {
+      const projectId = this.resolveAgentProjectId(data.agentId);
+      this.broadcastToProject({ type: 'agent:usage', ...data }, projectId);
+    });
+
     this.track(agentManager, 'agent:permission_request', (data: any) => {
       const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'agent:permission_request', ...data }, projectId);

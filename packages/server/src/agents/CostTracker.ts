@@ -8,6 +8,9 @@ export interface CostRecord {
   leadId: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -16,6 +19,7 @@ export interface AgentCostSummary {
   agentId: string;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalCostUsd: number;
   taskCount: number;
 }
 
@@ -24,8 +28,9 @@ export interface TaskCostSummary {
   leadId: string;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalCostUsd: number;
   agentCount: number;
-  agents: Array<{ agentId: string; inputTokens: number; outputTokens: number }>;
+  agents: Array<{ agentId: string; inputTokens: number; outputTokens: number; costUsd: number }>;
 }
 
 /**
@@ -80,6 +85,7 @@ export class CostTracker {
     leadId: string,
     cumulativeInputTokens: number,
     cumulativeOutputTokens: number,
+    extras?: { cacheReadTokens?: number; cacheWriteTokens?: number; costUsd?: number },
   ): void {
     const prev = this.lastSeen.get(agentId) ?? { inputTokens: 0, outputTokens: 0 };
     const deltaInput = Math.max(0, cumulativeInputTokens - prev.inputTokens);
@@ -93,6 +99,10 @@ export class CostTracker {
     // Skip zero-delta updates
     if (deltaInput === 0 && deltaOutput === 0) return;
 
+    const cacheRead = extras?.cacheReadTokens ?? 0;
+    const cacheWrite = extras?.cacheWriteTokens ?? 0;
+    const costUsd = extras?.costUsd ?? 0;
+
     // Atomic upsert: insert or add delta to existing record
     this.db.drizzle
       .insert(taskCostRecords)
@@ -102,12 +112,18 @@ export class CostTracker {
         leadId,
         inputTokens: deltaInput,
         outputTokens: deltaOutput,
+        cacheReadTokens: cacheRead,
+        cacheWriteTokens: cacheWrite,
+        costUsd,
       })
       .onConflictDoUpdate({
         target: [taskCostRecords.agentId, taskCostRecords.dagTaskId, taskCostRecords.leadId],
         set: {
           inputTokens: sql`${taskCostRecords.inputTokens} + ${deltaInput}`,
           outputTokens: sql`${taskCostRecords.outputTokens} + ${deltaOutput}`,
+          cacheReadTokens: sql`${taskCostRecords.cacheReadTokens} + ${cacheRead}`,
+          cacheWriteTokens: sql`${taskCostRecords.cacheWriteTokens} + ${cacheWrite}`,
+          costUsd: sql`${taskCostRecords.costUsd} + ${costUsd}`,
           updatedAt: utcNow,
         },
       })
@@ -121,6 +137,7 @@ export class CostTracker {
         agentId: taskCostRecords.agentId,
         totalInputTokens: sql<number>`sum(${taskCostRecords.inputTokens})`,
         totalOutputTokens: sql<number>`sum(${taskCostRecords.outputTokens})`,
+        totalCostUsd: sql<number>`sum(${taskCostRecords.costUsd})`,
         taskCount: sql<number>`count(distinct ${taskCostRecords.dagTaskId})`,
       })
       .from(taskCostRecords)
@@ -131,6 +148,7 @@ export class CostTracker {
       agentId: r.agentId,
       totalInputTokens: r.totalInputTokens ?? 0,
       totalOutputTokens: r.totalOutputTokens ?? 0,
+      totalCostUsd: r.totalCostUsd ?? 0,
       taskCount: r.taskCount ?? 0,
     }));
   }
@@ -146,6 +164,7 @@ export class CostTracker {
         leadId: taskCostRecords.leadId,
         totalInputTokens: sql<number>`sum(${taskCostRecords.inputTokens})`,
         totalOutputTokens: sql<number>`sum(${taskCostRecords.outputTokens})`,
+        totalCostUsd: sql<number>`sum(${taskCostRecords.costUsd})`,
         agentCount: sql<number>`count(distinct ${taskCostRecords.agentId})`,
       })
       .from(taskCostRecords)
@@ -160,7 +179,7 @@ export class CostTracker {
       .where(condition)
       .all();
 
-    const agentsByTask = new Map<string, Array<{ agentId: string; inputTokens: number; outputTokens: number }>>();
+    const agentsByTask = new Map<string, Array<{ agentId: string; inputTokens: number; outputTokens: number; costUsd: number }>>();
     for (const r of allRecords) {
       const key = `${r.leadId}:${r.dagTaskId}`;
       if (!agentsByTask.has(key)) agentsByTask.set(key, []);
@@ -168,6 +187,7 @@ export class CostTracker {
         agentId: r.agentId,
         inputTokens: r.inputTokens ?? 0,
         outputTokens: r.outputTokens ?? 0,
+        costUsd: r.costUsd ?? 0,
       });
     }
 
@@ -176,6 +196,7 @@ export class CostTracker {
       leadId: t.leadId,
       totalInputTokens: t.totalInputTokens ?? 0,
       totalOutputTokens: t.totalOutputTokens ?? 0,
+      totalCostUsd: t.totalCostUsd ?? 0,
       agentCount: t.agentCount ?? 0,
       agents: agentsByTask.get(`${t.leadId}:${t.dagTaskId}`) ?? [],
     }));
@@ -194,6 +215,9 @@ export class CostTracker {
         leadId: r.leadId,
         inputTokens: r.inputTokens ?? 0,
         outputTokens: r.outputTokens ?? 0,
+        cacheReadTokens: r.cacheReadTokens ?? 0,
+        cacheWriteTokens: r.cacheWriteTokens ?? 0,
+        costUsd: r.costUsd ?? 0,
         createdAt: r.createdAt!,
         updatedAt: r.updatedAt!,
       }));

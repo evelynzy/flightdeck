@@ -225,6 +225,13 @@ export class ClaudeSdkAdapter extends EventEmitter implements AgentAdapter {
             lastUsage = {
               inputTokens: message.usage.input_tokens,
               outputTokens: message.usage.output_tokens,
+              ...(message.usage.cache_read_input_tokens != null
+                ? { cacheReadTokens: message.usage.cache_read_input_tokens } : {}),
+              ...(message.usage.cache_creation_input_tokens != null
+                ? { cacheWriteTokens: message.usage.cache_creation_input_tokens } : {}),
+              ...(message.total_cost_usd != null ? { costUsd: message.total_cost_usd } : {}),
+              ...(message.duration_api_ms != null ? { durationMs: message.duration_api_ms } : {}),
+              ...(message.model ? { model: message.model } : {}),
             };
           }
           if (message.session_id) {

@@ -15,6 +15,7 @@ import {
   handleAgentSessionReady,
   handleAgentSessionResumeFailed,
   handleAgentMessageSent,
+  handleAgentUsage,
 } from './agentHandlers';
 
 import {
@@ -62,6 +63,7 @@ const handlerMap: Record<string, MessageHandler> = {
   'agent:session_ready': handleAgentSessionReady,
   'agent:session_resume_failed': handleAgentSessionResumeFailed,
   'agent:message_sent': handleAgentMessageSent,
+  'agent:usage': handleAgentUsage,
   'group:created': handleGroupCreated,
   'group:message': handleGroupMessage,
   'group:member_added': handleGroupMemberAdded,

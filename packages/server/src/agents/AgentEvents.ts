@@ -14,6 +14,13 @@ export interface UsageInfo {
   inputTokens: number;
   outputTokens: number;
   dagTaskId?: string;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
+  durationMs?: number;
+  model?: string;
+  contextWindowSize?: number;
+  contextWindowUsed?: number;
 }
 
 /** Info emitted when session resume fails */

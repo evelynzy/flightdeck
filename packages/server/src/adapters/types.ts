@@ -26,6 +26,13 @@ export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence
 export interface UsageInfo {
   inputTokens: number;
   outputTokens: number;
+  costUsd?: number;
+  durationMs?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  contextWindowSize?: number;
+  contextWindowUsed?: number;
+  model?: string;
 }
 
 export interface PromptResult {

@@ -234,3 +234,13 @@ export function handleAgentMessageSent(msg: any, ctx: HandlerContext): void {
     }
   }
 }
+
+export function handleAgentUsage(msg: any, ctx: HandlerContext): void {
+  ctx.updateAgent(msg.agentId, {
+    inputTokens: msg.inputTokens,
+    outputTokens: msg.outputTokens,
+    ...(msg.cacheReadTokens != null ? { cacheReadTokens: msg.cacheReadTokens } : {}),
+    ...(msg.cacheWriteTokens != null ? { cacheWriteTokens: msg.cacheWriteTokens } : {}),
+    ...(msg.costUsd != null ? { costUsd: msg.costUsd } : {}),
+  });
+}

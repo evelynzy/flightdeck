@@ -192,11 +192,21 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
     agent._notifySessionResumeFailed(info);
   }));
 
-  conn.on('usage', (usage: { inputTokens: number; outputTokens: number }) => withCtx(() => {
+  conn.on('usage', (usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; costUsd?: number; durationMs?: number; model?: string }) => withCtx(() => {
     agent.inputTokens = usage.inputTokens;
     agent.outputTokens = usage.outputTokens;
     agent.hasRealUsageData = true;
-    agent._notifyUsage({ agentId: agent.id, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, dagTaskId: agent.dagTaskId });
+    agent._notifyUsage({
+      agentId: agent.id,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      dagTaskId: agent.dagTaskId,
+      cacheReadTokens: usage.cacheReadTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      costUsd: usage.costUsd,
+      durationMs: usage.durationMs,
+      model: usage.model,
+    });
   }));
 
   conn.on('usage_update', (info: { size: number; used: number }) => withCtx(() => {

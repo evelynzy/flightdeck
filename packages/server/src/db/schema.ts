@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 /** ISO 8601 UTC timestamp with Z suffix — use instead of datetime('now') to avoid timezone ambiguity */
@@ -280,6 +280,9 @@ export const taskCostRecords = sqliteTable('task_cost_records', {
   leadId: text('lead_id').notNull(),
   inputTokens: integer('input_tokens').default(0),
   outputTokens: integer('output_tokens').default(0),
+  cacheReadTokens: integer('cache_read_tokens').default(0),
+  cacheWriteTokens: integer('cache_write_tokens').default(0),
+  costUsd: real('cost_usd').default(0),
   createdAt: text('created_at').default(utcNow),
   updatedAt: text('updated_at').default(utcNow),
 }, (table) => [

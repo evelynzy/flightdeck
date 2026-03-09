@@ -61,7 +61,12 @@ export interface SdkResultMessage {
   usage?: {
     input_tokens: number;
     output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
   };
+  total_cost_usd?: number;
+  duration_api_ms?: number;
+  model?: string;
 }
 
 export type SdkMessage =

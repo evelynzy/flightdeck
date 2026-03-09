@@ -644,7 +644,7 @@ When you discover something important about the codebase, a pattern, a gotcha, o
   onSessionResumeFailed(listener: (info: { requestedSessionId: string; error: string }) => void): void { this.events.onSessionResumeFailed(listener); }
   onContextCompacted(listener: (info: { previousUsed: number; currentUsed: number; percentDrop: number }) => void): void { this.events.onContextCompacted(listener); }
   /** Register a listener for token usage updates (for cost tracking). */
-  onUsage(listener: (info: { agentId: string; inputTokens: number; outputTokens: number; dagTaskId?: string }) => void): void { this.events.onUsage(listener); }
+  onUsage(listener: (info: UsageInfo) => void): void { this.events.onUsage(listener); }
   onThinking(listener: (text: string) => void): void { this.events.onThinking(listener); }
   onResponseStart(listener: () => void): void { this.events.onResponseStart(listener); }
 
