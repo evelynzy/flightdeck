@@ -241,5 +241,7 @@ export function handleAgentUsage(msg: any, ctx: HandlerContext): void {
     outputTokens: msg.outputTokens,
     ...(msg.cacheReadTokens != null ? { cacheReadTokens: msg.cacheReadTokens } : {}),
     ...(msg.cacheWriteTokens != null ? { cacheWriteTokens: msg.cacheWriteTokens } : {}),
+    ...(msg.contextWindowUsed != null ? { contextWindowUsed: msg.contextWindowUsed } : {}),
+    ...(msg.contextWindowSize != null ? { contextWindowSize: msg.contextWindowSize } : {}),
   });
 }
