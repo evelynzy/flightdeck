@@ -43,7 +43,7 @@ describe('SessionViewer', () => {
   it('fetches messages on mount', async () => {
     render(<SessionViewer session={session} onClose={onClose} />);
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledWith('/sessions/lead-abc123/messages?limit=1000');
+      expect(mockApiFetch).toHaveBeenCalledWith('/agents/lead-abc123/messages?limit=1000');
     });
   });
 
@@ -93,5 +93,11 @@ describe('SessionViewer', () => {
   it('shows lead ID prefix in header', () => {
     render(<SessionViewer session={session} onClose={onClose} />);
     expect(screen.getByText(/lead-abc/)).toBeInTheDocument();
+  });
+
+  it('calls onClose when Escape is pressed', () => {
+    render(<SessionViewer session={session} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
   });
 });
