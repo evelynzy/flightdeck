@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
 import { apiFetch } from '../../hooks/useApi';
-import { LayoutList, Network, Users, CheckCircle2, XCircle, Loader2, Play, Archive, Clock, BarChart2, Columns3, Globe } from 'lucide-react';
+import { LayoutList, Network, Users, CheckCircle2, XCircle, Loader2, Play, Archive, Clock, BarChart2, Columns3, Globe, SplitSquareHorizontal } from 'lucide-react';
 import { EmptyState } from '../Shared';
 import { TaskDagPanelContent } from '../LeadDashboard/TaskDagPanel';
 import { DagGraph } from './DagGraph';
@@ -127,8 +127,8 @@ function DagPanel({
   onTaskUpdated,
 }: {
   dagStatus: DagStatus | null;
-  dagView: 'graph' | 'list' | 'gantt' | 'resource' | 'kanban' | null;
-  setDagView: (v: 'graph' | 'list' | 'gantt' | 'resource' | 'kanban' | null) => void;
+  dagView: 'graph' | 'list' | 'gantt' | 'resource' | 'kanban' | 'split' | null;
+  setDagView: (v: 'graph' | 'list' | 'gantt' | 'resource' | 'kanban' | 'split' | null) => void;
   projectId?: string;
   onTaskUpdated?: () => void;
 }) {
@@ -146,12 +146,50 @@ function DagPanel({
   const GLOBAL_PAGE_SIZE = 200;
   const [projectNameMap, setProjectNameMap] = useState<Map<string, string>>(new Map());
   const hasDeps = dagStatus?.tasks.some((t) => t.dependsOn.length > 0) ?? false;
-  const effectiveView = dagView ?? (hasDeps ? 'graph' : 'list');
+  const effectiveView = dagView ?? 'split';
   const archivedParam = showArchived ? '&includeArchived=true' : '';
 
-  // Fetch global tasks when scope=global and view=kanban
+  // Split view: resizable Kanban (left) + DAG (right) with percentage-based split
+  const [splitPct, setSplitPct] = useState(() => {
+    try { const v = localStorage.getItem('tasks-split-pct'); return v ? Number(v) : 60; } catch { return 60; }
+  });
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleSplitDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const container = splitContainerRef.current;
+    if (!container) return;
+    const startX = e.clientX;
+    const containerRect = container.getBoundingClientRect();
+    const startPct = splitPct;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const deltaX = ev.clientX - startX;
+      const deltaPct = (deltaX / containerRect.width) * 100;
+      const newPct = Math.min(80, Math.max(25, startPct + deltaPct));
+      setSplitPct(newPct);
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try { localStorage.setItem('tasks-split-pct', String(splitPct)); } catch { /* ignore */ }
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [splitPct]);
+
+  // Persist split percentage on change
   useEffect(() => {
-    if (kanbanScope !== 'global' || effectiveView !== 'kanban') return;
+    try { localStorage.setItem('tasks-split-pct', String(splitPct)); } catch { /* ignore */ }
+  }, [splitPct]);
+
+  // Fetch global tasks when scope=global and view=kanban/split
+  useEffect(() => {
+    if (kanbanScope !== 'global' || (effectiveView !== 'kanban' && effectiveView !== 'split')) return;
     let cancelled = false;
     const fetchGlobal = async () => {
       try {
@@ -240,6 +278,7 @@ function DagPanel({
   }));
 
   const viewIcon =
+    effectiveView === 'split' ? <SplitSquareHorizontal size={14} className="text-teal-400" /> :
     effectiveView === 'graph' ? <Network size={14} className="text-blue-400" /> :
     effectiveView === 'gantt' ? <BarChart2 size={14} className="text-purple-400" /> :
     effectiveView === 'resource' ? <Users size={14} className="text-cyan-400" /> :
@@ -257,8 +296,8 @@ function DagPanel({
           )}
         </h3>
         <div className="flex items-center gap-2">
-          {/* Scope switcher (only shown in Kanban view) */}
-          {effectiveView === 'kanban' && (
+          {/* Scope switcher (shown in Kanban and Split views) */}
+          {(effectiveView === 'kanban' || effectiveView === 'split') && (
             <select
               value={kanbanScope}
               onChange={(e) => setKanbanScope(e.target.value as 'project' | 'global')}
@@ -271,13 +310,14 @@ function DagPanel({
           )}
           <div className="flex bg-th-bg rounded p-0.5 border border-th-border">
           <button
-            onClick={() => setDagView('list')}
+            onClick={() => setDagView('split')}
             className={`p-1 rounded transition-colors ${
-              effectiveView === 'list' ? 'bg-th-bg-muted text-th-text' : 'text-th-text-muted hover:text-th-text-alt'
+              effectiveView === 'split' ? 'bg-th-bg-muted text-th-text' : 'text-th-text-muted hover:text-th-text-alt'
             }`}
-            title="List view"
+            title="Split view (Kanban + Graph)"
+            data-testid="view-split"
           >
-            <LayoutList size={13} />
+            <SplitSquareHorizontal size={13} />
           </button>
           <button
             onClick={() => setDagView('kanban')}
@@ -296,6 +336,15 @@ function DagPanel({
             title="Graph view"
           >
             <Network size={13} />
+          </button>
+          <button
+            onClick={() => setDagView('list')}
+            className={`p-1 rounded transition-colors ${
+              effectiveView === 'list' ? 'bg-th-bg-muted text-th-text' : 'text-th-text-muted hover:text-th-text-alt'
+            }`}
+            title="List view"
+          >
+            <LayoutList size={13} />
           </button>
           <button
             onClick={() => setDagView('gantt')}
@@ -318,7 +367,50 @@ function DagPanel({
         </div>
         </div>
       </div>
-      {effectiveView === 'kanban' ? (
+      {effectiveView === 'split' ? (
+        /* Split view: Kanban + DAG side by side */
+        <div
+          ref={splitContainerRef}
+          className="flex flex-col lg:flex-row w-full"
+          style={{ minHeight: 500 }}
+          data-testid="split-view"
+        >
+          {/* Kanban panel (left) */}
+          <div
+            className="overflow-auto lg:overflow-y-auto"
+            style={{ flex: `0 0 ${splitPct}%`, minWidth: 0 }}
+          >
+            <KanbanBoard
+              dagStatus={kanbanScope === 'global' ? globalDagStatus : dagStatus}
+              projectId={kanbanScope === 'global' ? undefined : projectId}
+              onTaskUpdated={kanbanScope === 'global' ? undefined : onTaskUpdated}
+              scope={kanbanScope}
+              projectNameMap={projectNameMap}
+              hasMore={kanbanScope === 'global' ? globalHasMore : false}
+              onLoadMore={kanbanScope === 'global' ? loadMoreGlobalTasks : undefined}
+              showArchived={showArchived}
+              onShowArchivedChange={handleShowArchivedChange}
+            />
+          </div>
+
+          {/* Drag handle */}
+          <div
+            className="hidden lg:flex items-center justify-center w-1.5 cursor-col-resize hover:bg-blue-500/20 active:bg-blue-500/30 transition-colors group flex-shrink-0"
+            onMouseDown={handleSplitDragStart}
+            title="Drag to resize"
+            data-testid="split-handle"
+          >
+            <div className="w-0.5 h-8 bg-th-border group-hover:bg-blue-400 rounded-full transition-colors" />
+          </div>
+
+          {/* DAG panel (right) */}
+          <div
+            className="flex-1 min-w-0 min-h-[300px] lg:min-h-0"
+          >
+            <DagGraph dagStatus={dagStatus} fillContainer />
+          </div>
+        </div>
+      ) : effectiveView === 'kanban' ? (
         <div style={{ minHeight: 400 }}>
           <KanbanBoard
             dagStatus={kanbanScope === 'global' ? globalDagStatus : dagStatus}
@@ -373,7 +465,7 @@ export function TaskQueuePanel({ api }: Props) {
   const projectId = useOptionalProjectId();
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [progress, setProgress] = useState<LeadProgress | null>(null);
-  const [dagView, setDagView] = useState<'graph' | 'list' | 'gantt' | 'resource' | 'kanban' | null>('graph');
+  const [dagView, setDagView] = useState<'graph' | 'list' | 'gantt' | 'resource' | 'kanban' | 'split' | null>(null);
   const [persistedProjects, setPersistedProjects] = useState<Project[]>([]);
   const [resuming, setResuming] = useState<string | null>(null);
   const [historicalDag, setHistoricalDag] = useState<DagStatus | null>(null);

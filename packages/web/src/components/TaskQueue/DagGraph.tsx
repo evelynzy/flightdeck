@@ -826,9 +826,11 @@ const darkStyles = `
 // ---------------------------------------------------------------------------
 interface DagGraphProps {
   dagStatus: DagStatus | null;
+  /** When true, the graph fills its parent's height instead of using a fixed 500px */
+  fillContainer?: boolean;
 }
 
-export function DagGraph({ dagStatus }: DagGraphProps) {
+export function DagGraph({ dagStatus, fillContainer }: DagGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   if (!dagStatus || dagStatus.tasks.length === 0) {
@@ -843,7 +845,7 @@ export function DagGraph({ dagStatus }: DagGraphProps) {
     <div
       ref={containerRef}
       className="dag-flow-container relative w-full overflow-hidden bg-th-bg/50 rounded-lg"
-      style={{ height: 500 }}
+      style={fillContainer ? { height: '100%' } : { height: 500 }}
     >
       <style>{darkStyles}</style>
       <ReactFlowProvider>
