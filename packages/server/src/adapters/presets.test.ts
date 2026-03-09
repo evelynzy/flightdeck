@@ -107,7 +107,7 @@ describe('Provider Presets', () => {
       const preset = getPreset('copilot');
       expect(preset).toBeDefined();
       expect(preset!.id).toBe('copilot');
-      expect(preset!.name).toBe('GitHub Copilot');
+      expect(preset!.name).toBe('GitHub Copilot SDK');
     });
 
     it('returns undefined for an unknown provider ID', () => {

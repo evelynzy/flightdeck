@@ -200,14 +200,17 @@ function ProviderCard({
       {/* Expanded Details */}
       {expanded && (
         <div className="border-t border-th-border px-4 py-3 bg-th-bg-alt/30 space-y-3">
-          {/* CLI Details Grid */}
+          {/* Details Grid */}
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <div>
-              <span className="text-th-text-muted flex items-center gap-1"><Terminal className="w-3 h-3" /> Binary:</span>
-              <code className="font-mono text-th-text-alt">
-                {provider.binaryPath ?? provider.id}
-              </code>
-            </div>
+            {/* Binary — only show for non-SDK providers */}
+            {!sdkCapable && (
+              <div>
+                <span className="text-th-text-muted flex items-center gap-1"><Terminal className="w-3 h-3" /> Binary:</span>
+                <code className="font-mono text-th-text-alt">
+                  {provider.binaryPath ?? provider.id}
+                </code>
+              </div>
+            )}
             <div>
               <span className="text-th-text-muted">Status:</span>{' '}
               <span className={provider.installed ? 'text-green-400' : 'text-th-text-muted'}>
@@ -215,12 +218,15 @@ function ProviderCard({
                 {provider.version && ` (${provider.version})`}
               </span>
             </div>
-            <div>
-              <span className="text-th-text-muted flex items-center gap-1"><Settings2 className="w-3 h-3" /> Default Args:</span>
-              <code className="font-mono text-th-text-alt">
-                {defaultArgs.length > 0 ? defaultArgs.join(' ') : '(none)'}
-              </code>
-            </div>
+            {/* Default Args — only show for non-SDK providers that have args */}
+            {!sdkCapable && defaultArgs.length > 0 && (
+              <div>
+                <span className="text-th-text-muted flex items-center gap-1"><Settings2 className="w-3 h-3" /> Default Args:</span>
+                <code className="font-mono text-th-text-alt">
+                  {defaultArgs.join(' ')}
+                </code>
+              </div>
+            )}
             <div>
               <span className="text-th-text-muted">Features:</span>{' '}
               <span className="text-th-text-alt">

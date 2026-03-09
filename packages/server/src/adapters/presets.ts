@@ -46,7 +46,7 @@ export type ProviderId = 'copilot' | 'gemini' | 'opencode' | 'cursor' | 'codex' 
 export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
   copilot: {
     id: 'copilot',
-    name: 'GitHub Copilot',
+    name: 'GitHub Copilot SDK',
     binary: 'copilot',
     args: ['--acp', '--stdio'],
     transport: 'stdio',
@@ -102,7 +102,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
 
   claude: {
     id: 'claude',
-    name: 'Claude SDK',
+    name: 'Claude Agent SDK',
     binary: 'claude',
     args: ['--acp', '--stdio'],
     requiredEnvVars: ['ANTHROPIC_API_KEY'],

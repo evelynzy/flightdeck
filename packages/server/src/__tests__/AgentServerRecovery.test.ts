@@ -75,7 +75,7 @@ describe('AgentServerRecovery', () => {
     vi.clearAllMocks();
     mockGetPreset.mockReturnValue({
       id: 'copilot',
-      name: 'GitHub Copilot',
+      name: 'GitHub Copilot SDK',
       binary: 'gh',
       args: ['copilot', 'agent'],
       transport: 'stdio',

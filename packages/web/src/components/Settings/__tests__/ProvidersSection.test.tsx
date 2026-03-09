@@ -15,7 +15,7 @@ vi.mock('../../../hooks/useApi', () => ({
 const MOCK_PROVIDERS = [
   {
     id: 'copilot',
-    name: 'GitHub Copilot',
+    name: 'GitHub Copilot SDK',
     installed: true,
     authenticated: true,
     enabled: true,
@@ -82,7 +82,7 @@ describe('ProvidersSection', () => {
     await waitFor(() => {
       expect(screen.getByTestId('providers-list')).toBeInTheDocument();
     });
-    expect(screen.getByText('GitHub Copilot')).toBeInTheDocument();
+    expect(screen.getByText('GitHub Copilot SDK')).toBeInTheDocument();
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
     expect(screen.getByText('Google Gemini CLI')).toBeInTheDocument();
     expect(screen.getByText('OpenCode')).toBeInTheDocument();

@@ -26,7 +26,7 @@ vi.mock('../../hooks/useApi', () => ({
 // ── Test Data ───────────────────────────────────────────────────────
 
 const MOCK_PROVIDERS = [
-  { id: 'copilot', name: 'GitHub Copilot', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/gh' },
+  { id: 'copilot', name: 'GitHub Copilot SDK', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/gh' },
   { id: 'claude', name: 'Claude Code', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/claude' },
   { id: 'gemini', name: 'Google Gemini CLI', installed: false, authenticated: null, enabled: true, binaryPath: null },
   { id: 'opencode', name: 'OpenCode', installed: false, authenticated: null, enabled: true, binaryPath: null },

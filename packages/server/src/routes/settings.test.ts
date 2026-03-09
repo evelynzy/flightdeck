@@ -45,7 +45,7 @@ import type { AppContext } from './context.js';
 // ── Fixtures ────────────────────────────────────────────────────────
 
 const MOCK_STATUSES = [
-  { id: 'copilot', name: 'GitHub Copilot', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/copilot' },
+  { id: 'copilot', name: 'GitHub Copilot SDK', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/copilot' },
   { id: 'claude', name: 'Claude Code', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/claude' },
   { id: 'gemini', name: 'Google Gemini CLI', installed: false, authenticated: null, enabled: true, binaryPath: null },
   { id: 'opencode', name: 'OpenCode', installed: false, authenticated: null, enabled: true, binaryPath: null },
