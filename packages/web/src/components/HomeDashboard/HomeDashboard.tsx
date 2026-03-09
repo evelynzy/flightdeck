@@ -26,8 +26,6 @@ import {
   Zap,
   Bell,
   Plus,
-  Wifi,
-  WifiOff,
   ChevronRight,
   ChevronDown,
   Shield,
@@ -216,6 +214,7 @@ function ActiveAgentRow({ agent, projectName }: { agent: AgentInfo; projectName:
 }
 
 const ACTIVITY_ICONS: Record<string, string> = {
+  progress: '📊',
   task_completed: '✅',
   task_started: '▶️',
   decision_made: '⚖️',
@@ -223,9 +222,9 @@ const ACTIVITY_ICONS: Record<string, string> = {
   deferred_issue: '📌',
 };
 
-/** Only lead-emitted progress events — no agent lifecycle noise */
+/** Only explicit PROGRESS commands from the lead — nothing else */
 const PROGRESS_ACTION_TYPES = new Set([
-  'task_completed', 'task_started', 'decision_made', 'delegated', 'deferred_issue',
+  'progress',
 ]);
 
 function ActivityFeedItem({ entry, projectName, onClick }: { entry: ActivityEntry; projectName: string; onClick?: () => void }) {
@@ -355,6 +354,7 @@ function DecisionDetailModal({
 }
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  progress: 'Progress Update',
   task_completed: 'Task Completed',
   task_started: 'Task Started',
   decision_made: 'Decision Made',
@@ -522,7 +522,6 @@ function ProjectCard({
 export function HomeDashboard() {
   const navigate = useNavigate();
   const agents = useAppStore((s) => s.agents);
-  const connected = useAppStore((s) => s.connected);
   const pendingDecisions = useAppStore((s) => s.pendingDecisions);
   const attention = useAttentionItems();
 
@@ -552,7 +551,7 @@ export function HomeDashboard() {
       setProjects(activeProjects);
       setAllDecisions(Array.isArray(decisionsData) ? decisionsData : []);
 
-      // Filter to lead-emitted progress events only (no agent lifecycle noise)
+      // Filter to explicit PROGRESS commands from the lead only
       const progressActivity = (Array.isArray(activityData) ? activityData : [])
         .filter((a) => PROGRESS_ACTION_TYPES.has(a.actionType) && a.agentRole === 'lead')
         .slice(0, 15);
@@ -754,18 +753,9 @@ export function HomeDashboard() {
     <div className="flex-1 overflow-auto focus:outline-none" tabIndex={0}>
     <div className="p-6 max-w-6xl mx-auto" data-testid="home-dashboard">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <LayoutDashboard className="w-6 h-6 text-th-text-muted" />
-          <h1 className="text-xl font-semibold text-th-text-alt">Home</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {connected ? (
-            <StatusBadge variant="success" label="Connected" icon={<Wifi className="w-3 h-3" />} />
-          ) : (
-            <StatusBadge variant="error" label="Disconnected" icon={<WifiOff className="w-3 h-3" />} />
-          )}
-        </div>
+      <div className="flex items-center gap-3 mb-6">
+        <LayoutDashboard className="w-6 h-6 text-th-text-muted" />
+        <h1 className="text-xl font-semibold text-th-text-alt">Home</h1>
       </div>
 
       {/* Compact Stat Strip — ambient context, lowest visual weight */}
