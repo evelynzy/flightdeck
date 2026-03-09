@@ -50,6 +50,57 @@ Sessions can be stopped in three ways:
 - **Natural completion** — All tasks complete and the lead signals `COMPLETE_TASK` for the final task.
 - **Mass failure** — If too many agents fail in a short window, the `MassFailureDetector` pauses spawning and the session transitions to failed.
 
+## Session Persistence
+
+When a session stops, each agent's CLI session must be saved before the connection is closed. The order of operations matters — saving must happen before disconnecting.
+
+### Terminate/Save Lifecycle
+
+```
+User clicks "Stop" (or session completes)
+    │
+    ▼
+For each agent:
+    │
+    ├── 1. adapter.terminate()
+    │       └── CopilotSdkAdapter: await client.stop()  ← flushes session to disk
+    │           (5-second timeout to prevent hanging)
+    │
+    ├── 2. session.disconnect()  ← closes the JSON-RPC / subprocess connection
+    │
+    └── 3. Update agent_roster status to 'terminated'
+```
+
+**Order matters:**
+- `stop()` tells the SDK to persist session data (conversation history, tool results, etc.)
+- `disconnect()` tears down the connection
+- If you disconnect before stop, the SDK never saves — resume will fail
+
+### Where Sessions Are Stored
+
+| Adapter | Storage location | What's saved |
+|---------|-----------------|--------------|
+| **CopilotSdkAdapter** | `~/.copilot/session-store.db` | Conversation history, tool calls, session metadata |
+| **ClaudeSdkAdapter** | SDK-managed local storage | Conversation turns, context |
+| **AcpAdapter** | Provider-dependent | Varies by CLI tool |
+
+For the Copilot SDK, session data is keyed by the `sessionId` we provided to `createSession()`. This is why we generate our own UUID — it ensures we can always find the session later.
+
+### Crashed Sessions
+
+If a session crashes without proper shutdown (e.g., OOM kill, power loss, agent server crash):
+
+- The SDK's `stop()` never runs, so session data **may not be persisted**
+- Attempting to resume a crashed session will fail because the SDK has no saved state
+- The UI shows an error message: the user should start a new session instead of resuming
+- Database records (agent roster, task DAG, decisions, knowledge) are still intact — only the SDK conversation history is lost
+
+### Known Limitations
+
+- **Pre-fix sessions cannot resume** — Sessions created before the `sessionId` fix (commit `d12d5567`) passed no ID to `createSession()`, so the SDK generated a random ID that Flightdeck never stored. These sessions have mismatched IDs and cannot be resumed.
+- **Duplicate event dedup** — The event ID deduplication logic (commit `aef06755`) works around Copilot SDK bug #567, where the SDK emits duplicate events on resume. Without this fix, resumed sessions would show duplicated agent messages.
+- **5-second stop timeout** — If the SDK takes longer than 5 seconds to flush, the timeout fires and the session may not be fully saved. This is rare but can happen under heavy disk I/O.
+
 ## Session Identity
 
 Sessions use a **two-layer identity model**. Both layers are needed: the crew session tracks the overall session, and agent sessions track individual agent state for resume.
