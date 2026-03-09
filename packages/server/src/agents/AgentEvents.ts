@@ -4,8 +4,6 @@
  */
 import type { ToolCallInfo, PlanEntry } from '../adapters/types.js';
 
-/** Short notice sent as the initial prompt on successful session resume */
-export const RESUME_PREAMBLE = '[System] Session resumed.';
 import type { AgentStatus } from './Agent.js';
 
 /** Typed usage info emitted by onUsage listeners */

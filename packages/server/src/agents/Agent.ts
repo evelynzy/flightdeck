@@ -5,7 +5,7 @@ import type { Role } from './RoleRegistry.js';
 import type { ServerConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { redact } from '../utils/redaction.js';
-import { AgentEventEmitter, RESUME_PREAMBLE } from './AgentEvents.js';
+import { AgentEventEmitter } from './AgentEvents.js';
 import type { UsageInfo, CompactionInfo } from './AgentEvents.js';
 import { startAcp as startAcpBridge, ensureSharedWorkspace } from './AgentAcpBridge.js';
 import { formatCrewUpdate } from '../coordination/agents/CrewFormatter.js';
@@ -167,16 +167,9 @@ export class Agent {
     ensureSharedWorkspace(this);
     const isResume = !!this.resumeSessionId;
 
-    // On resume, the SDK restores conversation history which already contains
-    // system prompt, context manifest, and task. Only send the resume notice.
-    // If resume fails, the adapter emits session_resume_failed and starts a
-    // fresh session with a new ID.
-    let initialPrompt: string;
-    if (isResume) {
-      initialPrompt = RESUME_PREAMBLE;
-    } else {
-      initialPrompt = this.buildFullPrompt();
-    }
+    // On resume, send nothing — the SDK restores conversation history and the
+    // agent is ready. The user decides when to send the next message.
+    const initialPrompt = isResume ? undefined : this.buildFullPrompt();
     // Errors are handled internally by the bridge (sets agent status to 'failed').
     const bridgePromise = startAcpBridge(this, this.config, initialPrompt);
     bridgePromise.catch((err) => {

@@ -692,11 +692,10 @@ describe('startRemoteBridge', () => {
     await bridgePromise;
   });
 
-  it('sends only resume preamble on resume', async () => {
+  it('sends no prompt on resume', async () => {
     const agent = createMockAgent({ resumeSessionId: 'sess-old' });
-    const resumePreamble = '[System] You are resuming...';
 
-    const bridgePromise = startRemoteBridge(agent as any, client, resumePreamble);
+    const bridgePromise = startRemoteBridge(agent as any, client);
 
     const spawnMsg = transport.sent.find(m => m.type === 'spawn_agent')!;
     transport.receiveMessage({
@@ -710,10 +709,9 @@ describe('startRemoteBridge', () => {
 
     await bridgePromise;
 
-    // Only the resume preamble is sent — no system prompt, context manifest, or task
+    // No prompt sent on resume — SDK restores conversation history
     const sends = transport.sent.filter(m => m.type === 'send_message');
-    expect(sends.length).toBe(1);
-    expect((sends[0] as any).content).toBe(resumePreamble);
+    expect(sends.length).toBe(0);
   });
 
   it('handles spawn failure gracefully', async () => {

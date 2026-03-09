@@ -1,5 +1,4 @@
 import { Agent, isTerminalStatus } from './Agent.js';
-import { RESUME_PREAMBLE } from './AgentEvents.js';
 import { generateProjectId } from '../utils/projectId.js';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -777,9 +776,8 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     const startAgent = () => {
       if (this.agentServerClient) {
         const isResume = !!agent.resumeSessionId;
-        // On resume, SDK restores conversation — only send short notice.
-        // If resume fails, onSessionResumeFailed handler sends the full prompt.
-        const initialPrompt = isResume ? RESUME_PREAMBLE : agent.buildFullPrompt();
+        // On resume, send nothing — SDK restores conversation history.
+        const initialPrompt = isResume ? undefined : agent.buildFullPrompt();
         startRemoteBridge(agent, this.agentServerClient, initialPrompt);
       } else {
         agent.start();
