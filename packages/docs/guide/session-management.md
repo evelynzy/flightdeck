@@ -52,33 +52,83 @@ Sessions can be stopped in three ways:
 
 ## Session Identity
 
-Sessions use a **two-level identity model**:
+Sessions use a **two-layer identity model**. Both layers are needed: the crew session tracks the overall session, and agent sessions track individual agent state for resume.
 
-### Crew-Level Session
+### Layer 1: Crew-Level Session ID
 
-The crew-level session is a Flightdeck concept — it groups all agents working on a project together.
+Stored in `project_sessions.session_id`. Groups all agents working on a project together.
 
 ```
-Session ID: "proj-auth-refactor-1709912345"
+Crew Session: "proj-auth-refactor-1709912345"
 ├── Lead Agent (agent-49cbf6e1)
 ├── Developer (agent-0dde0f25)
 ├── Code Reviewer (agent-d6e9213a)
 └── Architect (agent-3973583e)
 ```
 
-This ID is stored in the `sessions` table and used for session history, resume, and project grouping.
+Used for session history, resume orchestration, and project grouping. Created when the user starts a new session.
 
-### Agent-Level Session
+### Layer 2: Agent-Level Session ID
 
-Each agent may also have a **CLI session ID** from its SDK adapter. This is the session ID that enables context resume with the underlying CLI tool.
+Stored in `agent_roster.session_id`. Each agent has its own session ID from its CLI adapter, enabling per-agent context resume.
 
 ```
 Agent agent-49cbf6e1:
-  Flightdeck ID: "agent-49cbf6e1"
-  SDK Session ID: "sess_abc123..."  (from Copilot/Claude SDK)
+  Flightdeck agent ID: "agent-49cbf6e1"
+  CLI session ID:      "sess_abc123..."
 ```
 
-The SDK session ID is stored in `agent_roster.sessionId` and passed to the adapter's `start()` method on resume.
+**How the agent session ID is created depends on the adapter:**
+
+### CopilotSdkAdapter (Flightdeck Controls the ID)
+
+The Copilot SDK accepts a session ID from the caller:
+
+```
+1. Flightdeck generates: flightdeckSessionId = randomUUID()
+2. Passes to SDK:        createSession({ ...config, sessionId: flightdeckSessionId })
+3. SDK stores state under our ID
+4. On resume:            resumeSession(flightdeckSessionId)  ← finds it because we chose the ID
+```
+
+Flightdeck controls the ID end-to-end. The same UUID is used for both creation and resume.
+
+### ClaudeSdkAdapter (Flightdeck Controls the ID)
+
+Similar to Copilot — Flightdeck generates the ID and passes it to the SDK:
+
+```
+1. Flightdeck generates: sessionId = randomUUID()
+2. Passes to SDK:        sdk.query(prompt, { resume: sessionId })
+3. On resume:            sdk.query(prompt, { resume: sessionId })  ← same ID
+```
+
+### AcpAdapter (Provider Controls the ID)
+
+The ACP protocol does not accept a caller-provided session ID. The CLI provider creates one:
+
+```
+1. Flightdeck calls:     newSession({ cwd })  ← no session ID passed
+2. Provider returns:     { sessionId: "provider-generated-id-xyz" }
+3. Flightdeck stores:    agent_roster.session_id = "provider-generated-id-xyz"
+4. On resume:            loadSession("provider-generated-id-xyz")  ← provider's own ID
+```
+
+The provider controls the ID. Flightdeck stores whatever the provider returns.
+
+### Summary
+
+| Adapter | Who generates the ID | Resume mechanism | Reliability |
+|---------|---------------------|-----------------|-------------|
+| **CopilotSdkAdapter** | Flightdeck (`randomUUID()`) | `resumeSession(ourId)` | Reliable |
+| **ClaudeSdkAdapter** | Flightdeck (`randomUUID()`) | `query({ resume: ourId })` | Reliable |
+| **AcpAdapter** | CLI provider | `loadSession(providerId)` | Best-effort (may fail silently) |
+
+### Design Decisions
+
+- **Copilot always uses CopilotSdkAdapter** (never ACP) — the native SDK provides reliable session resume
+- **AcpAdapter is the generic fallback** — works with any ACP-compatible CLI (Gemini, OpenCode, Cursor, Codex, or future tools)
+- **The adapter abstracts the ID generation difference** — callers (AgentManager, SessionResumeManager) don't need to know which flow is used. They just pass the stored `agent_roster.session_id` and the adapter handles the rest.
 
 ## Resuming a Session
 
@@ -98,17 +148,32 @@ Session resume is one of Flightdeck's key features — it lets you pick up where
 User clicks "Resume" on a stopped session
     │
     ▼
-SessionResumeManager.resume(projectId, options)
+1. Look up crew session ID from project_sessions
     │
-    ├── 1. Load session record from database
-    ├── 2. Load agent roster (agents from previous session)
-    ├── 3. Filter agents based on resume mode
-    ├── 4. For each agent to resume:
-    │   ├── Check if adapter supports resume (preset.supportsResume)
-    │   ├── Pass SDK sessionId to AdapterStartOptions
-    │   ├── Spawn agent via AgentManager
-    │   └── Inject knowledge context (KnowledgeInjector)
-    └── 5. Update session status to "running"
+    ▼
+2. reactivateSession() — update status to 'active' in DB
+    │
+    ▼
+3. Load agent roster — all agents from previous session
+    │
+    ▼
+4. Filter agents based on resume mode (all / specific / fresh)
+    │
+    ▼
+5. For each agent to resume:
+    ├── Read agent_roster.session_id (the CLI session ID)
+    ├── Check if adapter supports resume (preset.supportsResume)
+    ├── Pass session_id to adapter.start(opts) via AdapterStartOptions
+    ├── Adapter calls its resume mechanism:
+    │   ├── CopilotSdk: resumeSession(sessionId)
+    │   ├── ClaudeSdk:  query({ resume: sessionId })
+    │   └── ACP:        loadSession(sessionId)
+    ├── If resume fails → adapter falls back to new session with fresh ID
+    ├── Update agent_roster.session_id with new ID (if changed)
+    └── Inject knowledge context (KnowledgeInjector)
+    │
+    ▼
+6. Update crew session status to "running"
 ```
 
 ### How Adapters Handle Resume
