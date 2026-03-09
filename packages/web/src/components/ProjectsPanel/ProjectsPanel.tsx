@@ -27,6 +27,7 @@ import { formatDate } from '../../utils/format';
 import { useToastStore } from '../Toast';
 import { NewProjectModal } from '../LeadDashboard/NewProjectModal';
 import { StatusBadge, projectStatusProps } from '../ui/StatusBadge';
+import { sessionStatusDot } from '../../utils/statusColors';
 
 /** Extended project type with storage and agent count info from the enriched API */
 interface EnrichedProject {
@@ -278,12 +279,8 @@ function ProjectCard({
                     <span
                       className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                         isRunning
-                          ? 'bg-green-400'
-                          : s.status === 'completed'
-                            ? 'bg-blue-400'
-                            : s.status === 'crashed'
-                              ? 'bg-red-400'
-                              : 'bg-gray-400'
+                          ? 'bg-blue-400 animate-pulse'
+                          : sessionStatusDot(s.status)
                       }`}
                     />
                     <span

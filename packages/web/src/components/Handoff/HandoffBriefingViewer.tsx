@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Copy, Check, Edit3 } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
+import { dagTaskText } from '../../utils/statusColors';
 import { TRIGGER_DISPLAY, qualityColor, type HandoffRecord } from './types';
 import { HandoffQualityBar } from './HandoffQualityBar';
 
@@ -137,7 +138,7 @@ export function HandoffBriefingViewer({ handoffId, onClose }: HandoffBriefingVie
               <Section title="📋 Task Progress">
                 {record.briefing.tasks.map((t) => (
                   <div key={t.id} className="flex items-center gap-2 text-[11px]">
-                    <span className={t.status === 'done' ? 'text-green-400' : t.status === 'running' ? 'text-blue-400' : 'text-th-text-muted'}>
+                    <span className={dagTaskText(t.status)}>
                       {t.status === 'done' ? '✅' : t.status === 'running' ? '●' : '◐'}
                     </span>
                     <span className="text-th-text-alt">{t.name}</span>

@@ -16,6 +16,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
+import { dagTaskText } from '../../utils/statusColors';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { DagTask } from '../../types';
 import { truncate, priorityBadge, timeInStatus, isStale, TRUNCATE_LENGTHS } from './kanbanConstants';
@@ -269,7 +270,7 @@ export function TaskCard({ task, allTasks, isDragOverlay, projectId, onTaskUpdat
               </div>
               {dependencyNames.map(dep => (
                 <div key={dep.id} className="ml-3 text-[10px] text-th-text-alt flex items-center gap-1">
-                  <span className={dep.status === 'done' ? 'text-emerald-400' : dep.status === 'running' ? 'text-blue-400' : 'text-th-text-muted'}>
+                  <span className={dagTaskText(dep.status ?? 'pending')}>
                     {dep.status === 'done' ? '✓' : dep.status === 'running' ? '●' : '○'}
                   </span>
                   {truncate(dep.label, TRUNCATE_LENGTHS.depLabel)}

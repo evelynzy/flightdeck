@@ -1,4 +1,5 @@
 import type { AgentInfo } from '../../types';
+import { agentStatusDot } from '../../utils/statusColors';
 
 interface Props {
   agent: AgentInfo;
@@ -16,13 +17,6 @@ function barColor(pct: number): string {
   return 'bg-emerald-500';
 }
 
-function statusDot(status: string): string {
-  if (status === 'running') return 'bg-green-400 animate-pulse';
-  if (status === 'idle') return 'bg-yellow-400';
-  if (status === 'failed') return 'bg-red-400';
-  if (status === 'completed') return 'bg-blue-400';
-  return 'bg-gray-400';
-}
 
 /**
  * Full-width agent card for mobile lists.
@@ -39,7 +33,7 @@ export function MobileAgentCard({ agent, onFocus }: Props) {
           <span className="text-lg">{agent.role.icon || '🤖'}</span>
           <span className="text-sm font-medium text-th-text">{agent.role.name}</span>
         </div>
-        <span className={`w-2 h-2 rounded-full ${statusDot(agent.status)}`} />
+        <span className={`w-2 h-2 rounded-full ${agentStatusDot(agent.status)}`} />
       </div>
 
       {agent.outputPreview && (

@@ -98,8 +98,8 @@ function SessionProgress({ progress, dagStatus }: { progress: LeadProgress | nul
                 key={a.id}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border ${
                   a.status === 'running' ? 'border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-300' :
-                  a.status === 'idle' ? 'border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-300' :
-                  a.status === 'completed' ? 'border-gray-500/50 bg-gray-500/10 text-th-text-muted' :
+                  a.status === 'idle' ? 'border-gray-500/50 bg-gray-500/10 text-gray-600 dark:text-gray-300' :
+                  a.status === 'completed' ? 'border-purple-500/50 bg-purple-500/10 text-purple-600 dark:text-purple-300' :
                   a.status === 'failed' ? 'border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-300' :
                   a.status === 'terminated' ? 'border-orange-500/50 bg-orange-500/10 text-orange-600 dark:text-orange-300' :
                   'border-th-border text-th-text-muted'
@@ -566,8 +566,8 @@ export function TaskQueuePanel({ api }: Props) {
                   )}
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     l.status === 'running' ? 'bg-blue-400 animate-pulse' :
-                    l.status === 'idle' ? 'bg-green-400' :
-                    l.status === 'completed' ? 'bg-gray-500' :
+                    l.status === 'idle' ? 'bg-gray-400' :
+                    l.status === 'completed' ? 'bg-purple-400' :
                     l.status === 'terminated' ? 'bg-orange-400' :
                     'bg-red-400'
                   }`} />

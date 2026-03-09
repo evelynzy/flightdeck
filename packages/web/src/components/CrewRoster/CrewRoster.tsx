@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
 import { getRoleIcon } from '../../utils/getRoleIcon';
+import { sessionStatusDot } from '../../utils/statusColors';
 import { useToastStore } from '../Toast';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import { Tabs } from '../ui/Tabs';
@@ -215,11 +216,7 @@ function CrewGroup({ leadId, agents, summary, defaultExpanded = true, onSelectAg
           <div className="space-y-1.5">
             {sessions.slice(0, 5).map(s => (
               <div key={s.id} className="flex items-start gap-2 text-[11px]">
-                <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${
-                  s.status === 'completed' ? 'bg-green-400' :
-                  s.status === 'running' ? 'bg-blue-400 animate-pulse' :
-                  s.status === 'failed' ? 'bg-red-400' : 'bg-gray-400'
-                }`} />
+                <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${sessionStatusDot(s.status)}`} />
                 <div className="flex-1 min-w-0">
                   <div className="text-th-text truncate">{s.task ?? 'No task description'}</div>
                   <div className="flex items-center gap-2 text-[10px] text-th-text-muted">

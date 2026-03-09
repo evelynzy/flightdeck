@@ -35,7 +35,7 @@ const AGENT_STATUS_STYLES: Record<AgentStatus, StatusStyle> = {
   creating:   { dot: 'bg-yellow-400',  text: 'text-yellow-600 dark:text-yellow-400' },
   running:    { dot: 'bg-blue-400',    text: 'text-blue-400' },
   idle:       { dot: 'bg-gray-400',    text: 'text-gray-400' },
-  completed:  { dot: 'bg-zinc-400',    text: 'text-th-text-muted' },
+  completed:  { dot: 'bg-purple-400',  text: 'text-purple-400' },
   failed:     { dot: 'bg-red-400',     text: 'text-red-400' },
   terminated: { dot: 'bg-orange-400',  text: 'text-orange-400' },
 };
@@ -132,4 +132,20 @@ export function decisionStatusCard(status: string, isPending: boolean): string {
   if (status === 'rejected') return 'border-red-500/40 bg-red-900/10';
   if (isPending) return 'border-yellow-500/40 bg-yellow-900/10';
   return 'border-th-border bg-th-bg-alt/50';
+}
+
+// ── Session statuses (used in CrewRoster, ProjectsPanel, etc.) ────────
+
+const SESSION_STATUS_DOTS: Record<string, string> = {
+  active:    'bg-green-400',
+  running:   'bg-blue-400 animate-pulse',
+  completed: 'bg-purple-400',
+  failed:    'bg-red-400',
+  crashed:   'bg-red-400',
+  stopped:   'bg-gray-400',
+};
+
+/** Get the dot background class for a session status. */
+export function sessionStatusDot(status: string): string {
+  return SESSION_STATUS_DOTS[status] ?? 'bg-gray-400';
 }

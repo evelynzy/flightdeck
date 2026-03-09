@@ -1,6 +1,7 @@
 import { BarChart3, X, CheckCircle, Loader2, AlertCircle, MessageSquare } from 'lucide-react';
 import type { AgentReport } from '../../stores/leadStore';
 import type { LeadProgress, Delegation } from '../../types';
+import { agentStatusDot } from '../../utils/statusColors';
 import { AgentReportBlock } from './AgentReportBlock';
 
 interface ProgressHistoryEntry {
@@ -61,7 +62,7 @@ export function ProgressDetailModal({ progress, progressHistory, onClose }: Prog
               <div className="space-y-1">
                 {progress.crewAgents.map((ta: LeadProgress['crewAgents'][number]) => (
                   <div key={ta.id} className="flex items-center gap-2 px-2 py-1 rounded bg-th-bg-muted/50 text-xs font-mono">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${ta.status === 'running' ? 'bg-green-400 animate-pulse motion-reduce:animate-none' : ta.status === 'idle' ? 'bg-yellow-400' : ta.status === 'failed' ? 'bg-red-400' : ta.status === 'terminated' ? 'bg-orange-400' : 'bg-gray-500'}`} />
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${agentStatusDot(ta.status)}`} />
                     <span className="text-th-text-alt">{ta.role?.name || 'Agent'}</span>
                     <span className="text-th-text-muted">{ta.id.slice(0, 8)}</span>
                     <span className="ml-auto text-th-text-muted">{ta.status}</span>
