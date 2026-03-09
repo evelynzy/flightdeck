@@ -1,7 +1,24 @@
 # Unified Memory Architecture: Entropy Management & Progressive Disclosure
 
-> **Status:** Design  
-> **Author:** Architect  
+## Executive Summary / TL;DR
+
+This document designs a **unified memory architecture** for agent context management in Flightdeck. It replaces the current static, front-loaded knowledge injection pipeline with a dynamic system that delivers knowledge progressively, preserves critical facts across compaction, and keeps multi-agent sessions coherent.
+
+**Problems solved (8):**
+1. **P1** — Front-loaded injection: agents get everything at spawn, nothing after
+2. **P2** — Lossy compaction: each compression pass silently loses detail
+3. **P3** — No mid-session knowledge: agents can't learn as tasks evolve
+4. **P4** — Facts lost in compression: critical decisions vanish during compaction
+5. **P5** — Cross-agent divergence: agents develop inconsistent world models
+6. **P6** — Session memory cliff: rich context collapses to thin summaries between sessions
+7. **P7** — No degradation signal: no way to know when agent memory has degraded too far
+8. **P8** — Static budgets: one-size-fits-all injection regardless of task or role
+
+**Scope:** ~980 LOC across 7 components (implementation + ~30% for unit tests), shipped in 7 phases.
+**Who should read this:** Developers working on agent lifecycle, the knowledge system, or context management.
+
+> **Status:** Design
+> **Author:** Architect
 > **Scope:** Agent-side memory pipeline — how context is built, delivered, preserved, and degraded
 
 ---
@@ -14,6 +31,45 @@ Entropy Management and Progressive Disclosure are two sides of one coin: the **a
 - **Entropy Management** = preventing memory *degradation* — preserving coherence across compactions, sessions, and agents
 
 Both operate on the same infrastructure. This spec designs them as a unified system.
+
+---
+
+## Table of Contents
+
+1. [Current Memory Architecture Audit](#current-memory-architecture-audit)
+   - The Five Memory Tiers
+   - Knowledge Injection Pipeline
+   - Context Compaction
+   - Session Knowledge Extraction
+   - Critical Problems
+2. [Design: Unified Memory Architecture](#design-unified-memory-architecture)
+   - Principle: Pull > Push, Late > Early, Less > More
+3. [Category A: Knowledge Delivery (P1, P3, P8)](#category-a-knowledge-delivery-p1-p3-p8)
+   - Component 1: Tiered Injection Budget
+   - Component 2: Mid-Session Knowledge Injection
+4. [Category B: Memory Preservation (P2, P4, P6, P7)](#category-b-memory-preservation-p2-p4-p6-p7)
+   - Component 3: Compaction-Surviving Facts (Sticky Memory)
+   - Component 4: Memory Fidelity Scoring
+   - Component 6: Session-to-Session Memory Bridge
+5. [Category C: Multi-Agent Coherence (P5)](#category-c-multi-agent-coherence-p5)
+   - Component 5: Ground Truth Document
+   - Component 7: Per-Project Trust Dial
+6. [Summary: File Change Map](#summary-file-change-map)
+7. [Implementation Order](#implementation-order)
+8. [New Agent Commands Summary](#new-agent-commands-summary)
+9. [Risk Areas](#risk-areas)
+
+---
+
+## Non-Goals
+
+The following are explicitly **out of scope** for this design:
+
+- **No vector embedding changes** — the optional vector search interface stays as-is; this doc doesn't redesign it
+- **No WebSocket protocol changes** — agent-server communication protocol is unchanged
+- **No message format redesign** — the existing message envelope format remains
+- **No changes to SkillsLoader** — skill discovery and injection are separate from the memory pipeline
+- **No UI dashboard density changes** — this document is about the agent-side memory pipeline, not dashboard layout
 
 ---
 
@@ -58,13 +114,12 @@ Both operate on the same infrastructure. This spec designs them as a unified sys
 
 ```
 AgentManager.spawnAgent()
-  ├─ Agent.buildPrompt()
+  ├─ Agent.buildContextManifest()
   │   ├─ role.systemPrompt (static template)
-  │   ├─ Agent.buildContextManifest()
-  │   │   ├─ Peer list (all agents, status, tasks, locked files)
-  │   │   ├─ Budget section (leads only)
-  │   │   ├─ Hierarchy info (sub-leads only)
-  │   │   └─ Shared workspace path
+  │   ├─ Peer list (all agents, status, tasks, locked files)
+  │   ├─ Budget section (leads only)
+  │   ├─ Hierarchy info (sub-leads only)
+  │   ├─ Shared workspace path
   │   └─ Role-specific instructions
   ├─ KnowledgeInjector.injectKnowledge(projectId, context)
   │   ├─ Token budget: 1,200 (configurable)
@@ -73,8 +128,8 @@ AgentManager.spawnAgent()
   │   │   └─ RRF fusion: score = w/(k+rank_A) + w/(k+rank_B), k=60
   │   ├─ Sanitize: strip control chars, injection patterns, truncate 500 chars
   │   └─ Format: XML-like section tags (treated as context, not instructions)
-  ├─ CollectiveMemory.recall(projectId)
-  │   └─ Top 20 entries by use_count
+  ├─ CollectiveMemory.recall('pattern', projectId)
+  │   └─ recall(category, keyPrefix?, projectId?) — category is first arg
   └─ SkillsLoader.getSkills()
       └─ .github/skills/**/SKILL.md files (YAML frontmatter)
 ```
@@ -116,16 +171,16 @@ AgentManager.extractSessionKnowledge(agent)
 
 ### Critical Problems
 
-| Problem | Impact | Root Cause |
-|---------|--------|------------|
-| **All-at-once injection** | Agent gets full knowledge dump at spawn, nothing after | KnowledgeInjector only runs once (spawn time) |
-| **Compaction lossy** | Each compression pass loses detail, no fidelity metric | Summaries are 200-char truncations, not semantic distillations |
-| **No mid-session injection** | Agent can't receive new knowledge as task evolves | No mechanism to push knowledge into active agent context |
-| **No compaction-surviving facts** | Critical decisions/findings lost when context compresses | Only system messages and "important markers" survive |
-| **Cross-agent divergence** | Agents develop inconsistent views of same problem | No shared "ground truth" document that all agents reference |
-| **Session memory cliff** | Rich session context → thin extracted summaries | extractFromSession uses keyword heuristics, not semantic extraction |
-| **No memory decay signal** | No way to know when agent's memory has degraded too far | No metric for "memory quality" or "context fidelity" |
-| **Static injection budget** | 1,200 tokens regardless of task complexity or agent role | Should scale with task, role, and context window size |
+| Label | Problem | Impact | Root Cause |
+|-------|---------|--------|------------|
+| **P1** | **All-at-once injection** | Agent gets full knowledge dump at spawn, nothing after | KnowledgeInjector only runs once (spawn time) |
+| **P2** | **Compaction lossy** | Each compression pass loses detail, no fidelity metric | Summaries are 200-char truncations, not semantic distillations |
+| **P3** | **No mid-session injection** | Agent can't receive new knowledge as task evolves | No mechanism to push knowledge into active agent context |
+| **P4** | **No compaction-surviving facts** | Critical decisions/findings lost when context compresses | Only system messages and "important markers" survive |
+| **P5** | **Cross-agent divergence** | Agents develop inconsistent views of same problem | No shared "ground truth" document that all agents reference |
+| **P6** | **Session memory cliff** | Rich session context → thin extracted summaries | extractFromSession uses keyword heuristics, not semantic extraction |
+| **P7** | **No memory decay signal** | No way to know when agent's memory has degraded too far | No metric for "memory quality" or "context fidelity" |
+| **P8** | **Static injection budget** | 1,200 tokens regardless of task complexity or agent role | Should scale with task, role, and context window size |
 
 ---
 
@@ -141,13 +196,19 @@ The research is clear: **context utilization above ~40% degrades agent reasoning
 4. **Checkpoint explicitly** — critical facts survive all compactions
 5. **Share coherently** — multi-agent ground truth prevents divergence
 
+> **Note on Push-Based Injection (Component 2B):** The domain-context post-hook is the one exception to the "Pull > Push" principle. It's justified because agents don't know what they don't know — when touching files in an unfamiliar domain, they can't request knowledge they aren't aware exists. This push is narrow (one injection per new domain, max 3 entries) and tracked (never re-injects for the same domain).
+
 ---
+
+## Category A: Knowledge Delivery (P1, P3, P8)
 
 ### Component 1: Tiered Injection Budget
 
 Replace the static 1,200-token budget with a dynamic budget that scales with context window size, task complexity, and oversight level.
 
-**File:** `packages/server/src/knowledge/KnowledgeInjector.ts` — modify `injectKnowledge()`  
+**Addresses:** P1, P8
+
+**File:** `packages/server/src/knowledge/KnowledgeInjector.ts` — modify `injectKnowledge()`
 **Estimated LOC:** ~40 modifications
 
 ```typescript
@@ -165,6 +226,8 @@ function computeInjectionBudget(params: InjectionBudgetParams): number {
   // Target: 15% of context window for initial knowledge
   // (leaves 85% for conversation — well under the 40% degradation threshold)
   const baseBudget = Math.floor(params.contextWindowSize * 0.15);
+  // 15% initial budget leaves 85% for conversation — well under the
+  // empirically-observed 40% degradation threshold (to be calibrated via testing)
 
   // Scale by complexity
   const complexityMultiplier = {
@@ -193,6 +256,7 @@ function computeInjectionBudget(params: InjectionBudgetParams): number {
   return Math.min(
     Math.floor(baseBudget * complexityMultiplier * oversightMultiplier * roleMultiplier),
     4000,  // Hard cap: never more than 4K tokens upfront
+    // Never exceed 10% of typical 40K window for initial injection. To be calibrated.
   );
 }
 ```
@@ -223,7 +287,9 @@ const CATEGORY_WEIGHTS: Record<string, Record<string, number>> = {
 
 The biggest gap: agents only receive knowledge at spawn. When an agent encounters a new domain mid-task, it has no mechanism to pull relevant knowledge.
 
-**File:** `packages/server/src/knowledge/KnowledgeRetrievalService.ts` (new)  
+**Addresses:** P1, P3, P8
+
+**File:** `packages/server/src/knowledge/KnowledgeRetrievalService.ts` (new)
 **Estimated LOC:** ~120
 
 Two injection modes:
@@ -259,14 +325,17 @@ export class KnowledgeRetrievalService {
     limit?: number;
     tokenBudget?: number;
   }): Promise<{ content: string; tokenEstimate: number; entriesReturned: number }> {
-    const budget = params.tokenBudget ?? 800;  // Mid-session recalls are smaller
+    const budget = params.tokenBudget ?? 800;
+    // Smaller than spawn budget — mid-session recalls should be focused. To be calibrated.
     const limit = params.limit ?? 5;
 
-    // Search across both KnowledgeStore and CollectiveMemory
-    const knowledgeResults = await this.hybridSearch.search(
-      params.projectId, params.query, limit, params.category
+    // Route through KnowledgeStore.search() to apply FTS5 query sanitization
+    // (prevents FTS5 injection via crafted query strings)
+    const knowledgeResults = await this.knowledgeStore.search(
+      params.projectId, params.query, { limit, category: params.category }
     );
-    const collectiveResults = this.collectiveMemory.recall(params.projectId)
+    // recall() takes category as first arg: recall(category, keyPrefix?, projectId?)
+    const collectiveResults = this.collectiveMemory.recall('pattern', undefined, params.projectId)
       .filter(cm => !params.category || cm.category === params.category)
       .filter(cm => cm.value.toLowerCase().includes(params.query.toLowerCase()))
       .slice(0, 3);
@@ -384,20 +453,26 @@ function extractDomain(filePath: string): string {
 
 ---
 
+## Category B: Memory Preservation (P2, P4, P6, P7)
+
 ### Component 3: Compaction-Surviving Facts (Sticky Memory)
 
 Critical decisions and findings must survive all context compactions. The current system only preserves system messages and a few markers (✅/❌/DECISION). This is insufficient — important facts buried in regular messages get compressed to 200-char summaries.
 
-**File:** `packages/server/src/agents/StickyMemory.ts` (new)  
+**Addresses:** P2, P4
+
+**File:** `packages/server/src/agents/StickyMemory.ts` (new)
 **Estimated LOC:** ~80
 
 ```typescript
 // packages/server/src/agents/StickyMemory.ts
 
+import { sanitizeContent } from '../knowledge/sanitize.js';
+
 export interface StickyFact {
   id: string;
   content: string;
-  category: 'decision' | 'finding' | 'constraint' | 'error-lesson';
+  category: 'decision' | 'finding' | 'constraint' | 'error-lesson' | 'sensitive';
   source: 'agent' | 'system' | 'user';
   createdAt: number;
   tokenCost: number;
@@ -410,30 +485,39 @@ export interface StickyFact {
  */
 export class StickyMemory {
   private facts = new Map<string, StickyFact[]>();
-  private maxTokensPerAgent = 2000;  // Hard cap on sticky memory size
+  private maxTokensPerAgent = 2000;
+  // ~5% of a 40K context window. Balances fact preservation vs conversation space.
+  // To be calibrated per context window size.
 
   /**
    * Agent pins a fact via REMEMBER command.
    */
-  remember(agentId: string, fact: Omit<StickyFact, 'id' | 'tokenCost' | 'createdAt'>): StickyFact {
+  remember(agentId: string, fact: Omit<StickyFact, 'id' | 'tokenCost' | 'createdAt'>): StickyFact | null {
+    // Sanitize input to prevent persisting sensitive data (API keys, PII) across sessions
+    const sanitizedContent = sanitizeContent(fact.content);
+    if (!sanitizedContent) return null;  // Skip empty after sanitization
+
     const entry: StickyFact = {
       ...fact,
+      content: sanitizedContent,
       id: `sticky-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      tokenCost: Math.ceil(fact.content.length / 4),
+      tokenCost: Math.ceil(sanitizedContent.length / 4),
       createdAt: Date.now(),
     };
 
     const agentFacts = this.facts.get(agentId) ?? [];
     agentFacts.push(entry);
 
-    // Enforce token budget: evict oldest non-constraint facts
+    // Enforce token budget: evict oldest non-constraint facts (iterate in reverse to avoid splice index bugs)
     let totalTokens = agentFacts.reduce((sum, f) => sum + f.tokenCost, 0);
-    while (totalTokens > this.maxTokensPerAgent && agentFacts.length > 1) {
-      // Never evict constraints; evict oldest findings first
-      const evictIdx = agentFacts.findIndex(f => f.category !== 'constraint');
-      if (evictIdx === -1) break;  // All constraints — can't evict
-      totalTokens -= agentFacts[evictIdx].tokenCost;
-      agentFacts.splice(evictIdx, 1);
+    for (let i = 0; i < agentFacts.length && totalTokens > this.maxTokensPerAgent; ) {
+      if (agentFacts[i].category === 'constraint') {
+        i++;  // Skip constraints — never evict
+        continue;
+      }
+      totalTokens -= agentFacts[i].tokenCost;
+      agentFacts.splice(i, 1);
+      // Don't increment i — next element shifted into current position
     }
 
     this.facts.set(agentId, agentFacts);
@@ -517,7 +601,9 @@ agentManager.on('agent:context_compacted', ({ agentId }) => {
 
 A real-time metric that quantifies how much of an agent's original context has been preserved vs. degraded. This is the "memory health" signal the system currently lacks.
 
-**File:** `packages/server/src/agents/MemoryFidelityScorer.ts` (new)  
+**Addresses:** P2, P7
+
+**File:** `packages/server/src/agents/MemoryFidelityScorer.ts` (new)
 **Estimated LOC:** ~90
 
 ```typescript
@@ -564,7 +650,8 @@ export class MemoryFidelityScorer {
 
     // Information loss model:
     // Each compression pass loses ~30% of compressed content's detail
-    // (empirical estimate — summaries are 200-char truncations of 10-message batches)
+    // Empirical estimate: 200-char truncations of 10-message batches lose ~30% detail.
+    // To be calibrated with actual compression output analysis.
     const lossPerPass = 0.30;
     const compressedFraction = totalSaved / Math.max(originalTokens, 1);
     const estimatedInfoLoss = Math.min(1, compressedFraction * (1 - Math.pow(1 - lossPerPass, passes)));
@@ -619,13 +706,19 @@ When fidelity drops below thresholds:
 // In AgentManager, after each context_compacted event:
 const fidelity = fidelityScorer.score(agentId, agent, stickyMemory.getFacts(agentId).length);
 if (fidelity.score < 40) {
-  // Force knowledge re-injection
-  const knowledge = await knowledgeRetrievalService.recall({
-    projectId: agent.projectId,
-    query: agent.currentTask ?? agent.role.name,
-    tokenBudget: 600,
-  });
-  agent.sendMessage(`[System] Knowledge refresh (memory fidelity: ${fidelity.score}/100):\n${knowledge.content}`);
+  // Guard: don't inject if post-compaction utilization is still above 70%
+  // (injecting 600 tokens could trigger another compaction → infinite loop)
+  const postCompactionUtilization = agent.contextWindowUsed / agent.contextWindowSize;
+  if (postCompactionUtilization > 0.70) {
+    logger.warn({ module: 'memory', msg: 'Skipping knowledge re-injection — context still over 70% after compaction', fidelity: fidelity.score, utilization: postCompactionUtilization });
+  } else {
+    const knowledge = await knowledgeRetrievalService.recall({
+      projectId: agent.projectId,
+      query: agent.currentTask ?? agent.role.name,
+      tokenBudget: 600,  // To be calibrated — must leave room in context to avoid triggering another compaction
+    });
+    agent.sendMessage(`[System] Knowledge refresh (memory fidelity: ${fidelity.score}/100):\n${knowledge.content}`);
+  }
 }
 if (fidelity.score < 20) {
   const lead = agentManager.getLeadAgent();
@@ -642,142 +735,13 @@ if (fidelity.score < 20) {
 
 ---
 
-### Component 5: Ground Truth Document (Multi-Agent Coherence)
-
-The biggest source of multi-agent entropy: agents develop **inconsistent world models** because they each have different conversation histories and different compaction artifacts. The fix is a shared, authoritative document that all agents reference.
-
-**File:** `packages/server/src/coordination/knowledge/GroundTruth.ts` (new)  
-**Estimated LOC:** ~100
-
-```typescript
-// packages/server/src/coordination/knowledge/GroundTruth.ts
-
-export interface GroundTruthEntry {
-  key: string;              // e.g., "auth-strategy", "db-schema-v2"
-  content: string;          // The authoritative fact
-  updatedBy: string;        // agentId who last updated
-  updatedAt: number;
-  version: number;
-}
-
-/**
- * A shared, versioned, authoritative fact store for a project session.
- * All agents can read. Only Lead and Architect can write.
- * Entries are injected into sticky memory of all agents on update.
- *
- * This is NOT KnowledgeStore (which is long-term project knowledge).
- * GroundTruth is session-scoped and captures the *current state of decisions*
- * for the active session — preventing agents from diverging.
- */
-export class GroundTruth {
-  private entries = new Map<string, GroundTruthEntry>();
-  private subscribers = new Set<string>();  // agentIds subscribed to updates
-
-  constructor(
-    private agentManager: AgentManager,
-    private stickyMemory: StickyMemory,
-  ) {}
-
-  /**
-   * Set or update a ground truth entry.
-   * Broadcasts to all subscribed agents.
-   */
-  set(key: string, content: string, updatedBy: string): GroundTruthEntry {
-    const existing = this.entries.get(key);
-    const entry: GroundTruthEntry = {
-      key,
-      content,
-      updatedBy,
-      updatedAt: Date.now(),
-      version: (existing?.version ?? 0) + 1,
-    };
-    this.entries.set(key, entry);
-
-    // Broadcast to all subscribed agents
-    for (const agentId of this.subscribers) {
-      // Update sticky memory so this fact survives compaction
-      this.stickyMemory.remember(agentId, {
-        content: `[Ground Truth: ${key}] ${content}`,
-        category: 'constraint',
-        source: 'system',
-      });
-      // Also send as message for immediate awareness
-      const agent = this.agentManager.getAgent(agentId);
-      agent?.sendMessage(
-        `[System] Ground truth updated — ${key} (v${entry.version}):\n${content}`
-      );
-    }
-
-    return entry;
-  }
-
-  get(key: string): GroundTruthEntry | undefined {
-    return this.entries.get(key);
-  }
-
-  getAll(): GroundTruthEntry[] {
-    return [...this.entries.values()].sort((a, b) => a.key.localeCompare(b.key));
-  }
-
-  subscribe(agentId: string): void {
-    this.subscribers.add(agentId);
-    // Inject current ground truth into new subscriber's sticky memory
-    for (const entry of this.entries.values()) {
-      this.stickyMemory.remember(agentId, {
-        content: `[Ground Truth: ${entry.key}] ${entry.content}`,
-        category: 'constraint',
-        source: 'system',
-      });
-    }
-  }
-
-  unsubscribe(agentId: string): void {
-    this.subscribers.delete(agentId);
-  }
-
-  /**
-   * Format all entries for initial injection into agent context.
-   */
-  formatForInjection(): string | null {
-    if (this.entries.size === 0) return null;
-    let block = '<ground_truth>\nAuthoritative decisions for this session:\n';
-    for (const entry of this.getAll()) {
-      block += `- ${entry.key}: ${entry.content}\n`;
-    }
-    block += '</ground_truth>';
-    return block;
-  }
-}
-```
-
-**New agent commands:**
-
-```
-⟦⟦ SET_GROUND_TRUTH {"key": "auth-strategy", "content": "Using JWT with RSA-256 via jose library"} ⟧⟧
-⟦⟦ GET_GROUND_TRUTH {} ⟧⟧
-```
-
-**Auto-subscription:** All agents subscribe on spawn. Lead and Architect can write; others read-only.
-
-**Integration with KnowledgeInjector** (~10 LOC):
-
-```typescript
-// In KnowledgeInjector.injectKnowledge(), after knowledge selection:
-const groundTruthBlock = groundTruth.formatForInjection();
-if (groundTruthBlock) {
-  sections.push(groundTruthBlock);
-}
-```
-
-**~100 LOC** for GroundTruth + ~20 for commands + ~10 for injection = **~130 LOC total.**
-
----
-
 ### Component 6: Session-to-Session Memory Bridge
 
 What carries over between sessions, what gets lost, and what should be forgotten.
 
-**File:** `packages/server/src/knowledge/SessionMemoryBridge.ts` (new)  
+**Addresses:** P6
+
+**File:** `packages/server/src/knowledge/SessionMemoryBridge.ts` (new)
 **Estimated LOC:** ~100
 
 Currently, session knowledge extraction (SessionKnowledgeExtractor) is **keyword-heuristic based** — it looks for "decided", "chose", etc. This produces thin, unreliable summaries.
@@ -813,7 +777,7 @@ export class SessionMemoryBridge {
   constructor(
     private groundTruth: GroundTruth,
     private stickyMemory: StickyMemory,
-    private dagManager: DagManager,
+    private taskDAG: TaskDAG,
     private crashForensics: CrashForensics,
     private ledger: ActivityLedger,
   ) {}
@@ -827,7 +791,7 @@ export class SessionMemoryBridge {
     const groundTruthEntries = this.groundTruth.getAll();
 
     // Tasks: from DAG
-    const dagStatus = this.dagManager.getStatus();
+    const dagStatus = this.taskDAG.getStatus();
     const completedTasks = (dagStatus.tasks ?? [])
       .filter(t => t.status === 'done')
       .map(t => ({ taskId: t.id, summary: t.summary ?? t.description, agent: t.assignee ?? 'unknown' }));
@@ -835,10 +799,11 @@ export class SessionMemoryBridge {
       .filter(t => ['ready', 'pending', 'blocked'].includes(t.status))
       .map(t => ({ taskId: t.id, description: t.description, blockedBy: t.dependencies?.filter(d => d.status !== 'done').map(d => d.id) }));
 
-    // Sticky facts: aggregate from all agents
+    // Sticky facts: aggregate from all agents (exclude sensitive facts from handoffs)
     const allFacts: SessionHandoff['stickyFacts'] = [];
     for (const agent of agents) {
-      const facts = this.stickyMemory.getFacts(agent.id);
+      const facts = this.stickyMemory.getFacts(agent.id)
+        .filter(f => f.category !== 'sensitive');  // Exclude sensitive facts from handoffs
       for (const fact of facts) {
         allFacts.push({
           content: fact.content,
@@ -873,6 +838,7 @@ export class SessionMemoryBridge {
    * Token-budgeted to fit within injection limits.
    */
   formatForInjection(handoff: SessionHandoff, tokenBudget = 1500): string {
+    // ~4% of context window for previous session summary. To be calibrated.
     let content = '<previous_session>\n';
     let tokens = 0;
 
@@ -923,9 +889,182 @@ export class SessionMemoryBridge {
 
 ---
 
+## Category C: Multi-Agent Coherence (P5)
+
+### Component 5: Ground Truth Document (Multi-Agent Coherence)
+
+The biggest source of multi-agent entropy: agents develop **inconsistent world models** because they each have different conversation histories and different compaction artifacts. The fix is a shared, authoritative document that all agents reference.
+
+**Addresses:** P5
+
+**File:** `packages/server/src/coordination/knowledge/GroundTruth.ts` (new)
+**Estimated LOC:** ~100
+
+```typescript
+// packages/server/src/coordination/knowledge/GroundTruth.ts
+
+import { sanitizeContent } from '../../knowledge/sanitize.js';
+
+export interface GroundTruthEntry {
+  key: string;              // e.g., "auth-strategy", "db-schema-v2"
+  content: string;          // The authoritative fact
+  updatedBy: string;        // agentId who last updated
+  updatedAt: number;
+  version: number;
+}
+
+/**
+ * A shared, versioned, authoritative fact store for a project session.
+ * All agents can read. Only Lead and Architect can write.
+ * Entries are injected into sticky memory of all agents on update.
+ *
+ * This is NOT KnowledgeStore (which is long-term project knowledge).
+ * GroundTruth is session-scoped and captures the *current state of decisions*
+ * for the active session — preventing agents from diverging.
+ */
+export class GroundTruth {
+  private entries = new Map<string, GroundTruthEntry>();
+  private subscribers = new Set<string>();  // agentIds subscribed to updates
+  private broadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingBroadcasts: Array<{ key: string; entry: GroundTruthEntry }> = [];
+
+  constructor(
+    private agentManager: AgentManager,
+    private stickyMemory: StickyMemory,
+  ) {}
+
+  /**
+   * Set or update a ground truth entry.
+   * Broadcasts to all subscribed agents.
+   */
+  set(key: string, content: string, updatedBy: string): GroundTruthEntry {
+    const sanitizedContent = sanitizeContent(content);
+    if (!sanitizedContent) throw new Error('Ground truth content empty after sanitization');
+
+    const existing = this.entries.get(key);
+    const entry: GroundTruthEntry = {
+      key,
+      content: sanitizedContent,
+      updatedBy,
+      updatedAt: Date.now(),
+      version: (existing?.version ?? 0) + 1,
+    };
+    this.entries.set(key, entry);
+
+    // Batch update: replace single 'ground-truth-summary' sticky fact per agent
+    // instead of O(n) individual facts + messages per update
+    // Prevents O(n×m) storm: n subscribers × m entries. Single summary per agent.
+    const summary = this.formatForInjection();
+    for (const agentId of this.subscribers) {
+      // Evict previous ground truth summary
+      const existingFact = this.stickyMemory.getFacts(agentId)
+        .find(f => f.content.startsWith('[Ground Truth Summary]'));
+      if (existingFact) this.stickyMemory.forget(agentId, existingFact.id);
+
+      // Store single consolidated fact
+      this.stickyMemory.remember(agentId, {
+        content: `[Ground Truth Summary] ${summary}`,
+        category: 'constraint',
+        source: 'system',
+      });
+    }
+
+    // Debounced broadcast: notify agents of update (coalesced over 500ms)
+    this.scheduleBroadcast(key, entry);
+
+    return entry;
+  }
+
+  /**
+   * Debounce broadcast notifications to avoid flooding agents with
+   * rapid consecutive ground truth updates.
+   */
+  private scheduleBroadcast(key: string, entry: GroundTruthEntry): void {
+    this.pendingBroadcasts.push({ key, entry });
+    if (this.broadcastTimer) clearTimeout(this.broadcastTimer);
+    this.broadcastTimer = setTimeout(() => {
+      const keys = this.pendingBroadcasts.map(b => b.key);
+      const latestVersion = Math.max(...this.pendingBroadcasts.map(b => b.entry.version));
+      for (const agentId of this.subscribers) {
+        const agent = this.agentManager.getAgent(agentId);
+        agent?.sendMessage(
+          `[System] Ground truth updated — ${keys.join(', ')} (latest v${latestVersion}):\n` +
+          this.pendingBroadcasts.map(b => `- ${b.key}: ${b.entry.content}`).join('\n')
+        );
+      }
+      this.pendingBroadcasts = [];
+      this.broadcastTimer = null;
+    }, 500);
+  }
+
+  get(key: string): GroundTruthEntry | undefined {
+    return this.entries.get(key);
+  }
+
+  getAll(): GroundTruthEntry[] {
+    return [...this.entries.values()].sort((a, b) => a.key.localeCompare(b.key));
+  }
+
+  subscribe(agentId: string): void {
+    this.subscribers.add(agentId);
+    // Inject consolidated ground truth summary (not one fact per entry — avoids O(n) sticky facts)
+    const summary = this.formatForInjection();
+    if (summary) {
+      this.stickyMemory.remember(agentId, {
+        content: `[Ground Truth Summary] ${summary}`,
+        category: 'constraint',
+        source: 'system',
+      });
+    }
+  }
+
+  unsubscribe(agentId: string): void {
+    this.subscribers.delete(agentId);
+  }
+
+  /**
+   * Format all entries for initial injection into agent context.
+   */
+  formatForInjection(): string | null {
+    if (this.entries.size === 0) return null;
+    let block = '<ground_truth>\nAuthoritative decisions for this session:\n';
+    for (const entry of this.getAll()) {
+      block += `- ${entry.key}: ${entry.content}\n`;
+    }
+    block += '</ground_truth>';
+    return block;
+  }
+}
+```
+
+**New agent commands:**
+
+```
+⟦⟦ SET_GROUND_TRUTH {"key": "auth-strategy", "content": "Using JWT with RSA-256 via jose library"} ⟧⟧
+⟦⟦ GET_GROUND_TRUTH {} ⟧⟧
+```
+
+**Auto-subscription:** All agents subscribe on spawn. Lead and Architect can write; others read-only.
+
+**Integration with KnowledgeInjector** (~10 LOC):
+
+```typescript
+// In KnowledgeInjector.injectKnowledge(), after knowledge selection:
+const groundTruthBlock = groundTruth.formatForInjection();
+if (groundTruthBlock) {
+  sections.push(groundTruthBlock);
+}
+```
+
+**~100 LOC** for GroundTruth + ~20 for commands + ~10 for injection = **~130 LOC total.**
+
+---
+
 ### Component 7: Per-Project Trust Dial
 
 Per the user's directive: oversight level must be **per-project**, stored in the project DB record, with a visible control on the project Overview page.
+
+**Addresses:** P5, P8
 
 **Server side:**
 
@@ -933,19 +1072,27 @@ Per the user's directive: oversight level must be **per-project**, stored in the
 ```typescript
 // PATCH /projects/:id
 // Add oversightLevel to project update endpoint
+import { eq } from 'drizzle-orm';
+import { projects } from '../db/schema.js';
+
 router.patch('/:id', (req, res) => {
   const { oversightLevel, ...rest } = req.body;
   if (oversightLevel) {
-    db.prepare('UPDATE project_registry SET oversight_level = ? WHERE id = ?')
-      .run(oversightLevel, req.params.id);
+    // Use Drizzle ORM — never raw SQL for user-facing endpoints
+    db.drizzle.update(projects)
+      .set({ oversightLevel })
+      .where(eq(projects.id, req.params.id))
+      .run();
   }
   // ... existing update logic
 });
 ```
 
 **Schema addition** (~3 LOC):
-```sql
-ALTER TABLE project_registry ADD COLUMN oversight_level TEXT DEFAULT 'standard';
+```typescript
+// In packages/server/src/db/schema.ts (Drizzle schema, not raw SQL)
+// Add to the projects table definition:
+oversightLevel: text('oversight_level').default('standard'),
 ```
 
 **Client side:**
@@ -1019,6 +1166,8 @@ export function TrustDial({ projectId }: { projectId: string }) {
 
 ## Summary: File Change Map
 
+LOC estimates include implementation only. Add ~30% for unit tests.
+
 | # | Component | File | LOC | New/Modify |
 |---|-----------|------|-----|-----------|
 | 1 | Tiered Injection Budget | `knowledge/KnowledgeInjector.ts` | ~40 | Modify |
@@ -1039,6 +1188,7 @@ export function TrustDial({ projectId }: { projectId: string }) {
 | 7a | TrustDial component | `web/components/TrustDial/TrustDial.tsx` | ~60 | New |
 | 7b | Project API + schema | `routes/projects.ts` + `db/schema.ts` | ~18 | Modify |
 | **Total** | | | **~753** | |
+| **Total with tests (~30%)** | | | **~980** | |
 
 ---
 
@@ -1085,3 +1235,15 @@ SessionMemoryBridge handoffs could grow large for long sessions with many decisi
 
 ### 5. Compaction-Injection Race (LOW)
 If context_compacted fires and sticky memory re-injection happens simultaneously with a compaction pass, messages could be double-counted. Mitigation: re-injection happens *after* compression completes, as a synchronous follow-up step, not a separate event handler.
+
+### 6. Sensitive Data Persistence in Sticky Memory (HIGH)
+Without input sanitization, agents could inadvertently persist API keys, credentials, or PII via REMEMBER commands that survive across sessions via handoffs. Mitigation: all REMEMBER and SET_GROUND_TRUTH inputs are routed through `sanitizeContent()`. A dedicated `'sensitive'` fact category is excluded from session handoffs.
+
+### 7. Ground Truth Broadcast Storm (MEDIUM)
+If a Lead rapidly updates multiple ground truth entries, the naive implementation would send O(n×m) messages (n subscribers × m entries). Mitigation: ground truth updates use a single consolidated summary sticky fact per agent (replacing the previous summary) and debounce broadcast notifications over 500ms windows.
+
+### 8. FTS5 Injection via RECALL_KNOWLEDGE (MEDIUM)
+Agent-submitted query strings for RECALL_KNOWLEDGE flow into FTS5 search. Malicious or malformed queries could exploit FTS5 syntax. Mitigation: route all recall queries through `KnowledgeStore.search()` which applies FTS5 query sanitization, instead of calling `hybridSearch` directly.
+
+### 9. Fidelity-Triggered Re-Injection Loop (MEDIUM)
+When memory fidelity drops below 40, the system re-injects 600 tokens of knowledge. If the context is already near-full after compaction, this injection could trigger another compaction, which triggers another fidelity check, creating an infinite loop. Mitigation: check post-compaction utilization before re-injecting — skip injection if utilization exceeds 70%.
