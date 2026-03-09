@@ -541,13 +541,15 @@ export class AgentServer {
     on<number>('exit', (code) => {
       agent.status = code === 0 ? 'exited' : 'crashed';
 
-      this.massFailure.recordExit({
-        agentId: agent.id,
-        exitCode: code,
-        signal: null,
-        error: code !== 0 ? `Exit code ${code}` : null,
-        timestamp: Date.now(),
-      });
+      if (code !== 0) {
+        this.massFailure.recordExit({
+          agentId: agent.id,
+          exitCode: code,
+          signal: null,
+          error: `Exit code ${code}`,
+          timestamp: Date.now(),
+        });
+      }
 
       // Persist exit status
       this.persistence?.onAgentExited?.(agent.id, code);
