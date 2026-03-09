@@ -788,6 +788,7 @@ export function ProjectsPanel() {
           <h3 className="text-lg font-semibold text-th-text mb-1">Import Project</h3>
           <p className="text-xs text-th-text-muted mb-4">
             Enter the path to a directory containing a <code className="bg-th-bg-alt px-1 rounded">.flightdeck/</code> folder.
+            Shared artifacts will be available. Knowledge and memory from a previous database are not included.
           </p>
           <input
             type="text"
