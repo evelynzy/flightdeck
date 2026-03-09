@@ -400,7 +400,8 @@ export class AgentServer {
     this.wireAdapterEvents(agent);
 
     // Start the adapter
-    const startOpts = buildStartOptions(config, { cwd: process.cwd() });
+    const resumeSessionId = msg.context?.resumeSessionId as string | undefined;
+    const startOpts = buildStartOptions(config, { cwd: process.cwd(), sessionId: resumeSessionId });
     adapter.start(startOpts).then((sessionId) => {
       agent.sessionId = sessionId;
       agent.status = 'running';
@@ -411,6 +412,7 @@ export class AgentServer {
         role: msg.role,
         model: msg.model,
         pid: agent.pid,
+        sessionId,
       });
     }).catch((err) => {
       agent.status = 'crashed';

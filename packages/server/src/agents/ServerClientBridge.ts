@@ -284,8 +284,11 @@ export async function startRemoteBridge(
       cliCommand: '', // Not used for remote
     });
 
-    agent.sessionId = sessionId;
-    agent._notifySessionReady(sessionId);
+    // For session resume, prefer: spawn result sessionId > agent.resumeSessionId > adapter's agentId
+    // The spawn result carries the actual session ID from the remote CopilotSdkAdapter.
+    // ServerClientAdapter.start() returns agentId (synthetic), so we override it.
+    agent.sessionId = result.sessionId || agent.resumeSessionId || sessionId;
+    agent._notifySessionReady(agent.sessionId!);
 
     // Send initial prompt (always provided — includes context manifest on resume, full system prompt on fresh start)
     if (initialPrompt) {

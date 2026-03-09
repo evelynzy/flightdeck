@@ -62,6 +62,7 @@ export interface SpawnResult {
   role: string;
   model: string;
   pid: number | null;
+  sessionId?: string;
 }
 
 // ── Client ──────────────────────────────────────────────────────────
@@ -183,6 +184,7 @@ export class AgentServerClient extends EventEmitter {
       role: response.role,
       model: response.model,
       pid: response.pid,
+      sessionId: response.sessionId,
     };
   }
 

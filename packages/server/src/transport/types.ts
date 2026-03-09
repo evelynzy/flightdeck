@@ -155,6 +155,7 @@ export interface AgentSpawnedMessage {
   role: string;
   model: string;
   pid: number | null;
+  sessionId?: string;
 }
 
 export interface AgentEventMessage {
