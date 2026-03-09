@@ -467,7 +467,7 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
     }
   }
 
-  terminate(): void {
+  async terminate(): Promise<void> {
     // Resolve all pending permissions as cancelled and clear timeouts
     for (const [id, entry] of this.pendingPermissions) {
       clearTimeout(entry.timeout);
@@ -479,12 +479,27 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
     if (this.process) {
       const proc = this.process;
       this.process = null;
-      // Close stdin first so the CLI can flush session state to disk
-      proc.stdin?.end();
-      // Brief grace period before force-killing, so the process can exit naturally
-      setTimeout(() => {
+
+      if (this._exited) {
+        // Process already exited (error or normal exit) — just clean up
         try { proc.kill(); } catch { /* already exited */ }
-      }, 500);
+      } else {
+        // Close stdin so the CLI can flush session state to disk
+        proc.stdin?.end();
+        // Wait for process to exit naturally, with a 5s timeout before force-killing
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            proc.once('exit', () => resolve());
+            if (proc.exitCode !== null || proc.signalCode !== null) resolve();
+          }),
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              try { proc.kill(); } catch { /* already exited */ }
+              resolve();
+            }, 5000);
+          }),
+        ]);
+      }
     }
     this._isConnected = false;
     this._isPrompting = false;

@@ -61,11 +61,21 @@ import { logger } from '../utils/logger.js';
 /** Create a fake child process with piped stdin/stdout as real streams */
 function createFakeProcess() {
   const proc = new EventEmitter() as any;
-  proc.stdin = new PassThrough();
+  const stdin = new PassThrough();
+  // Simulate CLI exiting after stdin closes (flushes session state)
+  stdin.on('finish', () => { setTimeout(() => proc.emit('exit', 0, null), 10); });
+  proc.stdin = stdin;
   proc.stdout = new PassThrough();
   proc.stderr = null;
-  proc.kill = vi.fn();
+  proc.kill = vi.fn(() => { proc.emit('exit', 0, null); });
   proc.pid = 12345;
+  proc.exitCode = null;
+  proc.signalCode = null;
+  // Track exit state like a real ChildProcess
+  proc.on('exit', (code: number | null, signal: string | null) => {
+    proc.exitCode = code;
+    proc.signalCode = signal;
+  });
   return proc;
 }
 
@@ -493,8 +503,7 @@ describe('AcpAdapter', () => {
   // ── 5. terminate() ──────────────────────────────────────────────
 
   describe('terminate()', () => {
-    it('kills the process and resets state', async () => {
-      vi.useFakeTimers();
+    it('closes stdin and waits for process exit', async () => {
       const fakeProc = setupSuccessfulStart();
 
       const adapter = new AcpAdapter();
@@ -502,34 +511,28 @@ describe('AcpAdapter', () => {
 
       expect(adapter.isConnected).toBe(true);
 
-      adapter.terminate();
+      await adapter.terminate();
 
-      // kill() is deferred 500ms to let the CLI flush session state
       expect(adapter.isConnected).toBe(false);
       expect(adapter.isPrompting).toBe(false);
       expect(adapter.promptingStartedAt).toBeNull();
-
-      vi.advanceTimersByTime(500);
-      expect(fakeProc.kill).toHaveBeenCalled();
-      vi.useRealTimers();
+      // Process exited naturally via stdin close — kill() not needed
+      expect(fakeProc.kill).not.toHaveBeenCalled();
     });
 
-    it('is safe to call when not started', () => {
+    it('is safe to call when not started', async () => {
       const adapter = new AcpAdapter();
-      expect(() => adapter.terminate()).not.toThrow();
+      await adapter.terminate(); // Should not throw
     });
 
     it('is safe to call twice', async () => {
-      vi.useFakeTimers();
       setupSuccessfulStart();
 
       const adapter = new AcpAdapter();
       await adapter.start(DEFAULT_START_OPTS);
 
-      adapter.terminate();
-      vi.advanceTimersByTime(500);
-      expect(() => adapter.terminate()).not.toThrow();
-      vi.useRealTimers();
+      await adapter.terminate();
+      await adapter.terminate(); // Should not throw
     });
   });
 
@@ -563,7 +566,7 @@ describe('AcpAdapter', () => {
       expect(adapter.isConnected).toBe(false);
 
       // Clean up hanging promise
-      adapter.terminate();
+      await adapter.terminate();
     });
 
     it('normalizes null exit code to 1 on signal kill', async () => {
@@ -587,7 +590,7 @@ describe('AcpAdapter', () => {
         expect.objectContaining({ signal: 'SIGKILL' }),
       );
 
-      adapter.terminate();
+      await adapter.terminate();
     });
 
     it('emits exit only once when both error and exit fire', async () => {
@@ -609,7 +612,7 @@ describe('AcpAdapter', () => {
 
       expect(exitCodes).toHaveLength(1);
 
-      adapter.terminate();
+      await adapter.terminate();
     });
 
     it('preserves numeric exit code on normal exit', async () => {
@@ -630,7 +633,7 @@ describe('AcpAdapter', () => {
 
       expect(exitCodes).toEqual([42]);
 
-      adapter.terminate();
+      await adapter.terminate();
     });
   });
 
@@ -1005,7 +1008,7 @@ describe('AcpAdapter', () => {
       });
 
       await new Promise((r) => setTimeout(r, 10));
-      adapter.terminate();
+      await adapter.terminate();
 
       const result = await permPromise;
       expect(result.outcome.outcome).toBe('cancelled');
@@ -1020,7 +1023,7 @@ describe('AcpAdapter', () => {
       const exitHandler = vi.fn();
       adapter.on('exit', exitHandler);
 
-      adapter.terminate();
+      await adapter.terminate();
 
       expect(exitHandler).toHaveBeenCalledWith(0);
     });
@@ -1041,7 +1044,11 @@ describe('AcpAdapter', () => {
       });
 
       await vi.advanceTimersByTimeAsync(10);
-      adapter.terminate();
+      // Start terminate but don't await — it needs timers to advance
+      const terminatePromise = adapter.terminate();
+      // Advance past stdin flush delay (10ms) + kill timeout (5s)
+      await vi.advanceTimersByTimeAsync(5100);
+      await terminatePromise;
       expect((await permPromise).outcome.outcome).toBe('cancelled');
 
       // Timeout fires but permission already resolved — no double-resolve
