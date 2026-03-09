@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../hooks/useApi';
 import { Play, Loader2, Users, UserPlus, Sparkles, CheckCircle2 } from 'lucide-react';
 import type { SessionDetail, SessionAgent } from './SessionHistory';
@@ -63,6 +64,7 @@ const MODE_OPTIONS: Array<{ value: ResumeMode; icon: typeof Users; label: string
 ];
 
 export function ResumeSessionDialog({ projectId, lastSession, onClose, onResume }: ResumeSessionDialogProps) {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<ResumeMode>('resume-all');
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
     () => new Set(lastSession.agents.map(a => a.agentId)),
@@ -86,7 +88,7 @@ export function ResumeSessionDialog({ projectId, lastSession, onClose, onResume 
     setResuming(true);
     setError(null);
     try {
-      await apiFetch(`/projects/${projectId}/resume`, {
+      const response = await apiFetch<{ id: string }>(`/projects/${projectId}/resume`, {
         method: 'POST',
         body: JSON.stringify({
           task: task.trim() || undefined,
@@ -96,12 +98,15 @@ export function ResumeSessionDialog({ projectId, lastSession, onClose, onResume 
         }),
       });
       onResume();
+      if (response?.id) {
+        navigate(`/projects/${projectId}`);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to resume project');
     } finally {
       setResuming(false);
     }
-  }, [projectId, mode, task, selectedAgents, onResume]);
+  }, [projectId, mode, task, selectedAgents, onResume, navigate]);
 
   return (
     <div

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FolderOpen,
   Plus,
@@ -286,7 +286,13 @@ function ProjectCard({
                               : 'bg-gray-400'
                       }`}
                     />
-                    <span className="font-mono text-th-text-muted">{s.leadId.slice(0, 8)}</span>
+                    <span
+                      className="font-mono text-th-text-muted hover:text-th-text cursor-pointer"
+                      title={`Session: ${s.leadId} — click to copy`}
+                      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(s.leadId); }}
+                    >
+                      {s.leadId.slice(0, 8)}
+                    </span>
                     <span className="text-th-text-alt truncate">{s.task || s.status}</span>
                     <span className="text-th-text-muted ml-auto shrink-0">
                       {formatRelativeTime(s.startedAt)}
@@ -376,6 +382,7 @@ export function ProjectsPanel() {
   const [importPath, setImportPath] = useState('');
   const [importLoading, setImportLoading] = useState(false);
   const addToast = useToastStore((s) => s.add);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Consume ?action=new param — auto-open the new project modal
@@ -446,14 +453,18 @@ export function ProjectsPanel() {
   const handleResume = useCallback(
     async (id: string) => {
       try {
-        await apiFetch(`/projects/${id}/resume`, { method: 'POST', body: JSON.stringify({}) });
+        const response = await apiFetch<{ id: string }>(`/projects/${id}/resume`, { method: 'POST', body: JSON.stringify({}) });
         addToast('success', 'Project resumed — lead agent spawned');
-        await fetchProjects();
+        if (response?.id) {
+          navigate(`/projects/${id}`);
+        } else {
+          await fetchProjects();
+        }
       } catch (err: any) {
         addToast('error', `Failed to resume: ${err.message}`);
       }
     },
-    [addToast, fetchProjects],
+    [addToast, fetchProjects, navigate],
   );
 
   const handleArchive = useCallback(

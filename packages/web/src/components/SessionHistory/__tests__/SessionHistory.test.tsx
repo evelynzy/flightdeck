@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { SessionHistory } from '../SessionHistory';
 import type { SessionDetail } from '../SessionHistory';
 
@@ -64,13 +65,13 @@ describe('SessionHistory', () => {
 
   it('renders loading state initially', () => {
     mockApiFetch.mockReturnValue(new Promise(() => {})); // never resolves
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
     expect(screen.getByText('Loading sessions…')).toBeInTheDocument();
   });
 
   it('renders empty state when no sessions', async () => {
     mockApiFetch.mockResolvedValue([]);
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('No previous sessions')).toBeInTheDocument();
     });
@@ -78,7 +79,7 @@ describe('SessionHistory', () => {
 
   it('renders session cards with correct data', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('Build the dashboard')).toBeInTheDocument();
@@ -91,7 +92,7 @@ describe('SessionHistory', () => {
 
   it('fetches from correct endpoint', async () => {
     mockApiFetch.mockResolvedValue([]);
-    render(<SessionHistory projectId="proj-42" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-42" /></MemoryRouter>);
     await waitFor(() => {
       expect(mockApiFetch).toHaveBeenCalledWith('/projects/proj-42/sessions/detail');
     });
@@ -99,7 +100,7 @@ describe('SessionHistory', () => {
 
   it('expands session on click to show details', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('Build the dashboard')).toBeInTheDocument();
@@ -118,7 +119,7 @@ describe('SessionHistory', () => {
 
   it('shows retro indicator for sessions with retrospective', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('Build the dashboard')).toBeInTheDocument();
@@ -131,7 +132,7 @@ describe('SessionHistory', () => {
 
   it('shows Resume button for non-active sessions when no active lead', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" hasActiveLead={false} />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" hasActiveLead={false} /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('Build the dashboard')).toBeInTheDocument();
@@ -143,7 +144,7 @@ describe('SessionHistory', () => {
 
   it('hides Resume button when project has active lead', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" hasActiveLead={true} />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" hasActiveLead={true} /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('Build the dashboard')).toBeInTheDocument();
@@ -155,7 +156,7 @@ describe('SessionHistory', () => {
 
   it('collapses expanded session on second click', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('Build the dashboard')).toBeInTheDocument();
@@ -172,7 +173,7 @@ describe('SessionHistory', () => {
 
   it('shows task summary counts', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('8/10')).toBeInTheDocument();
@@ -182,7 +183,7 @@ describe('SessionHistory', () => {
 
   it('handles fetch error gracefully', async () => {
     mockApiFetch.mockRejectedValue(new Error('Network error'));
-    render(<SessionHistory projectId="proj-1" />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" /></MemoryRouter>);
 
     // Should show empty state, not crash
     await waitFor(() => {
@@ -192,7 +193,7 @@ describe('SessionHistory', () => {
 
   it('opens ResumeSessionDialog when Resume button is clicked', async () => {
     mockApiFetch.mockResolvedValue(MOCK_SESSIONS);
-    render(<SessionHistory projectId="proj-1" hasActiveLead={false} />);
+    render(<MemoryRouter><SessionHistory projectId="proj-1" hasActiveLead={false} /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByText('Build the dashboard')).toBeInTheDocument();

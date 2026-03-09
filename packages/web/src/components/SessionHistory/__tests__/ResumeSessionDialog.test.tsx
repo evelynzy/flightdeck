@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { ResumeSessionDialog } from '../ResumeSessionDialog';
 import type { SessionDetail } from '../SessionHistory';
 
@@ -48,26 +49,26 @@ describe('ResumeSessionDialog', () => {
   });
 
   it('renders the dialog with session info', () => {
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
     expect(screen.getByText('Resume Project')).toBeInTheDocument();
     expect(screen.getByText(/8\/10 tasks completed/)).toBeInTheDocument();
   });
 
   it('shows three resume modes', () => {
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
     expect(screen.getByText('Resume all agents')).toBeInTheDocument();
     expect(screen.getByText('Select specific agents')).toBeInTheDocument();
     expect(screen.getByText('Fresh start')).toBeInTheDocument();
   });
 
   it('defaults to resume-all mode', () => {
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
     // Agent checkboxes should NOT be visible by default
     expect(screen.queryByText('Select agents to resume (lead always included):')).not.toBeInTheDocument();
   });
 
   it('shows agent checkboxes when select mode is chosen', () => {
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
     fireEvent.click(screen.getByText('Select specific agents'));
 
     // Should show non-lead agents as checkboxes
@@ -78,7 +79,7 @@ describe('ResumeSessionDialog', () => {
   });
 
   it('shows resumable indicator for agents with sessionId', () => {
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
     fireEvent.click(screen.getByText('Select specific agents'));
 
     // developer and code-reviewer have sessionIds
@@ -88,7 +89,7 @@ describe('ResumeSessionDialog', () => {
 
   it('calls resume endpoint with resume-all mode', async () => {
     mockApiFetch.mockResolvedValue({ id: 'new-lead' });
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('Resume'));
 
@@ -108,7 +109,7 @@ describe('ResumeSessionDialog', () => {
 
   it('calls resume endpoint with fresh-start mode', async () => {
     mockApiFetch.mockResolvedValue({ id: 'new-lead' });
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('Fresh start'));
     fireEvent.click(screen.getByText('Resume'));
@@ -128,7 +129,7 @@ describe('ResumeSessionDialog', () => {
 
   it('calls resume endpoint with selected agents', async () => {
     mockApiFetch.mockResolvedValue({ id: 'new-lead' });
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
 
     // Switch to select mode
     fireEvent.click(screen.getByText('Select specific agents'));
@@ -152,7 +153,7 @@ describe('ResumeSessionDialog', () => {
 
   it('sends task override when provided', async () => {
     mockApiFetch.mockResolvedValue({ id: 'new-lead' });
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
 
     const textarea = screen.getByPlaceholderText('Continue previous work…');
     fireEvent.change(textarea, { target: { value: 'New task instructions' } });
@@ -168,7 +169,7 @@ describe('ResumeSessionDialog', () => {
 
   it('shows error message on failure', async () => {
     mockApiFetch.mockRejectedValue(new Error('Rate limit exceeded'));
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('Resume'));
 
@@ -179,13 +180,13 @@ describe('ResumeSessionDialog', () => {
   });
 
   it('closes when Cancel is clicked', () => {
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
     fireEvent.click(screen.getByText('Cancel'));
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
 
   it('closes when clicking outside the dialog', () => {
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
     const overlay = screen.getByTestId('resume-session-dialog');
     fireEvent.mouseDown(overlay);
     expect(defaultProps.onClose).toHaveBeenCalled();
@@ -193,7 +194,7 @@ describe('ResumeSessionDialog', () => {
 
   it('disables Resume button while resuming', async () => {
     mockApiFetch.mockReturnValue(new Promise(() => {})); // never resolves
-    render(<ResumeSessionDialog {...defaultProps} />);
+    render(<MemoryRouter><ResumeSessionDialog {...defaultProps} /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('Resume'));
 

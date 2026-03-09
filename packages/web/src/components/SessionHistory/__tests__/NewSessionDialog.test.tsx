@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { NewSessionDialog } from '../NewSessionDialog';
 
 const mockApiFetch = vi.fn();
@@ -40,7 +41,9 @@ describe('NewSessionDialog', () => {
 
   function renderDialog() {
     return render(
-      <NewSessionDialog projectId="proj-1" onClose={onClose} onStarted={onStarted} />,
+      <MemoryRouter>
+        <NewSessionDialog projectId="proj-1" onClose={onClose} onStarted={onStarted} />
+      </MemoryRouter>,
     );
   }
 

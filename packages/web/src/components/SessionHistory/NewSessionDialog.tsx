@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../hooks/useApi';
 import { Plus, Loader2, Check, Sparkles } from 'lucide-react';
 
@@ -42,6 +43,7 @@ export interface NewSessionDialogProps {
 }
 
 export function NewSessionDialog({ projectId, onClose, onStarted }: NewSessionDialogProps) {
+  const navigate = useNavigate();
   const [task, setTask] = useState('');
   const [leadModel, setLeadModel] = useState('');
   const [availableRoles, setAvailableRoles] = useState<RoleInfo[]>([]);
@@ -83,7 +85,7 @@ export function NewSessionDialog({ projectId, onClose, onStarted }: NewSessionDi
         const teamHint = `\n\n[Initial Crew] The user has pre-selected these roles for the initial crew: ${Array.from(selectedRoles).join(', ')}. Please create these agents as your first action.`;
         fullTask = (fullTask || '') + teamHint;
       }
-      await apiFetch(`/projects/${projectId}/resume`, {
+      const response = await apiFetch<{ id: string }>(`/projects/${projectId}/resume`, {
         method: 'POST',
         body: JSON.stringify({
           freshStart: true,
@@ -92,12 +94,15 @@ export function NewSessionDialog({ projectId, onClose, onStarted }: NewSessionDi
         }),
       });
       onStarted();
+      if (response?.id) {
+        navigate(`/projects/${projectId}`);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to start session');
     } finally {
       setStarting(false);
     }
-  }, [projectId, task, leadModel, selectedRoles, onStarted]);
+  }, [projectId, task, leadModel, selectedRoles, onStarted, navigate]);
 
   return (
     <div
