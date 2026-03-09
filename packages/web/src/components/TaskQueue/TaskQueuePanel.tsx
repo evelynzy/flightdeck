@@ -9,6 +9,7 @@ import { DagGraph } from './DagGraph';
 import { DagGantt } from './DagGantt';
 import { DagResourceView } from './DagResourceView';
 import { KanbanBoard } from './KanbanBoard';
+import { useOptionalProjectId } from '../../contexts/ProjectContext';
 import type { GanttTask } from './DagGantt';
 import type { DagStatus, LeadProgress, AgentInfo, Project } from '../../types';
 
@@ -369,6 +370,7 @@ function tabKey(tab: TabItem): string {
 export function TaskQueuePanel({ api }: Props) {
   const agents = useAppStore((s) => s.agents);
   const leadProjects = useLeadStore((s) => s.projects);
+  const projectId = useOptionalProjectId();
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [progress, setProgress] = useState<LeadProgress | null>(null);
   const [dagView, setDagView] = useState<'graph' | 'list' | 'gantt' | 'resource' | 'kanban' | null>('graph');
@@ -399,12 +401,19 @@ export function TaskQueuePanel({ api }: Props) {
       .map((p): TabItem => ({ type: 'persisted', project: p })),
   ];
 
-  // Auto-select first tab
+  // Auto-select first tab (or project-scoped tab if inside ProjectLayout)
   useEffect(() => {
-    if (tabs.length > 0 && (!selectedTab || !tabs.some(t => tabKey(t) === selectedTab))) {
+    if (projectId) {
+      // Inside a project — find the matching tab
+      const match = tabs.find(t =>
+        (t.type === 'active' && t.agent.projectId === projectId) ||
+        (t.type === 'persisted' && t.project.id === projectId),
+      );
+      if (match) setSelectedTab(tabKey(match));
+    } else if (tabs.length > 0 && (!selectedTab || !tabs.some(t => tabKey(t) === selectedTab))) {
       setSelectedTab(tabKey(tabs[0]));
     }
-  }, [tabs.length, selectedTab]);
+  }, [tabs.length, selectedTab, projectId]);
 
   // Selected tab data
   const currentTab = tabs.find(t => tabKey(t) === selectedTab);
@@ -479,7 +488,8 @@ export function TaskQueuePanel({ api }: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* ---- Project tabs ---- */}
+      {/* ---- Project tabs (hidden when inside ProjectLayout) ---- */}
+      {!projectId && (
       <div className="flex items-center border-b border-th-border shrink-0 overflow-x-auto bg-th-bg">
         {tabs.length === 0 ? (
           <div className="flex items-center gap-2 px-4 h-10 text-th-text-muted text-sm">
@@ -551,6 +561,7 @@ export function TaskQueuePanel({ api }: Props) {
           })
         )}
       </div>
+      )}
 
       {/* ---- Content for selected tab ---- */}
       <div className="flex-1 overflow-auto p-4 focus:outline-none" tabIndex={0}>
