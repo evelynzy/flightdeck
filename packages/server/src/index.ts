@@ -25,6 +25,21 @@ const config = getConfig();
 // ── Build service container (restores persisted settings internally) ──
 const container = await createContainer({ config, repoRoot });
 
+// ── Startup reconciliation ──────────────────────────────────
+// After a crash/restart, sessions may be stuck as 'active' or 'resuming'
+// with no running agent. Mark them as 'stopped' so resume works correctly.
+if (container.projectRegistry) {
+  const reconciled = container.projectRegistry.reconcileStaleSessions(
+    (leadId) => {
+      const agent = container.agentManager.get(leadId);
+      return !!agent && (agent.status === 'running' || agent.status === 'idle');
+    },
+  );
+  if (reconciled > 0) {
+    console.log(`🔧 Reconciled ${reconciled} stale session(s) from previous run`);
+  }
+}
+
 // ── Fork agent server (two-process architecture) ─────────────────
 // The agent server runs in a detached child process that survives
 // orchestrator restarts. connect() forks or reconnects via PID file.

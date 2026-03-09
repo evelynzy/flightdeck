@@ -299,4 +299,53 @@ describe('ProjectRegistry', () => {
       expect(final[0].status).toBe('active');
     });
   });
+
+  describe('reconcileStaleSessions', () => {
+    it('marks active sessions as stopped when agent is not alive', () => {
+      const project = registry.create('recon-1');
+      registry.startSession(project.id, 'lead-alive', 'task A');
+      registry.startSession(project.id, 'lead-dead', 'task B');
+
+      const reconciled = registry.reconcileStaleSessions(
+        (leadId) => leadId === 'lead-alive',
+      );
+
+      expect(reconciled).toBe(1);
+      const sessions = registry.getSessions(project.id);
+      const dead = sessions.find(s => s.leadId === 'lead-dead')!;
+      const alive = sessions.find(s => s.leadId === 'lead-alive')!;
+      expect(dead.status).toBe('stopped');
+      expect(dead.endedAt).toBeTruthy();
+      expect(alive.status).toBe('active');
+      expect(alive.endedAt).toBeNull();
+    });
+
+    it('reconciles resuming sessions with no running agent', () => {
+      const project = registry.create('recon-2');
+      registry.startSession(project.id, 'lead-r', 'task');
+      registry.endSession('lead-r', 'completed');
+
+      // Simulate a session stuck in 'resuming' state
+      const sessions = registry.getSessions(project.id);
+      registry.claimSessionForResume(sessions[0].id);
+
+      const reconciled = registry.reconcileStaleSessions(() => false);
+      expect(reconciled).toBe(1);
+
+      const after = registry.getSessions(project.id);
+      expect(after[0].status).toBe('stopped');
+      expect(after[0].endedAt).toBeTruthy();
+    });
+
+    it('leaves completed/crashed sessions untouched', () => {
+      const project = registry.create('recon-3');
+      registry.startSession(project.id, 'lead-c', 'task');
+      registry.endSession('lead-c', 'completed');
+      registry.startSession(project.id, 'lead-x', 'task 2');
+      registry.endSession('lead-x', 'crashed');
+
+      const reconciled = registry.reconcileStaleSessions(() => false);
+      expect(reconciled).toBe(0);
+    });
+  });
 });
