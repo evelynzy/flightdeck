@@ -190,6 +190,15 @@ export class CopilotSdkAdapter extends EventEmitter implements AgentAdapter {
           SDK_TIMEOUT_MS, 'resumeSession',
         );
         this.sdkSessionId = this.session.sessionId;
+        // Validate SDK returned the session we requested
+        if (this.sdkSessionId !== this.flightdeckSessionId) {
+          logger.warn({
+            module: 'copilot-sdk',
+            msg: 'Session ID mismatch after resumeSession — SDK returned a different ID than requested',
+            requested: this.flightdeckSessionId,
+            returned: this.sdkSessionId,
+          });
+        }
         // Record resume timestamp — events with older timestamps are historical replay
         this._resumeStartedAt = Date.now();
         logger.info({
@@ -221,6 +230,15 @@ export class CopilotSdkAdapter extends EventEmitter implements AgentAdapter {
         this.client.createSession({ ...sessionConfig, sessionId: this.flightdeckSessionId }), SDK_TIMEOUT_MS, 'createSession',
       );
       this.sdkSessionId = this.session.sessionId;
+      // Validate SDK assigned the ID we requested
+      if (this.sdkSessionId !== this.flightdeckSessionId) {
+        logger.warn({
+          module: 'copilot-sdk',
+          msg: 'Session ID mismatch after createSession — SDK assigned a different ID than requested',
+          requested: this.flightdeckSessionId,
+          assigned: this.sdkSessionId,
+        });
+      }
     }
 
     // Subscribe to session events for translation
