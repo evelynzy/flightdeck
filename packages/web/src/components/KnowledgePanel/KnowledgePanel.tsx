@@ -21,10 +21,12 @@ import {
   X,
   ThumbsUp,
   ThumbsDown,
+  Info,
 } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import { useToastStore } from '../Toast';
+import { useOptionalProjectId } from '../../contexts/ProjectContext';
 
 const MemoryBrowser = lazy(() => import('./MemoryBrowser').then(m => ({ default: m.MemoryBrowser })));
 
@@ -69,11 +71,11 @@ interface FusedSearchResult {
 
 // ── Helpers ───────────────────────────────────────────────
 
-const CATEGORY_META: Record<KnowledgeCategory, { icon: typeof Brain; label: string; color: string; description: string }> = {
-  core: { icon: Shield, label: 'Core', color: 'text-blue-500', description: 'Identity, preferences, rules' },
-  episodic: { icon: History, label: 'Episodic', color: 'text-amber-500', description: 'Session summaries, events' },
-  procedural: { icon: Wrench, label: 'Procedural', color: 'text-emerald-500', description: 'Patterns, corrections, how-to' },
-  semantic: { icon: Database, label: 'Semantic', color: 'text-purple-500', description: 'Facts, relationships, context' },
+const CATEGORY_META: Record<KnowledgeCategory, { icon: typeof Brain; label: string; color: string; description: string; tooltip: string }> = {
+  core: { icon: Shield, label: 'Core', color: 'text-blue-500', description: 'Identity, preferences, rules', tooltip: 'Fundamental facts and identity information about agents and projects' },
+  episodic: { icon: History, label: 'Episodic', color: 'text-amber-500', description: 'Session summaries, events', tooltip: 'Event-based memories from specific sessions and interactions' },
+  procedural: { icon: Wrench, label: 'Procedural', color: 'text-emerald-500', description: 'Patterns, corrections, how-to', tooltip: 'How-to knowledge — learned processes, workflows, and techniques' },
+  semantic: { icon: Database, label: 'Semantic', color: 'text-purple-500', description: 'Facts, relationships, context', tooltip: 'General knowledge — concepts, relationships, and domain understanding' },
 };
 
 // ── Sub-components ────────────────────────────────────────
@@ -368,6 +370,8 @@ interface Props {
 }
 
 export function KnowledgePanel({ projectId: propProjectId }: Props) {
+  const contextProjectId = useOptionalProjectId();
+  const resolvedProjectId = propProjectId ?? contextProjectId;
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
   const [stats, setStats] = useState<CategoryStat[]>([]);
   const [trainingSummary, setTrainingSummary] = useState<TrainingSummary | null>(null);
@@ -379,7 +383,7 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState(propProjectId ?? '');
+  const [selectedProjectId, setSelectedProjectId] = useState(resolvedProjectId ?? '');
   const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
   const addToast = useToastStore((s) => s.add);
   const [searchParams] = useSearchParams();
@@ -388,9 +392,9 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
     : 'browse';
   const [pageTab, setPageTab] = useState<PageTab>(initialTab);
 
-  // Load projects for picker if no projectId prop
+  // Load projects for picker only when no project ID from prop or context
   useEffect(() => {
-    if (!propProjectId) {
+    if (!resolvedProjectId) {
       apiFetch<Array<{ id: string; name: string; status: string }>>('/projects')
         .then((data) => {
           const active = (Array.isArray(data) ? data : []).filter((p) => p.status !== 'archived');
@@ -399,9 +403,9 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
         })
         .catch(() => {});
     }
-  }, [propProjectId, selectedProjectId]);
+  }, [resolvedProjectId, selectedProjectId]);
 
-  const effectiveProjectId = propProjectId ?? selectedProjectId;
+  const effectiveProjectId = resolvedProjectId ?? selectedProjectId;
 
   const fetchData = useCallback(async () => {
     if (!effectiveProjectId) return;
@@ -491,7 +495,7 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {/* Project picker (when no projectId prop) */}
-          {!propProjectId && projects.length > 0 && (
+          {!resolvedProjectId && projects.length > 0 && (
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
@@ -602,6 +606,9 @@ export function KnowledgePanel({ projectId: propProjectId }: Props) {
               <div className="flex items-center gap-1.5 mb-1">
                 <Icon className={`w-3.5 h-3.5 ${meta.color}`} />
                 <span className="text-xs font-medium text-th-text-alt">{meta.label}</span>
+                <span title={meta.tooltip} className="cursor-help">
+                  <Info className="w-3 h-3 text-th-text-muted/50 hover:text-th-text-muted transition-colors" />
+                </span>
               </div>
               <div className="text-lg font-semibold text-th-text-alt">{count}</div>
               {limit > 0 && (
