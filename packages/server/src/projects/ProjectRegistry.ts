@@ -125,19 +125,16 @@ export class ProjectRegistry {
 
     // Task summary across all sessions for this project
     let taskSummary = { total: 0, done: 0, failed: 0, pending: 0 };
-    if (allLeadIds.length > 0) {
-      const placeholders = allLeadIds.map(() => '?').join(',');
-      const taskRows = this.db.all<{ dag_status: string; cnt: number }>(
-        `SELECT dag_status, count(*) as cnt FROM dag_tasks WHERE lead_id IN (${placeholders}) GROUP BY dag_status`,
-        allLeadIds,
-      );
-      for (const row of taskRows) {
-        const count = Number(row.cnt);
-        taskSummary.total += count;
-        if (row.dag_status === 'done') taskSummary.done += count;
-        else if (row.dag_status === 'failed') taskSummary.failed += count;
-        else taskSummary.pending += count;
-      }
+    const taskRows = this.db.all<{ dag_status: string; cnt: number }>(
+      `SELECT dag_status, count(*) as cnt FROM dag_tasks WHERE project_id = ? GROUP BY dag_status`,
+      [projectId],
+    );
+    for (const row of taskRows) {
+      const count = Number(row.cnt);
+      taskSummary.total += count;
+      if (row.dag_status === 'done') taskSummary.done += count;
+      else if (row.dag_status === 'failed') taskSummary.failed += count;
+      else taskSummary.pending += count;
     }
 
     // Recent decisions across all sessions

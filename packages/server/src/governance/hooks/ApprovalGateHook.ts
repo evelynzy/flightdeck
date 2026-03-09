@@ -10,7 +10,7 @@ export interface ApprovalGateConfig {
 }
 
 const DEFAULT_GATES: Record<string, 'always' | 'when_limit_near'> = {
-  TERMINATE_AGENT: 'always',
+  TERMINATE_AGENT: 'when_limit_near',
   RESET_DAG: 'always',
   REQUEST_LIMIT_CHANGE: 'always',
   CREATE_AGENT: 'when_limit_near',

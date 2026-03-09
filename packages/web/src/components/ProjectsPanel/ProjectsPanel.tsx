@@ -458,7 +458,7 @@ export function ProjectsPanel() {
   const handleResume = useCallback(
     async (id: string) => {
       try {
-        const response = await apiFetch<{ id: string }>(`/projects/${id}/resume`, { method: 'POST', body: JSON.stringify({}) });
+        const response = await apiFetch<{ id: string }>(`/projects/${id}/resume`, { method: 'POST', body: JSON.stringify({ resumeAll: true }) });
         addToast('success', 'Project resumed — lead agent spawned');
         if (response?.id) {
           navigate(`/projects/${id}`);

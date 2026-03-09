@@ -333,13 +333,20 @@ describe('ShellCommandBlocklistHook', () => {
 // ── ApprovalGateHook tests ──
 
 describe('ApprovalGateHook', () => {
-  it('blocks TERMINATE_AGENT and creates pending approval', () => {
-    const hook = createApprovalGateHook();
+  it('blocks TERMINATE_AGENT when near limit', () => {
+    const hook = createApprovalGateHook({ limitThreshold: 0.8 });
+    const ctx = makeContext({ getRunningCount: () => 9, maxConcurrent: 10 });
     const action = makeAction({ commandName: 'TERMINATE_AGENT' });
-    const result = hook.evaluate(action, makeContext());
+    const result = hook.evaluate(action, ctx);
     expect(result.decision).toBe('block');
     expect(result.reason).toContain('requires approval');
-    expect(hook.getPending()).toHaveLength(1);
+  });
+
+  it('allows TERMINATE_AGENT when under limit', () => {
+    const hook = createApprovalGateHook();
+    const action = makeAction({ commandName: 'TERMINATE_AGENT' });
+    const ctx = makeContext({ getRunningCount: () => 2, maxConcurrent: 10 });
+    expect(hook.evaluate(action, ctx).decision).toBe('allow');
   });
 
   it('blocks RESET_DAG', () => {
@@ -367,20 +374,20 @@ describe('ApprovalGateHook', () => {
 
   it('approve removes pending and returns action', () => {
     const hook = createApprovalGateHook();
-    const action = makeAction({ commandName: 'TERMINATE_AGENT' });
+    const action = makeAction({ commandName: 'RESET_DAG' });
     hook.evaluate(action, makeContext());
 
     const pending = hook.getPending();
     expect(pending).toHaveLength(1);
     const approved = hook.approve(pending[0].id);
     expect(approved).toBeDefined();
-    expect(approved!.commandName).toBe('TERMINATE_AGENT');
+    expect(approved!.commandName).toBe('RESET_DAG');
     expect(hook.getPending()).toHaveLength(0);
   });
 
   it('reject removes pending and returns action', () => {
     const hook = createApprovalGateHook();
-    const action = makeAction({ commandName: 'TERMINATE_AGENT' });
+    const action = makeAction({ commandName: 'RESET_DAG' });
     hook.evaluate(action, makeContext());
 
     const pending = hook.getPending();
@@ -397,7 +404,7 @@ describe('ApprovalGateHook', () => {
   it('calls onGate callback when gating', () => {
     const onGate = vi.fn();
     const hook = createApprovalGateHook({ onGate });
-    hook.evaluate(makeAction({ commandName: 'TERMINATE_AGENT' }), makeContext());
+    hook.evaluate(makeAction({ commandName: 'RESET_DAG' }), makeContext());
     expect(onGate).toHaveBeenCalledOnce();
   });
 
