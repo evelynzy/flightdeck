@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { AppContext } from './context.js';
 import { NotificationService, type TelegramChannelConfig } from '../coordination/alerts/NotificationService.js';
 import { logger } from '../utils/logger.js';
+import { parseIntBounded } from '../utils/validation.js';
 
 export function notificationRoutes(ctx: AppContext): Router {
   const { db } = ctx;
@@ -142,8 +143,8 @@ export function notificationRoutes(ctx: AppContext): Router {
   router.get('/notifications/log', (req, res) => {
     try {
       const sessionId = req.query.sessionId as string | undefined;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 50;
+      const page = parseIntBounded(req.query.page, 1, 10000, 1);
+      const limit = parseIntBounded(req.query.limit, 1, 200, 50);
       res.json(service.getLog(sessionId, page, limit));
     } catch (err) {
       res.status(500).json({ error: 'Failed to get notification log', detail: (err as Error).message });

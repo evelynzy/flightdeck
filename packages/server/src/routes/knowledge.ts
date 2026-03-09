@@ -4,6 +4,7 @@ import type { AppContext } from './context.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import type { KnowledgeCategory } from '../knowledge/types.js';
 import { sanitizeContent } from '../knowledge/index.js';
+import { parseIntBounded } from '../utils/validation.js';
 
 const VALID_CATEGORIES = new Set<string>(['core', 'episodic', 'procedural', 'semantic']);
 const UI_WRITABLE_CATEGORIES = new Set<string>(['episodic', 'procedural', 'semantic']);
@@ -74,7 +75,7 @@ export function knowledgeRoutes(ctx: AppContext): Router {
     // Prefer hybrid search if available, fall back to FTS5-only
     if (hybridSearchEngine) {
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
-      const limit = req.query.limit ? Math.min(parseInt(String(req.query.limit), 10) || 20, 100) : 20;
+      const limit = parseIntBounded(req.query.limit, 1, 100, 20);
       const categories = category && isValidCategory(category) ? [category as KnowledgeCategory] : undefined;
 
       const results = hybridSearchEngine.search(projectId, query, { categories, limit });
@@ -82,7 +83,7 @@ export function knowledgeRoutes(ctx: AppContext): Router {
     }
 
     if (!knowledgeStore) return res.status(503).json({ error: 'Knowledge store not available' });
-    const limit = req.query.limit ? Math.min(parseInt(String(req.query.limit), 10) || 20, 100) : 20;
+    const limit = parseIntBounded(req.query.limit, 1, 100, 20);
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const entries = knowledgeStore.search(projectId, query, {
       limit,

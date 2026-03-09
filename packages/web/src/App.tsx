@@ -258,14 +258,17 @@ export function App() {
               }
             }
           })
-          .catch(() => { /* initial fetch — will retry */ });
+          .catch(() => { /* message history fetch — non-critical, will load via WS */ });
       });
       // Auto-select first running lead
       if (!store.selectedLeadId) {
         const running = leads.find((l) => l.status === 'running');
         if (running) store.selectLead(running.id);
       }
-    }).catch(() => { /* initial fetch — will retry */ });
+    }).catch((err) => {
+      console.warn('[App] Failed to load active leads:', err);
+      addToast('error', 'Failed to load sessions — check server connection');
+    });
 
     // Load persisted projects and register them in leadStore
     fetch('/api/projects').then((r) => r.json()).then((projects: Project[]) => {
@@ -281,8 +284,10 @@ export function App() {
         const first = projects.find((p) => p.status !== 'archived');
         if (first) store.selectLead(`project:${first.id}`);
       }
-    }).catch(() => { /* initial fetch — will retry */ });
-  }, []);
+    }).catch((err) => {
+      console.warn('[App] Failed to load projects:', err);
+    });
+  }, [addToast]);
 
   return (
     <div className="flex h-screen bg-surface text-th-text-alt">

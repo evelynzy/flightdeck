@@ -217,7 +217,7 @@ export function LeadDashboard({ api, ws, readOnly = false }: Props) {
                 }
               }
             })
-            .catch(() => { /* data will load on next poll */ });
+            .catch((err: unknown) => { if (!(err instanceof DOMException)) console.warn('[LeadDashboard] Message history fetch failed:', err); });
         });
         // Auto-select first running lead if none selected
         if (!useLeadStore.getState().selectedLeadId) {
@@ -225,7 +225,9 @@ export function LeadDashboard({ api, ws, readOnly = false }: Props) {
           if (running) useLeadStore.getState().selectLead(running.id);
         }
       }
-    }).catch(() => { /* initial fetch — will retry */ });
+    }).catch((err) => {
+      if (!controller.signal.aborted) console.warn('[LeadDashboard] Failed to load leads:', err);
+    });
     return () => controller.abort();
   }, [readOnly]);
 
@@ -266,7 +268,7 @@ export function LeadDashboard({ api, ws, readOnly = false }: Props) {
             }
           }
         })
-        .catch(() => { /* data will load on next poll */ });
+        .catch((err: unknown) => { if (!(err instanceof DOMException)) console.warn('[LeadDashboard] Message history fetch failed:', err); });
     }
     return () => {
       controller.abort();
@@ -307,7 +309,7 @@ export function LeadDashboard({ api, ws, readOnly = false }: Props) {
     const fetchProgress = () => {
       fetch(`/api/lead/${selectedLeadId}/progress`, { signal: controller.signal }).then((r) => r.json()).then((data) => {
         if (!controller.signal.aborted && data && !data.error) useLeadStore.getState().setProgress(selectedLeadId, data);
-      }).catch(() => { /* poll — retry on next interval */ });
+      }).catch((err: unknown) => { if (!(err instanceof DOMException)) console.warn('[LeadDashboard] Progress poll failed:', err); });
     };
     fetchProgress();
     const interval = setInterval(fetchProgress, 5000);
@@ -321,7 +323,7 @@ export function LeadDashboard({ api, ws, readOnly = false }: Props) {
     const fetchDecisions = () => {
       fetch(`/api/lead/${selectedLeadId}/decisions`, { signal: controller.signal }).then((r) => r.json()).then((data) => {
         if (!controller.signal.aborted && Array.isArray(data)) useLeadStore.getState().setDecisions(selectedLeadId, data);
-      }).catch(() => { /* poll — retry on next interval */ });
+      }).catch((err: unknown) => { if (!(err instanceof DOMException)) console.warn('[LeadDashboard] Decisions poll failed:', err); });
     };
     fetchDecisions();
     const interval = setInterval(fetchDecisions, 5000);
@@ -334,7 +336,7 @@ export function LeadDashboard({ api, ws, readOnly = false }: Props) {
     const controller = new AbortController();
     fetch(`/api/lead/${selectedLeadId}/groups`, { signal: controller.signal }).then((r) => r.json()).then((data) => {
       if (!controller.signal.aborted && Array.isArray(data)) useLeadStore.getState().setGroups(selectedLeadId, data);
-    }).catch(() => { /* data will load on next poll */ });
+    }).catch((err: unknown) => { if (!(err instanceof DOMException)) console.warn('[LeadDashboard] Groups fetch failed:', err); });
     return () => controller.abort();
   }, [selectedLeadId, isActiveAgent]);
 
@@ -352,7 +354,7 @@ export function LeadDashboard({ api, ws, readOnly = false }: Props) {
             store.setDagStatus(historicalProjectId, data as DagStatus);
           }
         }
-      }).catch(() => { /* poll — retry on next interval */ });
+      }).catch((err: unknown) => { if (!(err instanceof DOMException)) console.warn('[LeadDashboard] DAG poll failed:', err); });
     };
     fetchDag();
     const interval = setInterval(fetchDag, 10000);
