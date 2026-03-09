@@ -22,6 +22,18 @@ import { ProgressDetailModal, AgentReportDetailModal } from './ProgressDetailMod
 import { useLeadWebSocket } from './useLeadWebSocket';
 import { useDragResize } from './useDragResize';
 
+// Stable empty references — avoids new [] / {} on every render (zustand equality trap)
+const EMPTY_MESSAGES: AcpTextChunk[] = [];
+const EMPTY_DECISIONS: any[] = [];
+const EMPTY_PROGRESS_HISTORY: any[] = [];
+const EMPTY_ACTIVITY: any[] = [];
+const EMPTY_COMMS: any[] = [];
+const EMPTY_REPORTS: AgentReport[] = [];
+const EMPTY_GROUPS: any[] = [];
+const EMPTY_GROUP_MESSAGES: Record<string, any[]> = {};
+const EMPTY_DELEGATIONS: any[] = [];
+const EMPTY_CREW_AGENTS: any[] = [];
+
 interface Props {
   api: any;
   ws: any;
@@ -136,9 +148,9 @@ export function LeadDashboard({ api, ws }: Props) {
     if (!project) return;
     const currentCounts = {
       tasks: agents.filter(a => a.parentId === selectedLeadId && (a.status === 'completed' || a.status === 'failed')).length,
-      decisions: (project.decisions ?? []).filter((d: any) => d.needsConfirmation && d.status === 'recorded').length,
-      comms: (project.comms ?? []).length,
-      reports: (project.agentReports ?? []).length,
+      decisions: (project.decisions ?? EMPTY_DECISIONS).filter((d: any) => d.needsConfirmation && d.status === 'recorded').length,
+      comms: (project.comms ?? EMPTY_COMMS).length,
+      reports: (project.agentReports ?? EMPTY_REPORTS).length,
     };
     const elapsed = Date.now() - lastInteractionRef.current;
     if (elapsed >= 60_000 && !catchUpSummary) {
@@ -169,22 +181,26 @@ export function LeadDashboard({ api, ws }: Props) {
 
   // On mount, load existing leads from server
   useEffect(() => {
+    const controller = new AbortController();
     // Load active leads
-    fetch('/api/lead').then((r) => r.json()).then((leads: any[]) => {
+    fetch('/api/lead', { signal: controller.signal }).then((r) => r.json()).then((leads: any[]) => {
+      if (controller.signal.aborted) return;
       if (Array.isArray(leads)) {
         leads.forEach((l) => {
           useLeadStore.getState().addProject(l.id);
           // Pre-load message history for each lead
-          fetch(`/api/agents/${l.id}/messages?limit=200`)
+          fetch(`/api/agents/${l.id}/messages?limit=200`, { signal: controller.signal })
             .then((r) => r.json())
             .then((data: any) => {
-              if (Array.isArray(data.messages) && data.messages.length > 0) {
+              if (controller.signal.aborted) return;
+              if (Array.isArray(data?.messages) && data.messages.length > 0) {
                 const msgs: AcpTextChunk[] = data.messages.map((m: any) => ({
                   type: 'text' as const,
                   text: m.content,
                   sender: m.sender as 'agent' | 'user' | 'system' | 'thinking',
                   timestamp: new Date(m.timestamp).getTime(),
                 }));
+                // Only set if WS hasn't already delivered messages (WS wins)
                 const current = useLeadStore.getState().projects[l.id];
                 if (!current || current.messages.length === 0) {
                   useLeadStore.getState().setMessages(l.id, msgs);
@@ -200,13 +216,18 @@ export function LeadDashboard({ api, ws }: Props) {
         }
       }
     }).catch(() => {});
+    return () => controller.abort();
   }, []);
 
   // Subscribe to selected lead agent WS stream and load message history
   useEffect(() => {
     if (!selectedLeadId) return;
     chatInitialScroll.current = false; // reset so we scroll to bottom on lead change
+
+    // Subscribe to WS first — live data takes priority over HTTP
     ws.subscribe(selectedLeadId);
+
+    const controller = new AbortController();
     // Load persisted message history if we don't have any messages yet
     const proj = useLeadStore.getState().projects[selectedLeadId];
     if (!proj || proj.messages.length === 0) {
@@ -215,17 +236,18 @@ export function LeadDashboard({ api, ws }: Props) {
       const url = isHistorical
         ? `/api/projects/${selectedLeadId.slice(8)}/messages?limit=200`
         : `/api/agents/${selectedLeadId}/messages?limit=200`;
-      fetch(url)
+      fetch(url, { signal: controller.signal })
         .then((r) => r.json())
         .then((data: any) => {
-          if (Array.isArray(data.messages) && data.messages.length > 0) {
+          if (controller.signal.aborted) return;
+          if (Array.isArray(data?.messages) && data.messages.length > 0) {
             const msgs: AcpTextChunk[] = data.messages.map((m: any) => ({
               type: 'text' as const,
               text: m.content,
               sender: m.sender as 'agent' | 'user' | 'system' | 'thinking',
               timestamp: new Date(m.timestamp).getTime(),
             }));
-            // Only set if still no messages (avoid overwriting live data)
+            // Re-check: only set if WS hasn't delivered messages while we were fetching
             const current = useLeadStore.getState().projects[selectedLeadId];
             if (!current || current.messages.length === 0) {
               useLeadStore.getState().setMessages(selectedLeadId, msgs);
@@ -234,7 +256,10 @@ export function LeadDashboard({ api, ws }: Props) {
         })
         .catch(() => {});
     }
-    return () => ws.unsubscribe(selectedLeadId);
+    return () => {
+      controller.abort();
+      ws.unsubscribe(selectedLeadId);
+    };
   }, [selectedLeadId, ws]);
 
   // Auto-scroll on new messages only if near bottom
@@ -266,43 +291,48 @@ export function LeadDashboard({ api, ws }: Props) {
   const isActiveAgent = selectedLeadId != null && !selectedLeadId.startsWith('project:');
   useEffect(() => {
     if (!isActiveAgent || !selectedLeadId) return;
+    const controller = new AbortController();
     const fetchProgress = () => {
-      fetch(`/api/lead/${selectedLeadId}/progress`).then((r) => r.json()).then((data) => {
-        if (data && !data.error) useLeadStore.getState().setProgress(selectedLeadId, data);
+      fetch(`/api/lead/${selectedLeadId}/progress`, { signal: controller.signal }).then((r) => r.json()).then((data) => {
+        if (!controller.signal.aborted && data && !data.error) useLeadStore.getState().setProgress(selectedLeadId, data);
       }).catch(() => {});
     };
     fetchProgress();
     const interval = setInterval(fetchProgress, 5000);
-    return () => clearInterval(interval);
+    return () => { controller.abort(); clearInterval(interval); };
   }, [selectedLeadId, isActiveAgent]);
 
   // Poll decisions for selected lead
   useEffect(() => {
     if (!isActiveAgent || !selectedLeadId) return;
+    const controller = new AbortController();
     const fetchDecisions = () => {
-      fetch(`/api/lead/${selectedLeadId}/decisions`).then((r) => r.json()).then((data) => {
-        if (Array.isArray(data)) useLeadStore.getState().setDecisions(selectedLeadId, data);
+      fetch(`/api/lead/${selectedLeadId}/decisions`, { signal: controller.signal }).then((r) => r.json()).then((data) => {
+        if (!controller.signal.aborted && Array.isArray(data)) useLeadStore.getState().setDecisions(selectedLeadId, data);
       }).catch(() => {});
     };
     fetchDecisions();
     const interval = setInterval(fetchDecisions, 5000);
-    return () => clearInterval(interval);
+    return () => { controller.abort(); clearInterval(interval); };
   }, [selectedLeadId, isActiveAgent]);
 
   // Fetch groups for selected lead
   useEffect(() => {
     if (!isActiveAgent || !selectedLeadId) return;
-    fetch(`/api/lead/${selectedLeadId}/groups`).then((r) => r.json()).then((data) => {
-      if (Array.isArray(data)) useLeadStore.getState().setGroups(selectedLeadId, data);
+    const controller = new AbortController();
+    fetch(`/api/lead/${selectedLeadId}/groups`, { signal: controller.signal }).then((r) => r.json()).then((data) => {
+      if (!controller.signal.aborted && Array.isArray(data)) useLeadStore.getState().setGroups(selectedLeadId, data);
     }).catch(() => {});
+    return () => controller.abort();
   }, [selectedLeadId, isActiveAgent]);
 
   // Fetch DAG status for selected lead — always use agent UUID for /api/lead/:id/dag
   useEffect(() => {
     if (!isActiveAgent || !selectedLeadId) return;
+    const controller = new AbortController();
     const fetchDag = () => {
-      fetch(`/api/lead/${selectedLeadId}/dag`).then((r) => r.json()).then((data: any) => {
-        if (data && data.tasks) {
+      fetch(`/api/lead/${selectedLeadId}/dag`, { signal: controller.signal }).then((r) => r.json()).then((data: any) => {
+        if (!controller.signal.aborted && data && data.tasks) {
           const store = useLeadStore.getState();
           store.setDagStatus(selectedLeadId, data as DagStatus);
           // Also store under projectId so DagMinimap can find it by either key
@@ -314,7 +344,7 @@ export function LeadDashboard({ api, ws }: Props) {
     };
     fetchDag();
     const interval = setInterval(fetchDag, 10000);
-    return () => clearInterval(interval);
+    return () => { controller.abort(); clearInterval(interval); };
   }, [selectedLeadId, historicalProjectId, isActiveAgent]);
 
   // Listen for lead-specific WebSocket events
@@ -366,7 +396,7 @@ export function LeadDashboard({ api, ws }: Props) {
     // For interrupts, insert a separator so post-interrupt response appears as a new bubble
     if (mode === 'interrupt') {
       const proj = store.projects[selectedLeadId];
-      const msgs = proj?.messages ?? [];
+      const msgs = proj?.messages ?? EMPTY_MESSAGES;
       const last = msgs[msgs.length - 1];
       if (last?.sender === 'agent') {
         store.addMessage(selectedLeadId, { type: 'text', text: '---', sender: 'system' as any, timestamp: Date.now() });
@@ -484,23 +514,23 @@ export function LeadDashboard({ api, ws }: Props) {
     useAppStore.getState().setSelectedAgent(agentId);
   }, []);
 
-  const messages = currentProject?.messages ?? [];
-  const decisions = currentProject?.decisions ?? [];
+  const messages = currentProject?.messages ?? EMPTY_MESSAGES;
+  const decisions = currentProject?.decisions ?? EMPTY_DECISIONS;
   const pendingConfirmations = decisions.filter((d: any) => d.needsConfirmation && d.status === 'recorded');
   const progress = currentProject?.progress ?? null;
   const progressSummary = currentProject?.progressSummary ?? null;
-  const progressHistory = currentProject?.progressHistory ?? [];
-  const activity = currentProject?.activity ?? [];
-  const comms = currentProject?.comms ?? [];
-  const agentReports = currentProject?.agentReports ?? [];
-  const groups = currentProject?.groups ?? [];
-  const groupMessages = currentProject?.groupMessages ?? {};
+  const progressHistory = currentProject?.progressHistory ?? EMPTY_PROGRESS_HISTORY;
+  const activity = currentProject?.activity ?? EMPTY_ACTIVITY;
+  const comms = currentProject?.comms ?? EMPTY_COMMS;
+  const agentReports = currentProject?.agentReports ?? EMPTY_REPORTS;
+  const groups = currentProject?.groups ?? EMPTY_GROUPS;
+  const groupMessages = currentProject?.groupMessages ?? EMPTY_GROUP_MESSAGES;
   const dagStatus = currentProject?.dagStatus ?? null;
   const teamAgents = (() => {
     const live = agents.filter((a) => a.id === selectedLeadId || a.parentId === selectedLeadId);
     if (live.length > 0) return live;
     // Fallback: progress endpoint, then keyframe-derived agents
-    const progressTeam = progress?.crewAgents ?? [];
+    const progressTeam = progress?.crewAgents ?? EMPTY_CREW_AGENTS;
     return progressTeam.length > 0 ? progressTeam : derivedAgents;
   })();
 
@@ -755,7 +785,7 @@ export function LeadDashboard({ api, ws }: Props) {
             crewTabContent={
               <CrewStatusContent
                 agents={teamAgents}
-                delegations={progress?.delegations ?? []}
+                delegations={progress?.delegations ?? EMPTY_DELEGATIONS}
                 comms={comms}
                 activity={activity}
                 allAgents={agents}
