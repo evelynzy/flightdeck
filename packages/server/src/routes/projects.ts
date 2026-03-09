@@ -690,7 +690,13 @@ export function projectsRoutes(ctx: AppContext): Router {
 
     const { task, model, freshStart, resumeAll, agents: agentIds } = req.body;
     try {
-      const agent = agentManager.spawn(role, task, undefined, true, model, project.cwd ?? undefined, undefined, undefined, { projectName: project.name, projectId: project.id });
+      // Find the last session's Copilot sessionId for resume continuity
+      const lastSessions = projectRegistry.getSessions(project.id);
+      const resumeSessionId = !freshStart && lastSessions.length > 0
+        ? lastSessions[0].sessionId ?? undefined
+        : undefined;
+
+      const agent = agentManager.spawn(role, task, undefined, true, model, project.cwd ?? undefined, resumeSessionId, undefined, { projectName: project.name, projectId: project.id });
       projectRegistry.startSession(project.id, agent.id, task);
 
       // Gather context from previous session

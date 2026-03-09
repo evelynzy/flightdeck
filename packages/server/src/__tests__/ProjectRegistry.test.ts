@@ -233,4 +233,70 @@ describe('ProjectRegistry', () => {
       expect(registry.getSessionById(999)).toBeUndefined();
     });
   });
+
+  describe('reactivateSession', () => {
+    it('updates an existing session row instead of inserting a new one', () => {
+      const project = registry.create('Reactivate Test');
+      registry.startSession(project.id, 'lead-old', 'original task', 'lead');
+      registry.endSession('lead-old', 'completed');
+
+      const sessions = registry.getSessions(project.id);
+      expect(sessions).toHaveLength(1);
+      const sessionId = sessions[0].id;
+
+      // Claim then reactivate
+      const claimed = registry.claimSessionForResume(sessionId);
+      expect(claimed).toBe(true);
+
+      registry.reactivateSession(sessionId, 'lead-new', 'resumed task', 'lead');
+
+      // Should still be 1 session, not 2
+      const after = registry.getSessions(project.id);
+      expect(after).toHaveLength(1);
+      expect(after[0].leadId).toBe('lead-new');
+      expect(after[0].task).toBe('resumed task');
+      expect(after[0].status).toBe('active');
+      expect(after[0].endedAt).toBeNull();
+    });
+
+    it('clears endedAt and resets startedAt', () => {
+      const project = registry.create('Reset Times');
+      registry.startSession(project.id, 'lead-1', 'task');
+      registry.endSession('lead-1', 'completed');
+
+      const sessions = registry.getSessions(project.id);
+      const oldStart = sessions[0].startedAt;
+      expect(sessions[0].endedAt).not.toBeNull();
+
+      registry.claimSessionForResume(sessions[0].id);
+      registry.reactivateSession(sessions[0].id, 'lead-2', 'new task');
+
+      const updated = registry.getSessions(project.id);
+      expect(updated[0].endedAt).toBeNull();
+      // startedAt should be refreshed (may be same if fast, but at least set)
+      expect(updated[0].startedAt).toBeTruthy();
+    });
+
+    it('preserves session count when resuming multiple times', () => {
+      const project = registry.create('Multi Resume');
+      registry.startSession(project.id, 'lead-a', 'task 1');
+      registry.endSession('lead-a', 'completed');
+
+      const sessions = registry.getSessions(project.id);
+      registry.claimSessionForResume(sessions[0].id);
+      registry.reactivateSession(sessions[0].id, 'lead-b', 'task 2');
+      registry.endSession('lead-b', 'completed');
+
+      // Resume again
+      const sessions2 = registry.getSessions(project.id);
+      registry.claimSessionForResume(sessions2[0].id);
+      registry.reactivateSession(sessions2[0].id, 'lead-c', 'task 3');
+
+      // Still just 1 session row
+      const final = registry.getSessions(project.id);
+      expect(final).toHaveLength(1);
+      expect(final[0].leadId).toBe('lead-c');
+      expect(final[0].status).toBe('active');
+    });
+  });
 });

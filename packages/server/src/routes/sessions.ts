@@ -53,7 +53,7 @@ export function sessionsRoutes(ctx: AppContext): Router {
         { projectName: project.name, projectId: project.id },
       );
 
-      projectRegistry.startSession(project.id, agent.id, task, roleId);
+      projectRegistry.reactivateSession(session.id, agent.id, task, roleId);
 
       // Send briefing once the agent's session is connected
       const briefing = projectRegistry.buildBriefing(project.id);

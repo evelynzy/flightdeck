@@ -273,6 +273,24 @@ export class ProjectRegistry {
     return result.changes > 0;
   }
 
+  /** Reactivate a previously-claimed session row instead of inserting a new one */
+  reactivateSession(sessionRowId: number, leadId: string, task?: string, role?: string): void {
+    this.db.drizzle.update(projectSessions).set({
+      leadId,
+      task: task ?? null,
+      role: role ?? 'lead',
+      status: 'active',
+      startedAt: new Date().toISOString(),
+      endedAt: null,
+    }).where(eq(projectSessions.id, sessionRowId)).run();
+
+    // Touch project updatedAt
+    const session = this.getSessionById(sessionRowId);
+    if (session) {
+      this.db.drizzle.update(projects).set({ updatedAt: new Date().toISOString() }).where(eq(projects.id, session.projectId)).run();
+    }
+  }
+
   /**
    * Get the model config for a project.
    * Returns the stored config merged over defaults — stored values take precedence.
