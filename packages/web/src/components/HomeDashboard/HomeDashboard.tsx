@@ -5,8 +5,9 @@
  * 1. User Action Required — decisions needing approval + permission requests
  * 2. Active Work — what agents are doing right now, grouped by project
  * 3. Decisions Made — feed of recent agent decisions (informational)
- * 4. Progress — per-project DAG task summaries
- * 5. Projects — card grid of all active projects
+ * 4. Recent Activity — feed of task completions, agent spawns, key events
+ * 5. Progress — per-project DAG task summaries
+ * 6. Projects — card grid of all active projects
  *
  * Supports many-to-many Teams ↔ Projects relationship by design.
  */
@@ -40,7 +41,7 @@ import { useAppStore } from '../../stores/appStore';
 import { apiFetch } from '../../hooks/useApi';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import { EmptyState } from '../ui/EmptyState';
-import { StatusBadge } from '../ui/StatusBadge';
+import { StatusBadge, projectStatusProps } from '../ui/StatusBadge';
 import { useAttentionItems } from '../AttentionBar';
 import type { AgentInfo, Decision, DagStatus } from '../../types';
 
@@ -77,19 +78,30 @@ interface ProjectProgress {
   summary: DagStatus['summary'];
 }
 
+/** Activity entry from GET /api/coordination/activity */
+interface ActivityEntry {
+  id: number;
+  agentId: string;
+  agentRole: string;
+  actionType: string;
+  summary: string;
+  timestamp: string;
+  projectId: string;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function getProjectStatusVariant(
   agentCount: number,
+  failedCount: number,
   status: string,
-): { variant: 'success' | 'warning' | 'neutral'; label: string; pulse: boolean } {
+): { variant: 'success' | 'warning' | 'error' | 'neutral'; label: string; pulse: boolean } {
+  if (status === 'archived') return { variant: 'neutral', label: 'Archived', pulse: false };
   if (agentCount > 0) {
     return { variant: 'success', label: `${agentCount} agent${agentCount > 1 ? 's' : ''} running`, pulse: true };
   }
-  if (status === 'active') {
-    return { variant: 'warning', label: 'Idle', pulse: false };
-  }
-  return { variant: 'neutral', label: status, pulse: false };
+  if (failedCount > 0) return { variant: 'error', label: `${failedCount} failed`, pulse: false };
+  return { variant: 'neutral', label: 'Stopped', pulse: false };
 }
 
 function resolveProjectName(
@@ -196,6 +208,40 @@ function ActiveAgentRow({ agent, projectName }: { agent: AgentInfo; projectName:
   );
 }
 
+const ACTIVITY_ICONS: Record<string, string> = {
+  task_completed: '✅',
+  task_started: '▶️',
+  sub_agent_spawned: '🤖',
+  agent_terminated: '⏹️',
+  decision_made: '⚖️',
+  delegated: '📋',
+  file_edit: '📝',
+  error: '❌',
+  status_change: '🔄',
+  deferred_issue: '📌',
+};
+
+const PROGRESS_ACTION_TYPES = new Set([
+  'task_completed', 'task_started', 'sub_agent_spawned',
+  'agent_terminated', 'decision_made', 'delegated', 'error',
+  'deferred_issue', 'status_change',
+]);
+
+function ActivityFeedItem({ entry, projectName }: { entry: ActivityEntry; projectName: string }) {
+  const icon = ACTIVITY_ICONS[entry.actionType] ?? '📎';
+  return (
+    <div className="flex items-start gap-2.5 px-3 py-2" data-testid="activity-feed-item">
+      <span className="text-sm shrink-0 mt-0.5">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <span className="text-xs text-th-text-alt truncate block">{entry.summary}</span>
+        <div className="text-[10px] text-th-text-muted mt-0.5">
+          {entry.agentRole} · {projectName} · {formatRelativeTime(entry.timestamp)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProgressBar({ summary }: { summary: DagStatus['summary'] }) {
   const total = summary.done + summary.running + summary.ready + summary.pending + summary.failed + summary.blocked + summary.paused + summary.skipped;
   if (total === 0) return null;
@@ -235,7 +281,7 @@ function ProjectCard({
   failedCount?: number;
   onClick: () => void;
 }) {
-  const status = getProjectStatusVariant(agentCount, project.status);
+  const status = getProjectStatusVariant(agentCount, failedCount ?? 0, project.status);
   const activeSessions = project.sessions?.filter(s => s.status === 'active') ?? [];
 
   return (
@@ -298,17 +344,19 @@ export function HomeDashboard() {
   const [projects, setProjects] = useState<EnrichedProject[]>([]);
   const [allDecisions, setAllDecisions] = useState<Decision[]>([]);
   const [progressByProject, setProgressByProject] = useState<ProjectProgress[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Fetch projects + decisions + progress
+  // Fetch projects + decisions + progress + activity
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setFetchError(null);
-      const [projectsData, decisionsData] = await Promise.all([
+      const [projectsData, decisionsData, activityData] = await Promise.all([
         apiFetch<EnrichedProject[]>('/projects').catch(() => []),
         apiFetch<Decision[]>('/decisions').catch(() => []),
+        apiFetch<ActivityEntry[]>('/coordination/activity?limit=50').catch(() => []),
       ]);
 
       const activeProjects = Array.isArray(projectsData)
@@ -316,6 +364,12 @@ export function HomeDashboard() {
         : [];
       setProjects(activeProjects);
       setAllDecisions(Array.isArray(decisionsData) ? decisionsData : []);
+
+      // Filter activity to progress-relevant types (task completions, spawns, etc.)
+      const progressActivity = (Array.isArray(activityData) ? activityData : [])
+        .filter((a) => PROGRESS_ACTION_TYPES.has(a.actionType))
+        .slice(0, 15);
+      setRecentActivity(progressActivity);
 
       // Fetch DAG progress for projects with active leads (parallelized)
       const dagPromises = activeProjects
@@ -659,7 +713,26 @@ export function HomeDashboard() {
           </div>
         )}
 
-        {/* Section 4: Progress */}
+        {/* Section 4: Recent Activity */}
+        {recentActivity.length > 0 && (
+          <div data-testid="activity-feed-section">
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="w-4 h-4 text-th-text-muted" />
+              <h2 className="text-sm font-medium text-th-text-alt">Recent Progress</h2>
+            </div>
+            <div className="bg-surface-raised border border-th-border rounded-lg divide-y divide-th-border max-h-64 overflow-y-auto">
+              {recentActivity.map((a) => (
+                <ActivityFeedItem
+                  key={a.id}
+                  entry={a}
+                  projectName={resolveProjectName(a.projectId, projects, agents)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Section 5: Progress */}
         {progressByProject.length > 0 && (
           <div data-testid="progress-section">
             <div className="flex items-center gap-2 mb-3">
