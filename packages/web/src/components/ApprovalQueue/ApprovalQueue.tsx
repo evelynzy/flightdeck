@@ -1,12 +1,19 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Check, X, ChevronDown, ChevronRight, Clock, Lightbulb, EyeOff } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Check, X, ChevronDown, ChevronRight, Clock, Lightbulb, EyeOff, Eye } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
+import { useSettingsStore, type OversightLevel } from '../../stores/settingsStore';
 import { useToastStore } from '../Toast';
 import { apiFetch } from '../../hooks/useApi';
 import { categoryLabel } from '../../constants/categories';
 import { TEACH_ME_DELAY_MS } from '../../constants/timing';
 import type { Decision } from '../../types';
+
+const OVERSIGHT_HINT_OPTIONS: Array<{ level: OversightLevel; label: string; description: string }> = [
+  { level: 'detailed', label: 'Detailed', description: 'Review all agent actions' },
+  { level: 'standard', label: 'Standard', description: 'Review key decisions only' },
+  { level: 'minimal', label: 'Minimal', description: 'Agents work autonomously' },
+];
 
 // ── Urgency helpers ──────────────────────────────────────────────────
 
@@ -34,11 +41,14 @@ function ageLabel(timestamp: string): string {
 export function ApprovalQueue() {
   const pendingDecisions = useAppStore((s) => s.pendingDecisions);
   const addToast = useToastStore((s) => s.add);
+  const oversightLevel = useSettingsStore((s) => s.oversightLevel);
+  const setOversightLevel = useSettingsStore((s) => s.setOversightLevel);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [teachMePrompt, setTeachMePrompt] = useState<{ category: string; count: number; matchPreview: string[] } | null>(null);
+  const [showOversightPicker, setShowOversightPicker] = useState(false);
 
   // Keyboard navigation
   useEffect(() => {
@@ -408,6 +418,56 @@ export function ApprovalQueue() {
           </div>
         ))}
       </div>
+
+      {/* Oversight level hint — shown when approvals are pending */}
+      {pendingDecisions.length > 0 && (
+        <div className="shrink-0 border-t border-th-border px-4 py-2 bg-th-bg-alt/30" data-testid="oversight-hint">
+          {!showOversightPicker ? (
+            <p className="text-[10px] text-th-text-muted">
+              Seeing too many approvals?{' '}
+              <button
+                onClick={() => setShowOversightPicker(true)}
+                className="text-accent hover:underline font-medium"
+              >
+                Change oversight level
+              </button>
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-th-text-muted font-medium flex items-center gap-1">
+                  <Eye className="w-3 h-3" /> Oversight Level
+                </span>
+                <button
+                  onClick={() => setShowOversightPicker(false)}
+                  className="text-[10px] text-th-text-muted hover:text-th-text"
+                >
+                  ✕
+                </button>
+              </div>
+              {OVERSIGHT_HINT_OPTIONS.map(({ level, label, description }) => (
+                <button
+                  key={level}
+                  onClick={() => { setOversightLevel(level); setShowOversightPicker(false); addToast('success', `Oversight level changed to ${label}`); }}
+                  className={`w-full text-left px-2 py-1.5 rounded transition-colors ${
+                    oversightLevel === level
+                      ? 'bg-accent/10 border border-accent/30'
+                      : 'bg-th-bg border border-transparent hover:border-th-border'
+                  }`}
+                >
+                  <span className="text-xs font-medium text-th-text flex items-center gap-1.5">
+                    <span className={oversightLevel === level ? 'text-accent' : 'text-th-text-muted'}>
+                      {oversightLevel === level ? '◉' : '○'}
+                    </span>
+                    {label}
+                  </span>
+                  <p className="text-[10px] text-th-text-muted ml-5">{description}</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Teach Me prompt — appears after batch approval with 1s delay */}
       {teachMePrompt && (

@@ -14,9 +14,9 @@ import { DataManagement } from './DataManagement';
 import { TelegramSettings } from './TelegramSettings';
 
 const OVERSIGHT_OPTIONS: Array<{ level: OversightLevel; label: string; description: string }> = [
-  { level: 'detailed', label: 'Detailed', description: 'All notifications, expanded cards, heads-up at 1 exception' },
-  { level: 'standard', label: 'Standard', description: 'Exceptions only, balanced density, alerts at 2+ exceptions (default)' },
-  { level: 'minimal', label: 'Minimal', description: 'Action-required only, compact cards, failures only' },
+  { level: 'detailed', label: 'Detailed', description: 'Review all agent actions — new agents, commits, and task changes require your approval' },
+  { level: 'standard', label: 'Standard', description: 'Review key decisions — new agents and first few commits need approval, routine work runs automatically' },
+  { level: 'minimal', label: 'Minimal', description: 'Agents work autonomously — only critical resets require your approval' },
 ];
 
 interface Props {

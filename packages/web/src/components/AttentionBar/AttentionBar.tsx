@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, XCircle, Clock, MessageSquareWarning, Users, Eye, WifiOff } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -10,6 +10,12 @@ const LEVEL_LABELS: Record<OversightLevel, string> = {
   standard: 'Standard',
   minimal: 'Minimal',
 };
+
+const OVERSIGHT_PICKER_OPTIONS: Array<{ level: OversightLevel; label: string; description: string }> = [
+  { level: 'detailed', label: 'Detailed', description: 'Review all agent actions — new agents, commits, and task changes require your approval' },
+  { level: 'standard', label: 'Standard', description: 'Review key decisions — new agents and first few commits need approval, routine work runs automatically' },
+  { level: 'minimal', label: 'Minimal', description: 'Agents work autonomously — only critical resets require your approval' },
+];
 
 // ── Escalation Styles ───────────────────────────────────────────────
 
@@ -61,9 +67,11 @@ export function AttentionBar() {
   const connected = useAppStore((s) => s.connected);
   const openApprovalQueue = useAppStore((s) => s.setApprovalQueueOpen);
   const oversightLevel = useSettingsStore((s) => s.oversightLevel);
-  const cycleOversightLevel = useSettingsStore((s) => s.cycleOversightLevel);
+  const setOversightLevel = useSettingsStore((s) => s.setOversightLevel);
   const [dismissed, setDismissed] = useState(false);
   const [dismissedVersion, setDismissedVersion] = useState(0);
+  const [oversightOpen, setOversightOpen] = useState(false);
+  const oversightRef = useRef<HTMLDivElement>(null);
 
   const handleItemClick = useCallback((item: AttentionItem) => {
     if (item.action.type === 'navigate') {
@@ -84,6 +92,18 @@ export function AttentionBar() {
       setDismissed(false);
     }
   }, [dismissed, state.items.length, dismissedVersion]);
+
+  // Close oversight popover on outside click
+  useEffect(() => {
+    if (!oversightOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (oversightRef.current && !oversightRef.current.contains(e.target as Node)) {
+        setOversightOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [oversightOpen]);
 
   const isVisible = !dismissed || state.items.length > dismissedVersion;
 
@@ -214,16 +234,46 @@ export function AttentionBar() {
         </button>
       )}
 
-      {/* Trust Dial quick toggle (AC-16.6) */}
-      <button
-        data-testid="trust-dial-toggle"
-        onClick={cycleOversightLevel}
-        className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-th-bg-alt text-th-text-muted hover:text-th-text hover:bg-th-border transition-colors shrink-0"
-        title={`Oversight: ${LEVEL_LABELS[oversightLevel]} (click to cycle)`}
-      >
-        <Eye size={10} />
-        {LEVEL_LABELS[oversightLevel]}
-      </button>
+      {/* Trust Dial picker (AC-16.6) */}
+      <div className="relative shrink-0" ref={oversightRef}>
+        <button
+          data-testid="trust-dial-toggle"
+          onClick={() => setOversightOpen(!oversightOpen)}
+          className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-th-bg-alt text-th-text-muted hover:text-th-text hover:bg-th-border transition-colors"
+          title="Change oversight level"
+        >
+          <Eye size={10} />
+          <span className="font-medium">◉ {LEVEL_LABELS[oversightLevel]}</span>
+        </button>
+
+        {oversightOpen && (
+          <div className="absolute right-0 bottom-full mb-1 w-72 bg-surface-raised rounded-lg border border-th-border shadow-lg py-1 z-50" data-testid="oversight-picker">
+            <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-th-text-muted font-medium border-b border-th-border/50">
+              Oversight Level
+            </div>
+            {OVERSIGHT_PICKER_OPTIONS.map(({ level, label, description }) => (
+              <button
+                key={level}
+                data-testid={`oversight-option-${level}`}
+                onClick={() => { setOversightLevel(level); setOversightOpen(false); }}
+                className={`w-full text-left px-3 py-2 transition-colors ${
+                  oversightLevel === level
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-th-text hover:bg-th-bg-alt'
+                }`}
+              >
+                <div className="flex items-center gap-2 text-xs font-medium">
+                  <span className={oversightLevel === level ? 'text-accent' : 'text-th-text-muted'}>
+                    {oversightLevel === level ? '◉' : '○'}
+                  </span>
+                  {label}
+                </div>
+                <p className="text-[10px] text-th-text-muted mt-0.5 ml-5 leading-snug">{description}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
