@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
 import type { KnowledgeCategory, KnowledgeMetadata } from '../knowledge/types.js';
@@ -10,6 +10,37 @@ import { logger } from '../utils/logger.js';
 // ── Types ────────────────────────────────────────────────────────────
 
 const MEMORY_CATEGORIES: readonly MemoryCategory[] = ['pattern', 'decision', 'expertise', 'gotcha'];
+
+/** Maximum file size for individual imported files (512KB) */
+const MAX_IMPORT_FILE_BYTES = 512 * 1024;
+
+/** Resolve and validate that a path is within an allowed root. */
+function resolveAndValidate(filePath: string, allowedRoot: string): string {
+  let resolved: string;
+  try {
+    resolved = realpathSync(filePath);
+  } catch {
+    throw new Error('Path does not exist or is inaccessible');
+  }
+  const realRoot = realpathSync(allowedRoot);
+  if (!resolved.startsWith(realRoot + '/') && resolved !== realRoot) {
+    throw new Error('Path escapes allowed directory');
+  }
+  return resolved;
+}
+
+/** Read a file with size check. Returns content or null if over limit. */
+function safeReadFile(filePath: string): { content: string } | { error: string } {
+  try {
+    const size = statSync(filePath).size;
+    if (size > MAX_IMPORT_FILE_BYTES) {
+      return { error: `File too large (${(size / 1024).toFixed(0)}KB exceeds ${MAX_IMPORT_FILE_BYTES / 1024}KB limit)` };
+    }
+    return { content: readFileSync(filePath, 'utf-8') };
+  } catch (err) {
+    return { error: String(err) };
+  }
+}
 
 export interface ProjectImportOptions {
   projectId: string;
@@ -104,9 +135,19 @@ export class ProjectImporter {
       warnings: [],
     };
 
-    if (!existsSync(options.sourcePath)) {
+    // Validate sourcePath is a real path and doesn't escape via symlinks
+    let resolvedSource: string;
+    try {
+      resolvedSource = resolveAndValidate(options.sourcePath, options.sourcePath);
+    } catch {
       report.success = false;
-      report.warnings.push(`Source path does not exist: ${options.sourcePath}`);
+      report.warnings.push('Source path is invalid or inaccessible');
+      return report;
+    }
+
+    if (!existsSync(resolvedSource)) {
+      report.success = false;
+      report.warnings.push('Source path does not exist');
       return report;
     }
 
@@ -149,9 +190,14 @@ export class ProjectImporter {
       }
 
       let entries: unknown[];
+      const readResult = safeReadFile(join(dir, file));
+      if ('error' in readResult) {
+        report.knowledge.errors.push(`${file}: ${readResult.error}`);
+        report.knowledge.skipped++;
+        continue;
+      }
       try {
-        const raw = readFileSync(join(dir, file), 'utf-8');
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(readResult.content);
         if (!Array.isArray(parsed)) {
           report.knowledge.errors.push(`${file}: expected JSON array`);
           continue;
@@ -212,9 +258,14 @@ export class ProjectImporter {
       }
 
       let entries: unknown[];
+      const readResult = safeReadFile(join(dir, file));
+      if ('error' in readResult) {
+        report.memory.errors.push(`${file}: ${readResult.error}`);
+        report.memory.skipped++;
+        continue;
+      }
       try {
-        const raw = readFileSync(join(dir, file), 'utf-8');
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(readResult.content);
         if (!Array.isArray(parsed)) {
           report.memory.errors.push(`${file}: expected JSON array`);
           continue;
@@ -277,9 +328,14 @@ export class ProjectImporter {
 
     for (const file of files) {
       let session: unknown;
+      const readResult = safeReadFile(join(dir, file));
+      if ('error' in readResult) {
+        report.sessions.errors.push(`${file}: ${readResult.error}`);
+        report.sessions.skipped++;
+        continue;
+      }
       try {
-        const raw = readFileSync(join(dir, file), 'utf-8');
-        session = JSON.parse(raw);
+        session = JSON.parse(readResult.content);
       } catch (err) {
         report.sessions.errors.push(`${file}: ${String(err)}`);
         continue;
@@ -340,8 +396,8 @@ export class ProjectImporter {
     }
 
     for (const subdir of subdirs) {
-      // Subdirectory naming: {role}-{shortId}
-      const role = subdir.split('-')[0] || subdir;
+      // Subdirectory naming: {role}-{shortId} e.g. "readability-reviewer-43f9a8a1"
+      const role = subdir.replace(/-[a-f0-9]{8}$/, '') || subdir;
       const subdirPath = join(dir, subdir);
 
       let mdFiles: string[];
@@ -355,13 +411,13 @@ export class ProjectImporter {
         const filename = basename(mdFile, '.md');
         const key = `artifact:${role}:${filename}`;
 
-        let content: string;
-        try {
-          content = readFileSync(join(subdirPath, mdFile), 'utf-8');
-        } catch (err) {
-          report.knowledge.errors.push(`shared/${subdir}/${mdFile}: ${String(err)}`);
+        const readResult = safeReadFile(join(subdirPath, mdFile));
+        if ('error' in readResult) {
+          report.knowledge.errors.push(`shared/${subdir}/${mdFile}: ${readResult.error}`);
+          report.knowledge.skipped++;
           continue;
         }
+        const content = readResult.content;
 
         if (options.dryRun) {
           report.knowledge.imported++;

@@ -9,14 +9,16 @@ vi.mock('node:fs', () => ({
   readFileSync: vi.fn(),
   readdirSync: vi.fn(),
   statSync: vi.fn(),
+  realpathSync: vi.fn(),
 }));
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 
 const mockExistsSync = existsSync as ReturnType<typeof vi.fn>;
 const mockReadFileSync = readFileSync as ReturnType<typeof vi.fn>;
 const mockReaddirSync = readdirSync as ReturnType<typeof vi.fn>;
 const mockStatSync = statSync as ReturnType<typeof vi.fn>;
+const mockRealpathSync = realpathSync as ReturnType<typeof vi.fn>;
 
 // ── Dependency mocks ─────────────────────────────────────────────────
 
@@ -95,9 +97,20 @@ function setupFs(tree: Record<string, string | string[] | 'dir'>) {
     if (typeof val === 'string') return val;
     throw new Error(`ENOENT: no such file or directory '${p}'`);
   });
-  mockStatSync.mockImplementation((p: string) => ({
-    isDirectory: () => tree[p] === 'dir',
-  }));
+  mockStatSync.mockImplementation((p: string) => {
+    const val = tree[p];
+    return {
+      isDirectory: () => val === 'dir',
+      size: typeof val === 'string' ? val.length : 0,
+    };
+  });
+  // realpathSync: identity function (no symlinks in test)
+  mockRealpathSync.mockImplementation((p: string) => {
+    if (!(p in tree) && !Object.keys(tree).some(k => k.startsWith(p))) {
+      throw new Error(`ENOENT: no such file or directory '${p}'`);
+    }
+    return p;
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -238,13 +251,13 @@ describe('ProjectImporter', () => {
   describe('importSharedArtifacts', () => {
     it('imports shared markdown artifacts as episodic knowledge', () => {
       const sharedDir = `${sourcePath}/shared`;
-      const subdir = `${sharedDir}/dev-abc123`;
+      const subdir = `${sharedDir}/dev-abc12345`;
 
       mockExistsSync.mockImplementation((p: string) =>
         [sourcePath, sharedDir, subdir].includes(p),
       );
       mockReaddirSync.mockImplementation((p: string) => {
-        if (p === sharedDir) return ['dev-abc123'];
+        if (p === sharedDir) return ['dev-abc12345'];
         if (p === subdir) return ['notes.md', 'plan.md'];
         throw new Error(`ENOENT: ${p}`);
       });
@@ -255,7 +268,9 @@ describe('ProjectImporter', () => {
       });
       mockStatSync.mockImplementation((p: string) => ({
         isDirectory: () => p === subdir,
+        size: 100,
       }));
+      mockRealpathSync.mockImplementation((p: string) => p);
 
       const report = importer.import({ projectId, sourcePath });
 
@@ -274,11 +289,12 @@ describe('ProjectImporter', () => {
   describe('error handling', () => {
     it('returns error report for missing source path', () => {
       mockExistsSync.mockReturnValue(false);
+      mockRealpathSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
       const report = importer.import({ projectId, sourcePath: '/nonexistent' });
 
       expect(report.success).toBe(false);
-      expect(report.warnings).toContain('Source path does not exist: /nonexistent');
+      expect(report.warnings).toContain('Source path is invalid or inaccessible');
       expect(deps._knowledge.put).not.toHaveBeenCalled();
     });
 
@@ -376,6 +392,62 @@ describe('ProjectImporter', () => {
       expect(report2.knowledge.imported).toBe(1);
       // put() is called both times — upsert handles dedup
       expect(deps._knowledge.put).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── Security: file size limit ─────────────────────────────────
+
+  describe('file size limit', () => {
+    it('skips files exceeding 512KB', () => {
+      const largeContent = 'x'.repeat(600 * 1024); // 600KB
+      mockExistsSync.mockReturnValue(true);
+      mockReaddirSync.mockImplementation((p: string) => {
+        if (p === `${sourcePath}/knowledge`) return ['core.json'];
+        return [];
+      });
+      mockReadFileSync.mockReturnValue(largeContent);
+      mockStatSync.mockImplementation((p: string) => ({
+        isDirectory: () => p === sourcePath,
+        size: p.endsWith('.json') ? 600 * 1024 : 0,
+      }));
+      mockRealpathSync.mockImplementation((p: string) => p);
+
+      const report = importer.import({ projectId, sourcePath });
+
+      expect(report.knowledge.imported).toBe(0);
+      expect(report.knowledge.skipped).toBe(1);
+      expect(report.knowledge.errors[0]).toContain('too large');
+    });
+  });
+
+  // ── Security: role extraction ─────────────────────────────────
+
+  describe('role extraction from subdir name', () => {
+    it('extracts multi-word roles like readability-reviewer correctly', () => {
+      const sharedDir = `${sourcePath}/shared`;
+      const subdir = `${sharedDir}/readability-reviewer-43f9a8a1`;
+
+      mockExistsSync.mockImplementation((p: string) =>
+        [sourcePath, sharedDir, subdir].includes(p),
+      );
+      mockReaddirSync.mockImplementation((p: string) => {
+        if (p === sharedDir) return ['readability-reviewer-43f9a8a1'];
+        if (p === subdir) return ['review.md'];
+        return [];
+      });
+      mockReadFileSync.mockReturnValue('# Review notes');
+      mockStatSync.mockImplementation((p: string) => ({
+        isDirectory: () => p === subdir,
+        size: 20,
+      }));
+      mockRealpathSync.mockImplementation((p: string) => p);
+
+      const report = importer.import({ projectId, sourcePath });
+
+      expect(report.knowledge.imported).toBe(1);
+      expect(deps._knowledge.put).toHaveBeenCalledWith(
+        projectId, 'episodic', 'artifact:readability-reviewer:review', '# Review notes', { source: 'import', role: 'readability-reviewer' },
+      );
     });
   });
 });
