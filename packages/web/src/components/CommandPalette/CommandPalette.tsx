@@ -165,12 +165,6 @@ function buildSettingItems(
 ): PaletteItem[] {
   const settings = [
     {
-      id: 'setting-intent-rules',
-      label: 'Intent Rules',
-      description: 'Configure auto-approval rules',
-      keywords: ['intent', 'rules', 'approval', 'auto'],
-    },
-    {
       id: 'setting-notifications',
       label: 'Notification Preferences',
       description: 'Configure notification channels',

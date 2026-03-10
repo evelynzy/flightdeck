@@ -17,14 +17,6 @@ interface CoachTip {
 
 const TIPS: CoachTip[] = [
   {
-    id: 'coach-intent-rules',
-    trigger: ({ sessionMinutes }) => sessionMinutes > 30,
-    title: 'Automate routine decisions',
-    body: 'Intent rules auto-handle routine decisions so you can focus on what matters.',
-    icon: '💡',
-    cta: { label: 'Learn more', action: '/settings' },
-  },
-  {
     id: 'coach-cmdk',
     trigger: ({ sessionMinutes }) => sessionMinutes > 10,
     title: 'Press \u2318K for quick commands',
@@ -43,9 +35,9 @@ const TIPS: CoachTip[] = [
     id: 'coach-batch-approve',
     trigger: ({ pendingDecisions }) => pendingDecisions.length >= 5,
     title: 'Batch approve decisions',
-    body: "You have several pending decisions. Consider using batch approval or creating an intent rule.",
+    body: 'You have several pending decisions. Consider using batch approval.',
     icon: '💡',
-    cta: { label: 'Create Rule', action: '/settings' },
+    cta: { label: 'View Queue', action: '/approvals' },
   },
   // Idle agents tip removed — idle agents don't cost anything (per-token billing),
   // and the Lead assigns tasks, not the user.

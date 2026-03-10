@@ -264,15 +264,7 @@ const PATTERNS: NLPattern[] = [
     description: 'Navigate to the approval queue',
   },
 
-  // ── Create (2) ────────────────────────────────────────────────
-  {
-    id: 'create-rule',
-    phrases: ['create a rule to'],
-    category: 'create',
-    destructive: false,
-    description: 'Create an intent rule for automatic decision handling',
-    entityParam: 'topic',
-  },
+  // ── Create (1) ────────────────────────────────────────────────
   {
     id: 'take-snapshot',
     phrases: ['take a snapshot', 'save this moment'],
@@ -713,13 +705,6 @@ export class NLCommandService {
       }
 
       // ── Create ───────────────────────────────────────────────
-      case 'create-rule': {
-        const topic = entity || 'unknown';
-        steps.push({ action: 'create_rule', target: 'intent', params: { description: topic } });
-        summary = `Creating intent rule: "${topic}"`;
-        break;
-      }
-
       case 'take-snapshot': {
         steps.push({ action: 'take_snapshot', target: 'current' });
         summary = 'Taking a snapshot of the current state';
@@ -842,11 +827,6 @@ export class NLCommandService {
         }
 
         // ── Create actions (V1: signal success, actual creation via API) ─
-        case 'create_rule': {
-          const description = step.params?.description ?? '';
-          return { success: true, detail: `Rule creation initiated: "${description}"` };
-        }
-
         case 'take_snapshot': {
           return { success: true, detail: 'Snapshot capture initiated' };
         }

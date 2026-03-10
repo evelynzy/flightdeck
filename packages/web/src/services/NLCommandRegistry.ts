@@ -49,8 +49,7 @@ const PATTERNS: NLPattern[] = [
   { id: 'nl-show-timeline', phrases: ['show the timeline', 'open timeline'], category: 'navigate', destructive: false, description: 'Navigate to Timeline', icon: '📅' },
   { id: 'nl-show-approvals', phrases: ['show approvals', 'pending decisions', 'open approvals'], category: 'navigate', destructive: false, description: 'Open approval queue', icon: '🎯' },
 
-  // Create (2)
-  { id: 'nl-create-rule', phrases: ['create a rule', 'add a rule', 'new rule'], category: 'create', destructive: false, description: 'Open intent rule editor', icon: '📝' },
+  // Create (1)
   { id: 'nl-snapshot', phrases: ['take a snapshot', 'save this moment', 'bookmark'], category: 'create', destructive: false, description: 'Create session replay bookmark', icon: '📸' },
 ];
 

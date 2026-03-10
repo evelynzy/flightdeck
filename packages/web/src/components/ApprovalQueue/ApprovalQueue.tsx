@@ -1,18 +1,17 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Check, X, ChevronDown, ChevronRight, Clock, Lightbulb, EyeOff, Eye } from 'lucide-react';
+import { Check, X, ChevronDown, ChevronRight, Clock, EyeOff, Eye } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useLeadStore } from '../../stores/leadStore';
 import { useSettingsStore, type OversightLevel } from '../../stores/settingsStore';
 import { useToastStore } from '../Toast';
 import { apiFetch } from '../../hooks/useApi';
 import { categoryLabel } from '../../constants/categories';
-import { TEACH_ME_DELAY_MS } from '../../constants/timing';
 import type { Decision } from '../../types';
 
 const OVERSIGHT_HINT_OPTIONS: Array<{ level: OversightLevel; label: string; description: string }> = [
-  { level: 'detailed', label: 'Detailed', description: 'Review all agent actions' },
-  { level: 'standard', label: 'Standard', description: 'Review key decisions only' },
-  { level: 'minimal', label: 'Minimal', description: 'Agents work autonomously' },
+  { level: 'supervised', label: 'Supervised', description: 'Review all agent actions' },
+  { level: 'balanced', label: 'Balanced', description: 'Review key decisions only' },
+  { level: 'autonomous', label: 'Autonomous', description: 'Agents work autonomously' },
 ];
 
 // ── Urgency helpers ──────────────────────────────────────────────────
@@ -47,7 +46,6 @@ export function ApprovalQueue() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
-  const [teachMePrompt, setTeachMePrompt] = useState<{ category: string; count: number; matchPreview: string[] } | null>(null);
   const [showOversightPicker, setShowOversightPicker] = useState(false);
 
   // Keyboard navigation
@@ -167,14 +165,11 @@ export function ApprovalQueue() {
     setProcessingIds(new Set(ids));
 
     try {
-      let suggestedRule: { category: string; count: number } | null = null;
-
       try {
-        const result = await apiFetch<{ updated: number; suggestedRule?: { category: string; count: number } }>('/decisions/batch', {
+        await apiFetch<{ updated: number }>('/decisions/batch', {
           method: 'POST',
           body: JSON.stringify({ ids, action }),
         });
-        suggestedRule = result.suggestedRule ?? null;
       } catch {
         // Batch endpoint may not exist yet — fall back to individual calls
         await Promise.all(
@@ -208,22 +203,6 @@ export function ApprovalQueue() {
       setSelectedIds(new Set());
       const verb = action === 'confirm' ? 'approved' : action === 'reject' ? 'rejected' : 'dismissed';
       addToast('success', `${ids.length} decision${ids.length > 1 ? 's' : ''} ${verb}`);
-
-      // Teach Me: show prompt after 1s delay (PM requirement: don't stack with toast)
-      if (suggestedRule && action === 'confirm' && suggestedRule.count >= 3) {
-        const remaining = useAppStore.getState().pendingDecisions;
-        const matchPreview = remaining
-          .filter((d) => d.category === suggestedRule!.category)
-          .map((d) => d.title)
-          .slice(0, 5);
-        setTimeout(() => {
-          setTeachMePrompt({
-            category: suggestedRule!.category,
-            count: suggestedRule!.count,
-            matchPreview,
-          });
-        }, TEACH_ME_DELAY_MS);
-      }
     } catch (err: any) {
       addToast('error', `Batch ${action} failed: ${err.message}`);
     } finally {
@@ -231,29 +210,8 @@ export function ApprovalQueue() {
     }
   }, [selectedIds, addToast]);
 
-  // Create intent rule from Teach Me prompt
-  const handleTeachMeConfirm = useCallback(async () => {
-    if (!teachMePrompt) return;
-    try {
-      await apiFetch('/intents', {
-        method: 'POST',
-        body: JSON.stringify({
-          category: teachMePrompt.category,
-          matchField: 'category',
-          action: 'auto-approve',
-          source: 'teach_me',
-        }),
-      });
-      addToast('success', `Intent rule created: auto-approve "${teachMePrompt.category}" decisions`);
-    } catch (err: any) {
-      addToast('error', `Failed to create rule: ${err.message}`);
-    } finally {
-      setTeachMePrompt(null);
-    }
-  }, [teachMePrompt, addToast]);
-
   // Empty state — don't auto-close (critical reviewer requirement)
-  if (pendingDecisions.length === 0 && !teachMePrompt) {
+  if (pendingDecisions.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-th-text-muted p-8">
         <div className="text-center space-y-2">
@@ -469,45 +427,7 @@ export function ApprovalQueue() {
         </div>
       )}
 
-      {/* Teach Me prompt — appears after batch approval with 1s delay */}
-      {teachMePrompt && (
-        <div className="shrink-0 border-t border-th-border px-4 py-3 bg-th-bg-alt/60 animate-slide-in">
-          <div className="flex items-start gap-2">
-            <Lightbulb className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-th-text-alt">
-                Teach Me
-              </p>
-              <p className="text-[11px] text-th-text-muted mt-0.5">
-                You approved {teachMePrompt.count} <span className="font-medium text-th-text-alt">{categoryLabel(teachMePrompt.category)}</span> decisions.
-                Auto-approve these in future sessions?
-              </p>
-              {teachMePrompt.matchPreview.length > 0 && (
-                <div className="mt-1.5 text-[10px] text-th-text-muted bg-th-bg/50 rounded px-2 py-1">
-                  <span className="font-medium">Would also match:</span>
-                  {teachMePrompt.matchPreview.map((title, i) => (
-                    <div key={i} className="truncate">• {title}</div>
-                  ))}
-                </div>
-              )}
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={handleTeachMeConfirm}
-                  className="px-2.5 py-1 text-[11px] font-medium rounded bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 transition-colors"
-                >
-                  Yes, create rule
-                </button>
-                <button
-                  onClick={() => setTeachMePrompt(null)}
-                  className="px-2.5 py-1 text-[11px] font-medium rounded bg-th-bg-alt text-th-text-muted border border-th-border hover:text-th-text-alt transition-colors"
-                >
-                  Not now
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Teach Me prompt removed — Intent Rules feature was removed */}
     </div>
   );
 }
