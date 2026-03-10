@@ -3,12 +3,13 @@
 // Registered as a Tier 1 singleton in the DI container.
 
 import { EventEmitter } from 'events';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { writeFile, readFile } from 'fs/promises';
+import { dirname } from 'path';
 import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
 import { ConfigWatcher } from './ConfigWatcher.js';
 import { loadConfig, type ConfigDiff } from './ConfigLoader.js';
-import { type FlightdeckConfig, getDefaultConfig } from './configSchema.js';
+import { type FlightdeckConfig, flightdeckConfigSchema, getDefaultConfig } from './configSchema.js';
 import { logger } from '../utils/logger.js';
 
 export interface ConfigReloadedEvent {
@@ -45,7 +46,14 @@ export class ConfigStore extends EventEmitter {
       }
     } else {
       this._config = getDefaultConfig();
-      logger.info({ module: 'config', msg: 'No config file, using defaults', filePath });
+      // Auto-create config directory and file with defaults
+      try {
+        mkdirSync(dirname(filePath), { recursive: true });
+        writeFileSync(filePath, '# flightdeck config — see flightdeck.config.example.yaml for options\n', 'utf-8');
+        logger.info({ module: 'config', msg: 'Created default config file', filePath });
+      } catch (err: any) {
+        logger.warn({ module: 'config', msg: 'Could not create config file', filePath, err: err.message });
+      }
     }
   }
 
@@ -84,6 +92,14 @@ export class ConfigStore extends EventEmitter {
 
     // Deep-merge the patch into existing
     const merged = deepMerge(existing, patch);
+
+    // Validate merged config before writing — reject invalid configs
+    const result = flightdeckConfigSchema.safeParse(merged);
+    if (!result.success) {
+      const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+      throw new Error(`Config validation failed, write rejected:\n${issues.join('\n')}`);
+    }
+
     const yaml = stringifyYaml(merged, { indent: 2, lineWidth: 120 });
     await writeFile(this.filePath, yaml, 'utf-8');
     // Watcher will pick up the change and emit events

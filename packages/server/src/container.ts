@@ -4,6 +4,8 @@
 
 import { createServer, type Server as HttpServer } from 'http';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { existsSync } from 'node:fs';
 import type { ServerConfig } from './config.js';
 import { updateConfig, getConfig } from './config.js';
 import type { AppContext } from './routes/context.js';
@@ -156,8 +158,11 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   const effectiveConfig = getConfig();
 
   // ConfigStore: hot-reloadable config from YAML file (Tier 0 — no service deps)
+  // Resolution order: FLIGHTDECK_CONFIG env → repo-level file → ~/.flightdeck/config.yaml
+  const repoConfigPath = repoRoot ? join(repoRoot, 'flightdeck.config.yaml') : null;
   const configFilePath = process.env.FLIGHTDECK_CONFIG
-    || (repoRoot ? `${repoRoot}/flightdeck.config.yaml` : './flightdeck.config.yaml');
+    || (repoConfigPath && existsSync(repoConfigPath) ? repoConfigPath : null)
+    || join(homedir(), '.flightdeck', 'config.yaml');
   const configStore = new ConfigStore(configFilePath);
   onShutdown('configStore', () => configStore.stop());
 

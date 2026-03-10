@@ -1,5 +1,9 @@
 # flightdeck.config.yaml — Example configuration
-# Copy this file to flightdeck.config.yaml (or wherever FLIGHTDECK_CONFIG points).
+#
+# Config file resolution order:
+#   1. FLIGHTDECK_CONFIG env var (highest priority)
+#   2. Repo-level flightdeck.config.yaml (if exists — project overrides)
+#   3. ~/.flightdeck/config.yaml (default — auto-created on first run)
 #
 # This file is 100% optional. Without it, the system uses built-in defaults.
 # Hot-reloaded: changes take effect without server restart.
