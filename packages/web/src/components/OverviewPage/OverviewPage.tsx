@@ -41,6 +41,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Decision, DagStatus } from '../../types';
+import { TokenUsageSection } from './TokenUsageSection';
 
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -447,6 +448,15 @@ export function OverviewPage(_props: Props) {
         </section>
         </SectionErrorBoundary>
       </div>
+
+      {/* ── Token Usage (persisted — works even when session is inactive) ── */}
+      {effectiveId && (
+        <div className="mt-2">
+          <SectionErrorBoundary name="Token usage">
+            <TokenUsageSection projectId={effectiveId} />
+          </SectionErrorBoundary>
+        </div>
+      )}
 
       {/* ── Session History (always visible, scrollable) ──────── */}
       {effectiveId && (
