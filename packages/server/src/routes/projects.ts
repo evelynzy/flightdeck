@@ -761,29 +761,43 @@ export function projectsRoutes(ctx: AppContext): Router {
           ? previousAgents.filter((a) => agentIds.includes(a.agentId))
           : previousAgents;
 
-        // Stagger spawns to avoid rate limits (6s base + 2s per agent)
-        for (const [i, prev] of toResume.entries()) {
-          setTimeout(() => {
-            const prevRole = roleRegistry.get(prev.role);
-            if (!prevRole) return;
-            try {
-              agentManager.spawn(
-                prevRole,
-                prev.lastTaskSummary || undefined,
-                agent.id,
-                true,
-                prev.model,
-                project.cwd ?? undefined,
-                prev.sessionId || undefined,
-                prev.agentId,
-                { projectId: project.id, projectName: project.name },
-              );
-              logger.info({ module: 'project', msg: 'Respawned agent', role: prev.role, model: prev.model, parentId: agent.id });
-            } catch (err: any) {
-              logger.warn({ module: 'project', msg: 'Failed to respawn agent', role: prev.role, err: err.message });
+        // Spawn team agents in parallel batches (batch size 3, 1s between batches)
+        const BATCH_SIZE = 3;
+        const BATCH_DELAY = 1000;
+        const INITIAL_DELAY = 2000; // let lead settle before spawning team
+
+        const spawnTeam = async () => {
+          await new Promise((r) => setTimeout(r, INITIAL_DELAY));
+          for (let b = 0; b < toResume.length; b += BATCH_SIZE) {
+            const batch = toResume.slice(b, b + BATCH_SIZE);
+            await Promise.allSettled(batch.map((prev) => {
+              const prevRole = roleRegistry.get(prev.role);
+              if (!prevRole) return Promise.resolve();
+              try {
+                agentManager.spawn(
+                  prevRole,
+                  prev.lastTaskSummary || undefined,
+                  agent.id,
+                  true,
+                  prev.model,
+                  project.cwd ?? undefined,
+                  prev.sessionId || undefined,
+                  prev.agentId,
+                  { projectId: project.id, projectName: project.name },
+                );
+                logger.info({ module: 'project', msg: 'Respawned agent', role: prev.role, model: prev.model, parentId: agent.id });
+              } catch (err: any) {
+                logger.warn({ module: 'project', msg: 'Failed to respawn agent', role: prev.role, err: err.message });
+              }
+              return Promise.resolve();
+            }));
+            // Small delay between batches to avoid rate limits
+            if (b + BATCH_SIZE < toResume.length) {
+              await new Promise((r) => setTimeout(r, BATCH_DELAY));
             }
-          }, 6000 + i * 2000);
-        }
+          }
+        };
+        spawnTeam().catch((err) => logger.warn({ module: 'project', msg: 'Batch spawn error', err: String(err) }));
         respawnedCount = toResume.length;
         secretaryResumed = toResume.some((a) => a.role === 'secretary');
       }

@@ -329,12 +329,9 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
     // Lead spawned immediately
     expect(mockSpawn).toHaveBeenCalledTimes(1);
 
-    // Advance timers to trigger staggered respawns
-    vi.advanceTimersByTime(6000); // first agent at 6s
-    expect(mockSpawn).toHaveBeenCalledTimes(2);
-    vi.advanceTimersByTime(2000); // second at 8s
-    expect(mockSpawn).toHaveBeenCalledTimes(3);
-    vi.advanceTimersByTime(2000); // third (secretary) at 10s
+    // Advance timers to trigger batch respawns (2s initial delay, then concurrent batch)
+    await vi.advanceTimersByTimeAsync(2500);
+    // All 3 agents spawned in first batch (batch size 3)
     expect(mockSpawn).toHaveBeenCalledTimes(4);
 
     // Verify respawned agents got correct params
@@ -371,7 +368,7 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
     const body = await res.json();
     expect(body.respawning).toBe(1);
 
-    vi.advanceTimersByTime(8000);
+    await vi.advanceTimersByTimeAsync(3000);
     // 1 lead + 1 selected agent
     expect(mockSpawn).toHaveBeenCalledTimes(2);
 
