@@ -132,6 +132,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
   private sessionKnowledgeExtractor?: SessionKnowledgeExtractor;
   private collectiveMemory?: CollectiveMemory;
   private configStore?: import('../config/ConfigStore.js').ConfigStore;
+  private userInputTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private _systemPaused = false;
   private _shuttingDown = false;
 
@@ -322,6 +323,19 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     this.dispatcher.setIntegrationRouter(router);
   }
 
+  /** Resolve the effective oversight level for an agent: project override → global config → default. */
+  private getEffectiveOversightLevel(projectId?: string): string {
+    let level = 'autonomous';
+    if (this.configStore) {
+      level = this.configStore.current.oversight.level;
+    }
+    if (projectId && this.projectRegistry) {
+      const override = this.projectRegistry.getOversightLevel(projectId);
+      if (override) level = override;
+    }
+    return level;
+  }
+
   /**
    * Resolve the effective model for a role based on project model config.
    *
@@ -474,15 +488,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     }
 
     // Inject oversight tier behavioral instructions into agent prompt
-    // Resolve effective oversight level: project override → global config → default
-    let effectiveOversightLevel = 'autonomous';
-    if (this.configStore) {
-      effectiveOversightLevel = this.configStore.current.oversight.level;
-    }
-    if (effectiveProjectId && this.projectRegistry) {
-      const projectOverride = this.projectRegistry.getOversightLevel(effectiveProjectId);
-      if (projectOverride) effectiveOversightLevel = projectOverride;
-    }
+    const effectiveOversightLevel = this.getEffectiveOversightLevel(effectiveProjectId);
 
     if (this.configStore) {
       const oversightConfig = this.configStore.current.oversight;
@@ -620,6 +626,17 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
 
     agent.onUserInputRequest((request) => {
       this.emit('agent:user_input_request', { agentId: agent.id, request });
+
+      // In autonomous mode, auto-respond after 2 minutes so agent isn't blocked
+      const effectiveLevel = this.getEffectiveOversightLevel(agent.projectId);
+      if (effectiveLevel === 'autonomous') {
+        const timer = setTimeout(() => {
+          this.userInputTimers.delete(agent.id);
+          agent.resolveUserInput('User is not available. Use your best judgement.');
+          logger.info({ module: 'agent-manager', msg: 'Auto-resolved user input (autonomous mode timeout)', agentId: agent.id });
+        }, 120_000);
+        this.userInputTimers.set(agent.id, timer);
+      }
     });
 
     // When an agent's session is established, broadcast session ID
@@ -717,6 +734,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       runWithAgentContext(agent.id, agent.role.name, agent.projectId, () => {
       this.flushAgentMessage(agent.id);
       this.clearHungTimer(agent.id);
+      this.clearUserInputTimer(agent.id);
       this.dispatcher.clearBuffer(agent.id);
       logger.info({ module: 'agent', msg: 'Agent exited', exitCode: code, role: agent.role.id, status: agent.status });
 
@@ -1169,6 +1187,12 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
   resolveUserInput(agentId: string, response: string): boolean {
     const agent = this.agents.get(agentId);
     if (!agent) return false;
+    // Cancel the autonomous-mode auto-resolve timer if active
+    const timer = this.userInputTimers.get(agentId);
+    if (timer) {
+      clearTimeout(timer);
+      this.userInputTimers.delete(agentId);
+    }
     agent.resolveUserInput(response);
     return true;
   }
@@ -1178,6 +1202,14 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     if (timer) {
       clearTimeout(timer);
       this.hungTimers.delete(agentId);
+    }
+  }
+
+  private clearUserInputTimer(agentId: string): void {
+    const timer = this.userInputTimers.get(agentId);
+    if (timer) {
+      clearTimeout(timer);
+      this.userInputTimers.delete(agentId);
     }
   }
 
