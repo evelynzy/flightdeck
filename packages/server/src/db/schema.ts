@@ -280,6 +280,7 @@ export const taskCostRecords = sqliteTable('task_cost_records', {
   agentId: text('agent_id').notNull(),
   dagTaskId: text('dag_task_id').notNull(),
   leadId: text('lead_id').notNull(),
+  projectId: text('project_id'),
   inputTokens: integer('input_tokens').default(0),
   outputTokens: integer('output_tokens').default(0),
   cacheReadTokens: integer('cache_read_tokens').default(0),
@@ -291,6 +292,7 @@ export const taskCostRecords = sqliteTable('task_cost_records', {
   primaryKey({ columns: [table.agentId, table.dagTaskId, table.leadId] }),
   index('idx_task_cost_agent').on(table.agentId),
   index('idx_task_cost_task').on(table.dagTaskId, table.leadId),
+  index('idx_task_cost_project').on(table.projectId),
 ]);
 
 // ── Session Retrospectives ──────────────────────────────────────────

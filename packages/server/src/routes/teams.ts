@@ -406,7 +406,7 @@ export function teamsRoutes(ctx: AppContext): Router {
   router.delete('/crews/:leadId', writeLimiter, (req, res) => {
     if (!agentRoster) return res.status(503).json({ error: 'Agent roster not available' });
 
-    const { leadId } = req.params;
+    const leadId = paramStr(req.params.leadId);
     const lead = agentRoster.getAgent(leadId);
     if (!lead) return res.status(404).json({ error: 'Crew not found — lead agent not in roster' });
 
