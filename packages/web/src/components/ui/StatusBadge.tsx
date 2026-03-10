@@ -107,19 +107,19 @@ export function agentStatusProps(
   status: string,
   liveStatus?: string | null,
 ): { variant: StatusVariant; label: string } {
+  // Live agent states take priority — from AgentManager (in-memory)
   if (liveStatus === 'running') return { variant: 'success', label: 'Running' };
   if (liveStatus === 'creating') return { variant: 'warning', label: 'Starting' };
-  if (liveStatus === 'failed')   return { variant: 'error', label: 'Failed' };
+  if (liveStatus === 'idle')    return { variant: 'info', label: 'Idle' };
+  if (liveStatus === 'failed')  return { variant: 'error', label: 'Failed' };
+  if (liveStatus === 'terminated') return { variant: 'error', label: 'Terminated' };
+  if (liveStatus === 'completed')  return { variant: 'neutral', label: 'Completed' };
 
-  switch (status) {
-    case 'busy':       return { variant: 'info', label: 'Busy' };
-    case 'idle':       return { variant: 'warning', label: 'Idle' };
-    case 'retired':    return { variant: 'neutral', label: 'Retired' };
-    case 'terminated': return { variant: 'error', label: 'Terminated' };
-    case 'active':
-    case 'connected':  return { variant: 'success', label: 'Active' };
-    default:           return { variant: 'neutral', label: status };
-  }
+  // liveStatus is null/undefined — agent not in memory. Fall back to DB status.
+  if (status === 'terminated') return { variant: 'error', label: 'Terminated' };
+  if (status === 'retired')    return { variant: 'neutral', label: 'Retired' };
+  // DB says idle/busy but agent not live → offline
+  return { variant: 'neutral', label: 'Offline' };
 }
 
 /** Map connectivity states to StatusBadge variant + label. */

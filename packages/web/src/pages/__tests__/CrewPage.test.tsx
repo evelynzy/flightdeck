@@ -241,7 +241,7 @@ describe('CrewPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText('Idle').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Offline').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Terminated').length).toBeGreaterThan(0);
   });
 

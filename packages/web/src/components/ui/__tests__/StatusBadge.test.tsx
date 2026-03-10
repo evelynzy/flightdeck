@@ -118,12 +118,20 @@ describe('agentStatusProps', () => {
     expect(agentStatusProps('idle', 'creating')).toEqual({ variant: 'warning', label: 'Starting' });
   });
 
-  it('maps busy status to info', () => {
-    expect(agentStatusProps('busy')).toEqual({ variant: 'info', label: 'Busy' });
+  it('maps live idle liveStatus to info', () => {
+    expect(agentStatusProps('busy', 'idle')).toEqual({ variant: 'info', label: 'Idle' });
   });
 
-  it('maps idle status to warning', () => {
-    expect(agentStatusProps('idle')).toEqual({ variant: 'warning', label: 'Idle' });
+  it('maps idle DB status without liveStatus to Offline', () => {
+    expect(agentStatusProps('idle')).toEqual({ variant: 'neutral', label: 'Offline' });
+  });
+
+  it('maps busy DB status without liveStatus to Offline', () => {
+    expect(agentStatusProps('busy')).toEqual({ variant: 'neutral', label: 'Offline' });
+  });
+
+  it('maps idle DB status with null liveStatus to Offline', () => {
+    expect(agentStatusProps('idle', null)).toEqual({ variant: 'neutral', label: 'Offline' });
   });
 
   it('maps terminated status to error', () => {
@@ -134,8 +142,8 @@ describe('agentStatusProps', () => {
     expect(agentStatusProps('retired')).toEqual({ variant: 'neutral', label: 'Retired' });
   });
 
-  it('maps unknown status to neutral with original label', () => {
-    expect(agentStatusProps('custom')).toEqual({ variant: 'neutral', label: 'custom' });
+  it('maps unknown status without liveStatus to Offline', () => {
+    expect(agentStatusProps('custom')).toEqual({ variant: 'neutral', label: 'Offline' });
   });
 });
 
