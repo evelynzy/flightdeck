@@ -279,6 +279,20 @@ export function leadRoutes(ctx: AppContext): Router {
     res.json(tracker.getAgentTaskCosts(req.params.agentId));
   });
 
+  router.get('/costs/by-project', (_req, res) => {
+    const tracker = agentManager.getCostTracker();
+    if (!tracker) return res.json([]);
+    res.json(tracker.getProjectCosts());
+  });
+
+  router.get('/costs/by-session', (req, res) => {
+    const tracker = agentManager.getCostTracker();
+    if (!tracker) return res.json([]);
+    const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
+    if (!projectId) return res.status(400).json({ error: 'projectId query parameter is required' });
+    res.json(tracker.getSessionCosts(projectId));
+  });
+
   // --- Timers ---
   router.get('/timers', (_req, res) => {
     const registry = agentManager.getTimerRegistry();
@@ -368,7 +382,30 @@ export function leadRoutes(ctx: AppContext): Router {
   router.get('/lead/:id/progress', (req, res) => {
     const leadId = req.params.id;
     const delegations = agentManager.getDelegations(leadId);
-    const children = agentManager.getAll().filter((a) => a.parentId === leadId);
+    let children = agentManager.getAll().filter((a) => a.parentId === leadId);
+
+    // DB fallback: when lead is no longer in memory (historical session),
+    // query agentRoster for crew members linked via metadata.parentId
+    if (children.length === 0 && ctx.agentRoster) {
+      const rosterAgents = ctx.agentRoster.getAllAgents();
+      const rosterChildren = rosterAgents.filter((a) => {
+        const meta = a.metadata ?? {};
+        return meta.parentId === leadId && a.agentId !== leadId;
+      });
+      if (rosterChildren.length > 0) {
+        children = rosterChildren.map((a) => ({
+          id: a.agentId,
+          role: typeof a.role === 'string' ? { id: a.role, name: a.role } : a.role,
+          status: a.status,
+          task: a.lastTaskSummary ?? undefined,
+          model: a.model,
+          inputTokens: 0,
+          outputTokens: 0,
+          contextWindowSize: undefined,
+          contextWindowUsed: undefined,
+        })) as typeof children;
+      }
+    }
 
     const active = delegations.filter((d) => d.status === 'active').length;
     const completed = delegations.filter((d) => d.status === 'completed').length;
@@ -376,6 +413,8 @@ export function leadRoutes(ctx: AppContext): Router {
     const total = delegations.length;
 
     const lead = agentManager.get(leadId);
+    // DB fallback for lead tokens
+    const leadRoster = !lead && ctx.agentRoster ? ctx.agentRoster.getAgent(leadId) : undefined;
 
     res.json({
       totalDelegations: total,
@@ -385,12 +424,12 @@ export function leadRoutes(ctx: AppContext): Router {
       completionPct: total > 0 ? Math.round((completed / total) * 100) : 0,
       teamSize: children.length,
       leadTokens: lead ? { input: lead.inputTokens, output: lead.outputTokens } : null,
-      teamAgents: children.map((a) => ({
+      teamAgents: children.map((a: any) => ({
         id: a.id,
         role: a.role,
         status: a.status,
         task: a.task,
-        model: a.model || a.role.model,
+        model: a.model || a.role?.model,
         inputTokens: a.inputTokens,
         outputTokens: a.outputTokens,
         contextWindowSize: a.contextWindowSize,
