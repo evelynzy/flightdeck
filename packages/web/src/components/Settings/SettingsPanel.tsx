@@ -242,7 +242,7 @@ export function SettingsPanel({ api }: Props) {
             )}
           </div>
           <p className="text-[10px] text-th-text-muted mt-1">
-            Affects in-app notifications only. External channels (Telegram, Slack) use separate routing preferences.
+            These instructions are injected into agent system prompts and shape how agents behave at each oversight level.
           </p>
         </div>
       </section>

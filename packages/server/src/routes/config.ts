@@ -19,12 +19,12 @@ export function configRoutes(ctx: AppContext): Router {
     res.json(getConfig());
   });
 
-  // GET /config/yaml — returns the full YAML config (used by UI to load oversight settings)
+  // GET /config/yaml — returns only the oversight section (never expose secrets like API keys)
   router.get('/config/yaml', (_req, res) => {
     if (!ctx.configStore) {
       return res.status(503).json({ error: 'Config store not available' });
     }
-    res.json(ctx.configStore.current);
+    res.json({ oversight: ctx.configStore.current.oversight });
   });
 
   router.patch('/config', validateBody(configPatchSchema), (req, res) => {
