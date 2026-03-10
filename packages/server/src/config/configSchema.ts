@@ -130,6 +130,11 @@ const telegramSchema = z.object({
   rateLimitPerMinute: z.number().int().min(1).max(120).default(20),
 });
 
+// ── Oversight section (Trust Dial) ─────────────────────────
+const oversightSchema = z.object({
+  level: z.enum(['detailed', 'standard', 'minimal']).default('standard'),
+});
+
 // ── Conflicts section ──────────────────────────────────────
 const conflictsSchema = z.object({
   enabled: z.boolean().default(true),
@@ -221,6 +226,7 @@ export const flightdeckConfigSchema = z.preprocess(
     roles: z.preprocess((val) => val ?? {}, z.record(z.string(), roleOverrideSchema)),
     budget: sectionDefault(budgetSchema),
     provider: sectionDefault(providerSchema),
+    oversight: sectionDefault(oversightSchema),
     telegram: sectionDefault(telegramSchema),
     conflicts: sectionDefault(conflictsSchema),
     intentRules: z.preprocess((val) => val ?? [], z.array(intentRuleSchema)),

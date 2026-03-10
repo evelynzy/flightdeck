@@ -88,10 +88,17 @@ export const configPatchSchema = z
   .object({
     maxConcurrentAgents: z.number().int().positive().optional(),
     host: z.string().min(1).optional(),
+    oversightLevel: z.enum(['detailed', 'standard', 'minimal']).optional(),
   })
-  .refine((data) => data.maxConcurrentAgents !== undefined || data.host !== undefined, {
-    message: 'No valid fields to update. Allowed: maxConcurrentAgents, host',
-  });
+  .refine(
+    (data) =>
+      data.maxConcurrentAgents !== undefined ||
+      data.host !== undefined ||
+      data.oversightLevel !== undefined,
+    {
+      message: 'No valid fields to update. Allowed: maxConcurrentAgents, host, oversightLevel',
+    },
+  );
 
 /** POST /api/lead/:id/dag */
 export const dagDeclareSchema = z.object({

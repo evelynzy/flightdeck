@@ -28,9 +28,18 @@ export function configRoutes(ctx: AppContext): Router {
     }
     const updated = updateConfig(sanitized);
     agentManager.setMaxConcurrent(updated.maxConcurrentAgents);
-    // Persist maxConcurrentAgents to YAML config (single source of truth)
-    if (sanitized.maxConcurrentAgents !== undefined && ctx.configStore) {
-      ctx.configStore.writePartial({ server: { maxConcurrentAgents: updated.maxConcurrentAgents } }).catch(() => {});
+    // Persist to YAML config (single source of truth)
+    if (ctx.configStore) {
+      const yamlPatch: Record<string, unknown> = {};
+      if (sanitized.maxConcurrentAgents !== undefined) {
+        yamlPatch.server = { maxConcurrentAgents: updated.maxConcurrentAgents };
+      }
+      if (req.body.oversightLevel !== undefined) {
+        yamlPatch.oversight = { level: req.body.oversightLevel };
+      }
+      if (Object.keys(yamlPatch).length > 0) {
+        ctx.configStore.writePartial(yamlPatch).catch(() => {});
+      }
     }
     res.json(updated);
   });

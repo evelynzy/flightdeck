@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import type { AppContext } from './context.js';
-import { NotificationService, type TelegramChannelConfig } from '../coordination/alerts/NotificationService.js';
+import {
+  NotificationService,
+  type TelegramChannelConfig,
+  type NotifiableEvent,
+} from '../coordination/alerts/NotificationService.js';
 import { logger } from '../utils/logger.js';
 import { parseIntBounded } from '../utils/validation.js';
 
@@ -134,6 +138,95 @@ export function notificationRoutes(ctx: AppContext): Router {
       res.json(config);
     } catch (err) {
       res.status(500).json({ error: 'Failed to update quiet hours', detail: (err as Error).message });
+    }
+  });
+
+  // ── Composite Settings (used by NotificationPreferencesPanel) ──
+
+  // GET /api/notifications/routing — returns event→channelType routing matrix
+  router.get('/notifications/routing', (_req, res) => {
+    try {
+      const preferences = service.getPreferences();
+      const channels = service.getChannels();
+
+      // Build routing matrix: event → channel types (not IDs)
+      const routing: Record<string, string[]> = {};
+      for (const pref of preferences) {
+        if (!pref.enabled) {
+          routing[pref.event] = [];
+          continue;
+        }
+        const channelTypes: string[] = [];
+        for (const channelId of pref.channels) {
+          const channel = channels.find(c => c.id === channelId);
+          if (channel) channelTypes.push(channel.type);
+        }
+        routing[pref.event] = [...new Set(channelTypes)];
+      }
+
+      res.json({ routing, preset: 'conservative' });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to get routing', detail: (err as Error).message });
+    }
+  });
+
+  // PUT /api/notifications/settings — composite save for the settings panel
+  // Accepts { channels, routing, preset, quietHours } and delegates to service methods
+  router.put('/notifications/settings', (req, res) => {
+    try {
+      const { channels: channelUpdates, routing, quietHours } = req.body ?? {};
+
+      // 1. Update channel enabled states
+      if (Array.isArray(channelUpdates)) {
+        for (const ch of channelUpdates) {
+          if (ch.id && ch.enabled !== undefined) {
+            service.updateChannel(ch.id, { enabled: ch.enabled });
+          }
+        }
+      }
+
+      // 2. Convert routing matrix (event→channelTypes) to preferences (event→channelIds)
+      if (routing && typeof routing === 'object') {
+        const allChannels = service.getChannels();
+        const updates = Object.entries(routing).map(([event, channelTypes]) => {
+          const types = channelTypes as string[];
+          const channelIds = allChannels
+            .filter(c => types.includes(c.type) && c.enabled)
+            .map(c => c.id);
+          return {
+            event: event as NotifiableEvent,
+            tier: (['agent_crashed', 'budget_exceeded'] as string[]).includes(event)
+              ? 'interrupt' as const
+              : 'summon' as const,
+            channels: channelIds,
+            enabled: channelIds.length > 0,
+          };
+        });
+        service.updatePreferences(updates);
+      }
+
+      // 3. Save quiet hours
+      if (quietHours !== undefined) {
+        if (quietHours && quietHours.start && quietHours.end) {
+          service.setQuietHours({
+            enabled: true,
+            start: quietHours.start,
+            end: quietHours.end,
+            timezone: quietHours.timezone ?? 'UTC',
+          });
+        } else {
+          service.setQuietHours({
+            enabled: false,
+            start: '22:00',
+            end: '08:00',
+            timezone: 'UTC',
+          });
+        }
+      }
+
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to save settings', detail: (err as Error).message });
     }
   });
 

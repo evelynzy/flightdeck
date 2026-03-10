@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from '../hooks/useApi';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 
@@ -90,6 +91,16 @@ function applyTheme(resolved: 'dark' | 'light') {
   } catch {}
 }
 
+/** Fire-and-forget sync of oversight level to server YAML config */
+function syncOversightToServer(level: OversightLevel): void {
+  apiFetch('/config', {
+    method: 'PATCH',
+    body: JSON.stringify({ oversightLevel: level }),
+  }).catch(() => {
+    // Best effort — localStorage is the primary store, server is secondary
+  });
+}
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   soundEnabled: loadSoundPreference(),
   themeMode: loadThemeMode(),
@@ -119,6 +130,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setOversightLevel: (level) => {
     try { localStorage.setItem(OVERSIGHT_KEY, level); } catch {}
     set({ oversightLevel: level });
+    // Persist to YAML config via server
+    syncOversightToServer(level);
   },
 
   setProjectOversight: (projectId, level) => {
