@@ -3,7 +3,6 @@ import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { ThemeMode, OversightLevel } from '../../stores/settingsStore';
 import { Trash2, Plus, Sun, Moon, Monitor, Settings, Cpu, Users, Terminal, ChevronDown, ChevronRight, Zap, Volume2, Eye } from 'lucide-react';
-import { DashboardCustomizer } from './DashboardCustomizer';
 import { ProvidersSection } from './ProvidersSection';
 import { PlaybookLibrary } from '../Playbooks';
 import { IntentRulesDashboard } from '../IntentRules';
@@ -209,9 +208,6 @@ export function SettingsPanel({ api }: Props) {
       <section className="bg-surface-raised border border-th-border rounded-lg p-4 mb-6">
         <TelegramSettings />
       </section>
-
-      {/* Dashboard Layout */}
-      <DashboardCustomizer />
 
       {/* Playbooks */}
       <section className="bg-surface-raised border border-th-border rounded-lg p-4 mb-6">
