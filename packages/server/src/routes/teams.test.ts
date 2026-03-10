@@ -1,8 +1,8 @@
 /**
  * Teams route tests.
  *
- * Covers: export (JSON + directory), import stub, list teams,
- * team details, error handling, and missing dependencies.
+ * Covers: list teams, team details, agent profiles, health,
+ * retire/clone, crews summary, error handling, and missing dependencies.
  */
 import { describe, it, expect, vi, afterAll } from 'vitest';
 import express from 'express';
@@ -26,24 +26,6 @@ const MOCK_AGENTS = [
   { agentId: 'a3', role: 'reviewer', model: 'gpt-4', status: 'idle', teamId: 'team-2' },
 ];
 
-const MOCK_BUNDLE = {
-  manifest: {
-    bundleFormat: '1.0',
-    exportedAt: '2026-01-01T00:00:00Z',
-    checksum: 'a'.repeat(64),
-    stats: { agentCount: 2, knowledgeCount: 1, correctionCount: 0, feedbackCount: 0 },
-  },
-  agents: [{ name: 'a1', role: 'architect', model: 'gpt-4', status: 'idle', config: {} }],
-  knowledge: { core: [], procedural: [], semantic: [], episodic: [] },
-  training: { corrections: [], feedback: [] },
-};
-
-const MOCK_EXPORT_RESULT = {
-  bundle: MOCK_BUNDLE,
-  outputDir: '/tmp/test.flightdeck-team',
-  filesWritten: ['/tmp/test.flightdeck-team/manifest.json'],
-};
-
 const MOCK_TRAINING_SUMMARY = {
   totalCorrections: 3,
   totalFeedback: 5,
@@ -65,10 +47,6 @@ function minimalCtx(overrides: Partial<AppContext> = {}): AppContext {
     lockRegistry: {} as any,
     activityLedger: {} as any,
     decisionLog: {} as any,
-    teamExporter: {
-      exportBundle: vi.fn().mockReturnValue(MOCK_BUNDLE),
-      exportToDirectory: vi.fn().mockReturnValue(MOCK_EXPORT_RESULT),
-    } as any,
     agentRoster: {
       getAllAgents: vi.fn((_status?: any, teamId?: string) => {
         if (teamId) return MOCK_AGENTS.filter((a) => a.teamId === teamId);
@@ -80,17 +58,6 @@ function minimalCtx(overrides: Partial<AppContext> = {}): AppContext {
     } as any,
     trainingCapture: {
       getTrainingSummary: vi.fn().mockReturnValue(MOCK_TRAINING_SUMMARY),
-    } as any,
-    teamImporter: {
-      import: vi.fn().mockReturnValue({
-        success: true,
-        teamId: 'team-1',
-        validation: { valid: true, issues: [] },
-        agents: [{ name: 'a1', action: 'created', newAgentId: 'new-1' }],
-        knowledge: { imported: 1, skipped: 0, conflicts: 0 },
-        training: { correctionsImported: 0, feedbackImported: 0 },
-        warnings: [],
-      }),
     } as any,
     ...overrides,
   } as AppContext;
@@ -124,210 +91,6 @@ function createTestServer(ctxOverrides: Partial<AppContext> = {}): {
 // ── Tests ───────────────────────────────────────────────────────────
 
 describe('teamsRoutes', () => {
-  // ── POST /teams/:teamId/export ──────────────────────────────────
-
-  describe('POST /teams/:teamId/export', () => {
-    it('exports team as JSON when no outputPath', async () => {
-      const srv = createTestServer();
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/export`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const body = await res.json();
-
-        expect(res.status).toBe(200);
-        expect(body.success).toBe(true);
-        expect(body.bundle).toBeDefined();
-        expect(body.bundle.manifest.bundleFormat).toBe('1.0');
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('exports team to directory when outputPath provided', async () => {
-      const srv = createTestServer();
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/export`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outputPath: '/tmp/export' }),
-        });
-        const body = await res.json();
-
-        expect(res.status).toBe(200);
-        expect(body.success).toBe(true);
-        expect(body.bundlePath).toBe('/tmp/test.flightdeck-team');
-        expect(body.filesWritten).toBe(1);
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('passes filter options to exporter', async () => {
-      const srv = createTestServer();
-      const base = await srv.start();
-      try {
-        await fetch(`${base}/teams/team-1/export`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agents: ['a1'],
-            categories: ['core'],
-            includeTraining: false,
-            excludeEpisodic: true,
-          }),
-        });
-
-        expect(srv.ctx.teamExporter!.exportBundle).toHaveBeenCalledWith('team-1', {
-          agentIds: ['a1'],
-          categories: ['core'],
-          includeKnowledge: undefined,
-          includeTraining: false,
-          excludeEpisodic: true,
-        });
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 503 when exporter not available', async () => {
-      const srv = createTestServer({ teamExporter: undefined });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/export`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        expect(res.status).toBe(503);
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 500 on export error', async () => {
-      const srv = createTestServer({
-        teamExporter: {
-          exportBundle: vi.fn().mockImplementation(() => { throw new Error('disk full'); }),
-          exportToDirectory: vi.fn(),
-        } as any,
-      });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/export`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const body = await res.json();
-        expect(res.status).toBe(500);
-        expect(body.error).toContain('disk full');
-      } finally {
-        await srv.stop();
-      }
-    });
-  });
-
-  // ── POST /teams/import ──────────────────────────────────────────
-
-  describe('POST /teams/import', () => {
-    it('imports a valid bundle', async () => {
-      const srv = createTestServer();
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/import`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bundle: MOCK_BUNDLE, projectId: 'proj-1' }),
-        });
-        const body = await res.json();
-        expect(res.status).toBe(200);
-        expect(body.success).toBe(true);
-        expect(body.report.teamId).toBe('team-1');
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 400 when bundle missing', async () => {
-      const srv = createTestServer();
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/import`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: 'proj-1' }),
-        });
-        expect(res.status).toBe(400);
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 400 when projectId missing', async () => {
-      const srv = createTestServer();
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/import`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bundle: MOCK_BUNDLE }),
-        });
-        expect(res.status).toBe(400);
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 422 when validation fails', async () => {
-      const srv = createTestServer({
-        teamImporter: {
-          import: vi.fn().mockReturnValue({
-            success: false,
-            teamId: 'team-1',
-            validation: { valid: false, issues: [{ phase: 'integrity', severity: 'error', message: 'bad checksum' }] },
-            agents: [],
-            knowledge: { imported: 0, skipped: 0, conflicts: 0 },
-            training: { correctionsImported: 0, feedbackImported: 0 },
-            warnings: [],
-          }),
-        } as any,
-      });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/import`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bundle: MOCK_BUNDLE, projectId: 'proj-1' }),
-        });
-        expect(res.status).toBe(422);
-        const body = await res.json();
-        expect(body.success).toBe(false);
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 503 when importer not available', async () => {
-      const srv = createTestServer({ teamImporter: undefined });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/import`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bundle: MOCK_BUNDLE, projectId: 'proj-1' }),
-        });
-        expect(res.status).toBe(503);
-      } finally {
-        await srv.stop();
-      }
-    });
-  });
-
   // ── GET /teams ──────────────────────────────────────────────────
 
   describe('GET /teams', () => {

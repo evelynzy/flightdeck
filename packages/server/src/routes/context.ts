@@ -24,8 +24,6 @@ import type { MassFailureDetector } from '../transport/MassFailureDetector.js';
 import type { AgentRosterRepository } from '../db/AgentRosterRepository.js';
 import type { AgentServerClient } from '../agents/AgentServerClient.js';
 import type { AgentServerHealth } from '../agents/AgentServerHealth.js';
-import type { TeamExporter } from '../teams/TeamExporter.js';
-import type { TeamImporter } from '../teams/TeamImporter.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { execSync } from 'node:child_process';
 
@@ -75,8 +73,6 @@ export interface AppContext {
   agentServerClient?: AgentServerClient;
   agentServerHealth?: AgentServerHealth;
   massFailureDetector?: MassFailureDetector;
-  teamExporter?: TeamExporter;
-  teamImporter?: TeamImporter;
   agentRoster?: AgentRosterRepository;
   integrationRouter?: import('../integrations/IntegrationRouter.js').IntegrationRouter;
   configStore?: import('../config/ConfigStore.js').ConfigStore;
