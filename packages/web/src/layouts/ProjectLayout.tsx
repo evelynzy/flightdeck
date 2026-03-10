@@ -231,11 +231,9 @@ export function ProjectLayout() {
     } catch { /* Gracefully ignore corrupt localStorage */ }
   }, [id, activeTab]);
 
-  // Restore last tab on initial navigation to project root
-  const isProjectRoot = Boolean(id) && (
-    location.pathname === `/projects/${id}` ||
-    location.pathname === `/projects/${id}/overview`
-  );
+  // Restore last tab on initial navigation to project root (bare /projects/:id only)
+  const isProjectRoot = Boolean(id) &&
+    location.pathname === `/projects/${id}`;
   useEffect(() => {
     if (!id || !isProjectRoot) return;
     try {
