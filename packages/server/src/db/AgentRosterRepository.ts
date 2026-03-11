@@ -2,7 +2,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import type { Database } from './database.js';
 import { agentRoster } from './schema.js';
 
-export type RosterAgentStatus = 'idle' | 'busy' | 'terminated' | 'retired';
+export type RosterAgentStatus = 'idle' | 'busy' | 'terminated';
 
 export interface AgentRecord {
   agentId: string;
@@ -197,27 +197,6 @@ export class AgentRosterRepository {
     return deleted;
   }
 
-  retireAgent(agentId: string, reason?: string): boolean {
-    const now = new Date().toISOString();
-    const existing = this.getAgent(agentId);
-    if (!existing) return false;
-
-    const meta = existing.metadata ?? {};
-    (meta as Record<string, unknown>).retiredAt = now;
-    if (reason) (meta as Record<string, unknown>).retiredReason = reason;
-
-    const result = this.db.drizzle
-      .update(agentRoster)
-      .set({
-        status: 'retired' as RosterAgentStatus,
-        metadata: JSON.stringify(meta),
-        updatedAt: now,
-      })
-      .where(eq(agentRoster.agentId, agentId))
-      .run();
-    return result.changes > 0;
-  }
-
   cloneAgent(sourceAgentId: string, newAgentId: string): AgentRecord | undefined {
     const source = this.getAgent(sourceAgentId);
     if (!source) return undefined;
@@ -249,7 +228,7 @@ export class AgentRosterRepository {
 
   getStatusCounts(teamId?: string): Record<string, number> {
     const agents = this.getAllAgents(undefined, teamId);
-    const counts: Record<string, number> = { idle: 0, busy: 0, terminated: 0, retired: 0 };
+    const counts: Record<string, number> = { idle: 0, busy: 0, terminated: 0 };
     for (const a of agents) {
       counts[a.status] = (counts[a.status] ?? 0) + 1;
     }

@@ -119,7 +119,7 @@ export function teamsRoutes(ctx: AppContext): Router {
 
     const teamId = paramStr(req.params.teamId);
     const statusFilter = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const validStatuses = new Set(['idle', 'busy', 'terminated', 'retired']);
+    const validStatuses = new Set(['idle', 'busy', 'terminated']);
 
     if (statusFilter && !validStatuses.has(statusFilter)) {
       return res.status(400).json({ error: `Invalid status filter: ${statusFilter}` });
@@ -127,7 +127,7 @@ export function teamsRoutes(ctx: AppContext): Router {
 
     try {
       const agents = agentRoster.getAllAgents(
-        statusFilter as 'idle' | 'busy' | 'terminated' | 'retired' | undefined,
+        statusFilter as 'idle' | 'busy' | 'terminated' | undefined,
         teamId,
       );
 
@@ -241,7 +241,6 @@ export function teamsRoutes(ctx: AppContext): Router {
           status: a.status,
           uptimeMs,
           lastTaskSummary: a.lastTaskSummary,
-          retiredAt: (meta as any).retiredAt,
           clonedFromId: (meta as any).clonedFromId,
         };
       });
@@ -254,39 +253,6 @@ export function teamsRoutes(ctx: AppContext): Router {
       });
     } catch (err: any) {
       logger.error({ module: 'teams', msg: 'Failed to get team health', teamId, err: err.message });
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // ── POST /teams/:teamId/agents/:agentId/retire ─────────────────
-
-  router.post('/teams/:teamId/agents/:agentId/retire', writeLimiter, (req, res) => {
-    if (!agentRoster) {
-      return res.status(503).json({ error: 'Agent roster not available' });
-    }
-
-    const agentId = Array.isArray(req.params.agentId) ? req.params.agentId[0] : req.params.agentId;
-    const { reason } = req.body ?? {};
-
-    try {
-      const agent = agentRoster.getAgent(agentId);
-      if (!agent) {
-        return res.status(404).json({ error: `Agent ${agentId} not found` });
-      }
-
-      if (agent.status === 'retired') {
-        return res.status(409).json({ error: `Agent ${agentId} is already retired` });
-      }
-
-      const ok = agentRoster.retireAgent(agentId, reason);
-      if (!ok) {
-        return res.status(500).json({ error: 'Failed to retire agent' });
-      }
-
-      logger.info({ module: 'teams', msg: 'Agent retired', agentId, reason });
-      res.json({ ok: true, agentId, status: 'retired' });
-    } catch (err: any) {
-      logger.error({ module: 'teams', msg: 'Failed to retire agent', agentId, err: err.message });
       res.status(500).json({ error: err.message });
     }
   });
@@ -405,7 +371,7 @@ export function teamsRoutes(ctx: AppContext): Router {
     const lead = agentRoster.getAgent(leadId);
     if (!lead) return res.status(404).json({ error: 'Crew not found — lead agent not in roster' });
 
-    // Don't allow deleting active crews — only terminated/retired
+    // Don't allow deleting active crews — only terminated
     const liveAgents = agentManager.getAll();
     const liveLeadAgent = liveAgents.find(a => a.id === leadId);
     if (liveLeadAgent && (liveLeadAgent.status === 'running' || liveLeadAgent.status === 'idle')) {

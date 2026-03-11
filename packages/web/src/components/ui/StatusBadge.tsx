@@ -117,7 +117,6 @@ export function agentStatusProps(
 
   // liveStatus is null/undefined — agent not in memory. Fall back to DB status.
   if (status === 'terminated') return { variant: 'error', label: 'Terminated' };
-  if (status === 'retired')    return { variant: 'neutral', label: 'Retired' };
   // DB says idle/busy but agent not live → offline
   return { variant: 'neutral', label: 'Offline' };
 }

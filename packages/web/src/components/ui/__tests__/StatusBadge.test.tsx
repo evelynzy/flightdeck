@@ -138,10 +138,6 @@ describe('agentStatusProps', () => {
     expect(agentStatusProps('terminated')).toEqual({ variant: 'error', label: 'Terminated' });
   });
 
-  it('maps retired status to neutral', () => {
-    expect(agentStatusProps('retired')).toEqual({ variant: 'neutral', label: 'Retired' });
-  });
-
   it('maps unknown status without liveStatus to Offline', () => {
     expect(agentStatusProps('custom')).toEqual({ variant: 'neutral', label: 'Offline' });
   });

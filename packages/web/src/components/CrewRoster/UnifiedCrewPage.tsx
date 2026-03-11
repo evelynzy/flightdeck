@@ -45,7 +45,7 @@ import { useAppStore } from '../../stores/appStore';
 
 // ── Types (shared with CrewRoster) ─────────────────────────
 
-type RosterStatus = 'idle' | 'busy' | 'terminated' | 'retired';
+type RosterStatus = 'idle' | 'busy' | 'terminated';
 type LiveStatus = 'creating' | 'running' | 'idle' | 'completed' | 'failed' | 'terminated' | null;
 type ProfileTab = 'overview' | 'chat' | 'settings';
 
@@ -312,9 +312,9 @@ function AgentRow({ agent, isLead, isSelected, onSelect, onRemove, crewAgents }:
   // Check if this is a lead with children
   const hasChildren = isLead && crewAgents && crewAgents.some(a => a.parentId === agent.agentId && a.agentId !== agent.agentId);
 
-  // Only show remove button for terminated/retired agents that aren't leads with children
+  // Only show remove button for terminated agents that aren't leads with children
   const canRemove = !hasChildren &&
-                    (agent.status === 'terminated' || agent.status === 'retired') &&
+                    agent.status === 'terminated' &&
                     (!agent.liveStatus || agent.liveStatus === 'terminated' || agent.liveStatus === 'failed' || agent.liveStatus === 'completed');
 
   const handleRemove = async (e: React.MouseEvent) => {
@@ -823,7 +823,7 @@ export function UnifiedCrewPage({ scope = 'global' }: UnifiedCrewPageProps) {
             className="w-full pl-9 pr-3 py-2 text-sm rounded bg-th-bg-alt border border-th-border text-th-text placeholder:text-th-text-alt" />
         </div>
         <div className="flex gap-1">
-          {(['all', 'idle', 'busy', 'terminated', 'retired'] as const).map(s => (
+          {(['all', 'idle', 'busy', 'terminated'] as const).map(s => (
             <button key={s} onClick={() => setStatusFilter(s)}
               className={`px-3 py-1.5 text-xs rounded capitalize transition-colors ${
                 statusFilter === s

@@ -82,7 +82,7 @@ const rosterAgents = [
 const healthData = {
   teamId: 'default',
   totalAgents: 3,
-  statusCounts: { busy: 1, idle: 1, terminated: 1, retired: 0 },
+  statusCounts: { busy: 1, idle: 1, terminated: 1 },
   massFailurePaused: false,
   agents: [
     { agentId: 'aa11bb22-cc33-dd44-ee55-ff6677889900', role: 'architect', model: 'claude-sonnet-4-6', status: 'busy', uptimeMs: 540_000_000, lastTaskSummary: 'Designing auth module' },
@@ -191,7 +191,6 @@ describe('CrewPage', () => {
     });
     expect(screen.getByTestId('card-active')).toBeInTheDocument();
     expect(screen.getByTestId('card-idle')).toBeInTheDocument();
-    expect(screen.getByTestId('card-retired')).toBeInTheDocument();
   });
 
   it('renders agent cards with roles and IDs', async () => {
@@ -404,7 +403,7 @@ describe('CrewPage', () => {
     const callCount = mockApiFetch.mock.calls.length;
     act(() => {
       window.dispatchEvent(new MessageEvent('ws-message', {
-        data: JSON.stringify({ type: 'team:agent_retired' }),
+        data: JSON.stringify({ type: 'team:agent_cloned' }),
       }));
     });
     await waitFor(() => {

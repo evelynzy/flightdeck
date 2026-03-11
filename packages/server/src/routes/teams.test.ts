@@ -2,7 +2,7 @@
  * Teams route tests.
  *
  * Covers: list teams, team details, agent profiles, health,
- * retire/clone, crews summary, error handling, and missing dependencies.
+ * clone, crews summary, error handling, and missing dependencies.
  */
 import { describe, it, expect, vi, afterAll } from 'vitest';
 import express from 'express';
@@ -176,7 +176,7 @@ describe('teamsRoutes', () => {
       const srv = createTestServer({
         agentRoster: {
           getAllAgents: vi.fn().mockReturnValue(MOCK_AGENTS),
-          getStatusCounts: vi.fn().mockReturnValue({ idle: 1, busy: 2, retired: 0, terminated: 0 }),
+          getStatusCounts: vi.fn().mockReturnValue({ idle: 1, busy: 2, terminated: 0 }),
         } as any,
       });
       const base = await srv.start();
@@ -186,7 +186,7 @@ describe('teamsRoutes', () => {
         const body = await res.json();
         expect(body.teamId).toBe('team-1');
         expect(body.totalAgents).toBe(3);
-        expect(body.statusCounts).toEqual({ idle: 1, busy: 2, retired: 0, terminated: 0 });
+        expect(body.statusCounts).toEqual({ idle: 1, busy: 2, terminated: 0 });
         expect(body.agents).toHaveLength(3);
         expect(body.agents[0]).toHaveProperty('uptimeMs');
       } finally {
@@ -215,91 +215,6 @@ describe('teamsRoutes', () => {
       const base = await srv.start();
       try {
         const res = await fetch(`${base}/teams/team-1/health`);
-        expect(res.status).toBe(503);
-      } finally {
-        await srv.stop();
-      }
-    });
-  });
-
-  // ── POST /teams/:teamId/agents/:agentId/retire ─────────────────
-
-  describe('POST /teams/:teamId/agents/:agentId/retire', () => {
-    it('retires an agent', async () => {
-      const srv = createTestServer({
-        agentRoster: {
-          getAgent: vi.fn().mockReturnValue({ agentId: 'a1', status: 'idle' }),
-          retireAgent: vi.fn().mockReturnValue(true),
-          getAllAgents: vi.fn().mockReturnValue(MOCK_AGENTS),
-        } as any,
-      });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/agents/a1/retire`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: 'end of project' }),
-        });
-        expect(res.status).toBe(200);
-        const body = await res.json();
-        expect(body.ok).toBe(true);
-        expect(body.status).toBe('retired');
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 404 for unknown agent', async () => {
-      const srv = createTestServer({
-        agentRoster: {
-          getAgent: vi.fn().mockReturnValue(undefined),
-          getAllAgents: vi.fn().mockReturnValue(MOCK_AGENTS),
-        } as any,
-      });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/agents/unknown/retire`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        expect(res.status).toBe(404);
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 409 if already retired', async () => {
-      const srv = createTestServer({
-        agentRoster: {
-          getAgent: vi.fn().mockReturnValue({ agentId: 'a1', status: 'retired' }),
-          getAllAgents: vi.fn().mockReturnValue(MOCK_AGENTS),
-        } as any,
-      });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/agents/a1/retire`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        expect(res.status).toBe(409);
-        const body = await res.json();
-        expect(body.error).toContain('already retired');
-      } finally {
-        await srv.stop();
-      }
-    });
-
-    it('returns 503 when roster not available', async () => {
-      const srv = createTestServer({ agentRoster: undefined });
-      const base = await srv.start();
-      try {
-        const res = await fetch(`${base}/teams/team-1/agents/a1/retire`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
         expect(res.status).toBe(503);
       } finally {
         await srv.stop();

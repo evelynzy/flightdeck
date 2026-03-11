@@ -14,7 +14,6 @@ import {
   Activity,
   Clock,
   PauseCircle,
-  UserMinus,
   X,
   Download,
   Upload,
@@ -34,7 +33,7 @@ import type { TabItem } from '../components/ui/Tabs';
 // ── Types ─────────────────────────────────────────────────
 
 type CrewTab = 'roster' | 'health' | 'export';
-type AgentStatus = 'idle' | 'busy' | 'terminated' | 'retired';
+type AgentStatus = 'idle' | 'busy' | 'terminated';
 type LiveStatus = 'creating' | 'running' | 'idle' | 'completed' | 'failed' | 'terminated' | null;
 type ProfileTab = 'overview' | 'history' | 'knowledge' | 'skills' | 'settings';
 type SortField = 'role' | 'status' | 'updatedAt';
@@ -70,7 +69,6 @@ export interface AgentHealthInfo {
   status: string;
   uptimeMs: number;
   lastTaskSummary?: string;
-  retiredAt?: string;
   clonedFromId?: string;
 }
 
@@ -813,7 +811,7 @@ export function CrewPage() {
       try {
         const raw = (event as MessageEvent).data;
         const msg = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (msg.type === 'team:agent_retired' || msg.type === 'team:agent_cloned') {
+        if (msg.type === 'team:agent_cloned') {
           fetchData();
         }
       } catch { /* ignore */ }
@@ -975,7 +973,7 @@ export function CrewPage() {
             </div>
 
             <div className="flex gap-1">
-              {(['all', 'busy', 'idle', 'retired', 'terminated'] as const).map(s => (
+              {(['all', 'busy', 'idle', 'terminated'] as const).map(s => (
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
@@ -1074,13 +1072,6 @@ export function CrewPage() {
               icon={<PauseCircle className="w-4 h-4" />}
               color="text-blue-400"
               testId="card-idle"
-            />
-            <OverviewCard
-              label="Retired"
-              count={statusCounts.retired ?? 0}
-              icon={<UserMinus className="w-4 h-4" />}
-              color="text-gray-400"
-              testId="card-retired"
             />
           </div>
         </>

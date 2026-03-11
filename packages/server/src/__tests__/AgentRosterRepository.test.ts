@@ -320,7 +320,7 @@ describe('AgentRosterRepository', () => {
 
     it('returns 0 when no busy/idle agents exist', () => {
       repo.upsertAgent('a1', 'dev', 'model', 'terminated');
-      repo.upsertAgent('a2', 'dev', 'model', 'retired');
+      repo.upsertAgent('a2', 'dev', 'model', 'terminated');
 
       const reconciled = repo.reconcileStaleAgents(() => false);
       expect(reconciled).toBe(0);
