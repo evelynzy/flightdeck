@@ -67,6 +67,9 @@ export function AgentDetailModal({ agentId, onClose }: AgentDetailModalProps) {
             </div>
             <div className="flex items-center gap-3 mt-0.5 text-xs text-th-text-muted font-mono">
               <span>{agent.id.slice(0, 8)}</span>
+              {agent.provider && (
+                <span className="bg-blue-500/15 text-blue-400 px-1.5 rounded">{agent.provider}</span>
+              )}
               {agent.model && (
                 <span className="bg-th-bg-muted/50 px-1.5 rounded">{agent.model}</span>
               )}

@@ -71,6 +71,16 @@ const CONFIG_ROLES = [
   'lead',
 ];
 
+/** Check if a model is native to the given provider.
+ *  Copilot supports all models natively (routes to the right backend). */
+function isModelNativeToProvider(modelId: string, provider: string): boolean {
+  if (provider === 'copilot') return true;
+  if (provider === 'claude') return modelId.startsWith('claude-');
+  if (provider === 'gemini') return modelId.startsWith('gemini-');
+  if (provider === 'codex' || provider === 'cursor') return modelId.startsWith('gpt-');
+  return false;
+}
+
 interface Props {
   /** Project ID — if provided, loads/saves config for this project */
   projectId?: string;
@@ -85,25 +95,33 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
   const [config, setConfig] = useState<ModelConfigMap>(value ?? {});
   const [defaults, setDefaults] = useState<ModelConfigMap>({});
   const [allModels, setAllModels] = useState<string[]>([]);
+  const [activeProvider, setActiveProvider] = useState<string>('copilot');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch available models and defaults
+  // Fetch available models, defaults, and active provider
   useEffect(() => {
-    apiFetch<ModelsListResponse>('/models')
-      .then((data) => {
-        setAllModels(data.models);
-        setDefaults(data.defaults);
+    const fetchAll = async () => {
+      try {
+        const [modelsData, configData] = await Promise.all([
+          apiFetch<ModelsListResponse>('/models'),
+          apiFetch<{ provider?: string }>('/config'),
+        ]);
+        setAllModels(modelsData.models);
+        setDefaults(modelsData.defaults);
+        if (configData.provider) setActiveProvider(configData.provider);
         if (!value && !projectId) {
-          setConfig(data.defaults);
+          setConfig(modelsData.defaults);
         }
-      })
-      .catch(() => setError('Failed to load models'))
-      .finally(() => {
+      } catch {
+        setError('Failed to load models');
+      } finally {
         if (!projectId) setLoading(false);
-      });
+      }
+    };
+    fetchAll();
   }, []);
 
   // Fetch project-specific config if projectId is provided
@@ -225,6 +243,7 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
               <div className="flex flex-wrap gap-1">
                 {allModels.map((modelId) => {
                   const isSelected = allowedModels.includes(modelId);
+                  const isNative = isModelNativeToProvider(modelId, activeProvider);
                   return (
                     <button
                       key={modelId}
@@ -234,11 +253,12 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
                           ? 'bg-yellow-600/20 border-yellow-500/50 text-yellow-600 dark:text-yellow-200'
                           : 'bg-th-bg border-th-border text-th-text-muted hover:border-th-border-hover opacity-50'
                       }`}
-                      title={MODEL_NAMES[modelId] || modelId}
+                      title={`${MODEL_NAMES[modelId] || modelId}${isNative ? '' : ' (cross-provider)'}`}
                     >
                       {compact
                         ? modelId.replace('claude-', '').replace('gemini-3-pro-preview', 'gemini-3').replace('gpt-', 'g')
                         : MODEL_NAMES[modelId] || modelId}
+                      {!isNative && <span className="ml-0.5 opacity-60">↔</span>}
                     </button>
                   );
                 })}

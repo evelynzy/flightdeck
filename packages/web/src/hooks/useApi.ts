@@ -83,10 +83,10 @@ export function useApi() {
     setConfig(config);
   }, [setConfig]);
 
-  const spawnAgent = useCallback(async (roleId: string, task?: string) => {
+  const spawnAgent = useCallback(async (roleId: string, task?: string, options?: { model?: string; provider?: string }) => {
     return apiFetch('/agents', {
       method: 'POST',
-      body: JSON.stringify({ roleId, task }),
+      body: JSON.stringify({ roleId, task, ...options }),
     });
   }, []);
 
