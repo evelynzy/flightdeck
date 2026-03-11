@@ -149,7 +149,7 @@ export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props)
           <tr className="border-b border-th-border text-th-text-muted text-xs uppercase tracking-wider">
             <th className="text-left px-3 py-2">Agent</th>
             <th className="text-left px-3 py-2">Status</th>
-            <th className="text-left px-3 py-2 hidden md:table-cell">Model</th>
+            <th className="text-left px-3 py-2 hidden md:table-cell">Provider / Model</th>
             <th className="text-left px-3 py-2 hidden md:table-cell">Task</th>
             <th className="text-left px-3 py-2">Current Activity</th>
             <th className="text-left px-3 py-2 hidden lg:table-cell">Progress</th>
@@ -207,34 +207,46 @@ export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props)
                     <span className={`w-2 h-2 rounded-full ${STATUS_DOT[agent.status] ?? 'bg-gray-400'}`} />
                     <span className="text-xs text-th-text-alt capitalize">{agent.status}</span>
                   </div>
+                  {agent.status === 'failed' && agent.exitError && (
+                    <div className="text-[10px] text-red-400 mt-0.5 truncate max-w-[140px]" title={agent.exitError}>
+                      {agent.exitError}
+                    </div>
+                  )}
                 </td>
 
-                {/* Model */}
+                {/* Provider + Model */}
                 <td className="px-3 py-2.5 hidden md:table-cell">
-                  {isActive ? (
-                    <select
-                      value={currentModel}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        api.updateAgent(agent.id, { model: e.target.value });
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-[10px] bg-th-bg-alt border border-th-border text-th-text-alt rounded px-1 py-0.5 focus:outline-none focus:border-accent cursor-pointer max-w-[120px]"
-                    >
-                      {(() => {
-                        const options = AVAILABLE_MODELS.includes(currentModel)
-                          ? AVAILABLE_MODELS
-                          : [currentModel, ...AVAILABLE_MODELS];
-                        return options.map((m) => (
-                          <option key={m} value={m}>{shortModelName(m) || m}</option>
-                        ));
-                      })()}
-                    </select>
-                  ) : (
-                    <span className="text-[10px] text-th-text-muted">
-                      {currentModel ? shortModelName(currentModel) : '—'}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {agent.provider && (
+                      <span className="text-[10px] bg-blue-500/15 text-blue-400 px-1 py-px rounded shrink-0">
+                        {agent.provider}
+                      </span>
+                    )}
+                    {isActive ? (
+                      <select
+                        value={currentModel}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          api.updateAgent(agent.id, { model: e.target.value });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[10px] bg-th-bg-alt border border-th-border text-th-text-alt rounded px-1 py-0.5 focus:outline-none focus:border-accent cursor-pointer max-w-[120px]"
+                      >
+                        {(() => {
+                          const options = AVAILABLE_MODELS.includes(currentModel)
+                            ? AVAILABLE_MODELS
+                            : [currentModel, ...AVAILABLE_MODELS];
+                          return options.map((m) => (
+                            <option key={m} value={m}>{shortModelName(m) || m}</option>
+                          ));
+                        })()}
+                      </select>
+                    ) : (
+                      <span className="text-[10px] text-th-text-muted">
+                        {currentModel ? shortModelName(currentModel) : '—'}
+                      </span>
+                    )}
+                  </div>
                 </td>
 
                 {/* Task */}
@@ -289,15 +301,17 @@ export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props)
                 {/* Locks */}
                 <td className="px-3 py-2.5 hidden lg:table-cell">
                   {agentLocks.length > 0 ? (
-                    <div className="flex items-center gap-1">
+                    <div className="space-y-0.5">
                       <span className="text-[10px] text-purple-400">🔒 {agentLocks.length}</span>
-                      <span
-                        className="text-[10px] text-th-text-muted truncate max-w-[100px]"
-                        title={agentLocks.map((l) => l.filePath).join(', ')}
-                      >
-                        {agentLocks[0].filePath.split('/').pop()}
-                        {agentLocks.length > 1 && ` +${agentLocks.length - 1}`}
-                      </span>
+                      {agentLocks.map((l) => (
+                        <div
+                          key={l.filePath}
+                          className="text-[10px] text-th-text-muted font-mono truncate max-w-[150px]"
+                          title={l.filePath}
+                        >
+                          {l.filePath.split('/').pop()}
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <span className="text-xs text-th-text-muted">—</span>
