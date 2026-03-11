@@ -147,7 +147,7 @@ export function AgentCard({ agent, api }: Props) {
           )}
           <span className="text-[10px] text-th-text-muted">Model:</span>
           <select
-            value={agent.model || agent.role.model || ''}
+            value={agent.model || ''}
             onChange={(e) => {
               e.stopPropagation();
               api.updateAgent(agent.id, { model: e.target.value });
@@ -156,7 +156,7 @@ export function AgentCard({ agent, api }: Props) {
             className="text-[10px] bg-th-bg-alt border border-th-border text-th-text-alt rounded px-1 py-0.5 focus:outline-none focus:border-accent cursor-pointer"
           >
             {(() => {
-              const currentModel = agent.model || agent.role.model || '';
+              const currentModel = agent.model || '';
               const options = AVAILABLE_MODELS.includes(currentModel)
                 ? AVAILABLE_MODELS
                 : [currentModel, ...AVAILABLE_MODELS];

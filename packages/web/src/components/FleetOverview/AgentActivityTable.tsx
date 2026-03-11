@@ -155,7 +155,7 @@ export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props)
             const planTotal = agent.plan?.length ?? 0;
             const planDone = agent.plan?.filter((p) => p.status === 'completed').length ?? 0;
             const isActive = agent.status === 'running' || agent.status === 'idle';
-            const currentModel = agent.model || agent.role.model || '';
+            const currentModel = agent.model || '';
 
             return (
               <tr

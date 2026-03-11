@@ -66,9 +66,9 @@ export function CrewStatus({ agents, delegations }: Props) {
                     {agent.provider && (
                       <span className="text-[10px] bg-blue-500/15 text-blue-400 px-1 py-px rounded">{agent.provider}</span>
                     )}
-                    {(agent.model || agent.role.model) && (
-                      <span className="text-[10px] font-mono text-th-text-muted bg-th-bg-muted/50 px-1 rounded" title={agent.model || agent.role.model}>
-                        {shortModel(agent.model || agent.role.model)}
+                    {(agent.model) && (
+                      <span className="text-[10px] font-mono text-th-text-muted bg-th-bg-muted/50 px-1 rounded" title={agent.model}>
+                        {shortModel(agent.model)}
                       </span>
                     )}
                     <AgentIdBadge id={agent.id} />

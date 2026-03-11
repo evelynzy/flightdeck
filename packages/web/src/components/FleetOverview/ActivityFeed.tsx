@@ -129,7 +129,7 @@ export function ActivityFeed({ activity, agents }: Props) {
                       <span className="text-lg">{agent.role.icon}</span>
                       <div>
                         <p className="text-sm font-mono text-th-text-alt">{agent.role.name}</p>
-                        <p className="text-[10px] font-mono text-th-text-muted">{agent.id.slice(0, 8)} · {agent.status}{agent.provider ? ` · ${agent.provider}` : ''} · {agent.model || agent.role.model || 'default'}</p>
+                        <p className="text-[10px] font-mono text-th-text-muted">{agent.id.slice(0, 8)} · {agent.status}{agent.provider ? ` · ${agent.provider}` : ''} · {agent.model || 'default'}</p>
                       </div>
                     </div>
                   ) : (

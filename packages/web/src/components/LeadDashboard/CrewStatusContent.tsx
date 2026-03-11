@@ -109,18 +109,18 @@ export function CrewStatusContent({ agents, delegations, comms, activity, allAge
                     {agent.provider && (
                       <span className="text-[9px] bg-blue-500/15 text-blue-400 px-1 py-px rounded shrink-0">{agent.provider}</span>
                     )}
-                    {(agent.model || agent.role.model) && (
-                      <span className="text-[9px] font-mono text-th-text-muted bg-th-bg-muted/50 px-1 rounded shrink-0">{agent.model || agent.role.model}</span>
+                    {(agent.model) && (
+                      <span className="text-[9px] font-mono text-th-text-muted bg-th-bg-muted/50 px-1 rounded shrink-0">{agent.model}</span>
                     )}
                   </div>
                 )}
-                {!delegation && (agent.model || agent.role.model) && (
+                {!delegation && (agent.model) && (
                   <div className="flex items-center justify-end gap-1.5 mt-0.5">
                     {agent.provider && (
                       <span className="text-[9px] bg-blue-500/15 text-blue-400 px-1 py-px rounded shrink-0">{agent.provider}</span>
                     )}
-                    {(agent.model || agent.role.model) && (
-                      <span className="text-[9px] font-mono text-th-text-muted bg-th-bg-muted/50 px-1 rounded shrink-0">{agent.model || agent.role.model}</span>
+                    {(agent.model) && (
+                      <span className="text-[9px] font-mono text-th-text-muted bg-th-bg-muted/50 px-1 rounded shrink-0">{agent.model}</span>
                     )}
                   </div>
                 )}
