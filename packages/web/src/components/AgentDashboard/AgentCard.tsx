@@ -50,11 +50,6 @@ export function AgentCard({ agent, api }: Props) {
               <span className={`text-xs ${agentStatusText(agent.status)}`}>
                 {agent.status}
               </span>
-              {agent.status === 'failed' && agent.exitError && (
-                <span className="text-[10px] text-red-400 truncate max-w-[200px]" title={agent.exitError}>
-                  {agent.exitError}
-                </span>
-              )}
               {agent.sessionId && (
                 <button
                   className="text-[10px] font-mono text-th-text-muted bg-th-bg-alt/60 px-1 rounded hover:bg-th-bg-alt transition-colors"
@@ -151,8 +146,17 @@ export function AgentCard({ agent, api }: Props) {
         </div>
       )}
 
+      {agent.exitError && (
+        <div className="text-[10px] font-mono text-red-400 bg-red-900/20 border border-red-800/30 rounded px-2 py-1 mb-1 whitespace-pre-wrap max-h-12 overflow-hidden">
+          {agent.exitError.length > 120 ? agent.exitError.slice(0, 120) + '…' : agent.exitError}
+        </div>
+      )}
+
       {(agent.status === 'running' || agent.status === 'idle') && (
         <div className="flex items-center gap-1.5 mb-1">
+          {agent.provider && (
+            <span className="text-[10px] bg-blue-500/15 text-blue-400 px-1 py-0.5 rounded">{agent.provider}</span>
+          )}
           <span className="text-[10px] text-th-text-muted">Model:</span>
           <select
             value={agent.model || agent.role.model || ''}
@@ -176,9 +180,12 @@ export function AgentCard({ agent, api }: Props) {
         </div>
       )}
 
-      {!(agent.status === 'running' || agent.status === 'idle') && agent.model && (
-        <div className="text-[10px] text-th-text-muted mb-1">
-          Model: <span className="text-th-text-muted">{agent.model}</span>
+      {!(agent.status === 'running' || agent.status === 'idle') && (agent.model || agent.provider) && (
+        <div className="flex items-center gap-1.5 text-[10px] text-th-text-muted mb-1">
+          {agent.provider && (
+            <span className="bg-blue-500/15 text-blue-400 px-1 py-0.5 rounded">{agent.provider}</span>
+          )}
+          {agent.model && <span>{agent.model}</span>}
         </div>
       )}
 
