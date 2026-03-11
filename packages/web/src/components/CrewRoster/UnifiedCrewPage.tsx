@@ -793,12 +793,22 @@ export function UnifiedCrewPage({ scope = 'global' }: UnifiedCrewPageProps) {
 
   const handleDeleteCrew = useCallback(async (leadId: string) => {
     try {
-      await apiFetch(`/crews/${leadId}`, { method: 'DELETE' });
-      addToast('success', 'Crew deleted');
-      setAgents(prev => prev.filter(a => a.agentId !== leadId && a.parentId !== leadId));
+      if (leadId === 'unassigned') {
+        // Unassigned agents have no lead — remove each individually
+        const unassigned = agents.filter(a => !a.parentId && a.role !== 'lead');
+        await Promise.all(unassigned.map(a => apiFetch(`/roster/${a.agentId}`, { method: 'DELETE' })));
+        addToast('success', `Removed ${unassigned.length} unassigned agent(s)`);
+        setAgents(prev => prev.filter(a => a.parentId || a.role === 'lead'));
+      } else {
+        await apiFetch(`/crews/${leadId}`, { method: 'DELETE' });
+        addToast('success', 'Crew deleted');
+        setAgents(prev => prev.filter(a => a.agentId !== leadId && a.parentId !== leadId));
+      }
       if (selectedAgent) {
         const deletedAgent = agents.find(a => a.agentId === selectedAgent);
-        if (deletedAgent && (deletedAgent.agentId === leadId || deletedAgent.parentId === leadId)) {
+        if (deletedAgent && (leadId === 'unassigned'
+          ? (!deletedAgent.parentId && deletedAgent.role !== 'lead')
+          : (deletedAgent.agentId === leadId || deletedAgent.parentId === leadId))) {
           setSelectedAgent(null);
         }
       }
