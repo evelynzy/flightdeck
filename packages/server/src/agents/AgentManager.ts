@@ -71,8 +71,6 @@ export interface AgentManagerEvents {
   'agent:crashed': { agentId: string; code: number };
   'agent:auto_restarted': { agentId: string; crashCount: number };
   'agent:restart_limit': { agentId: string };
-  'agent:hung': { agentId: string; elapsedMs: number };
-  'agent:hung_terminated': { agentId: string };
   'agent:restarted': { oldId: string; newAgent: ReturnType<Agent['toJSON']> };
   // Events emitted via CommandDispatcher pass-through
   'agent:sub_spawned': { parentId: string; child: ReturnType<Agent['toJSON']> };
@@ -109,9 +107,6 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
   private agentThreads: Map<string, string> = new Map(); // agentId → conversationId
   private messageBuffers: Map<string, string> = new Map(); // agentId → buffered text
   private flushTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-  /** If set, auto-terminate agents after this many ms past the initial hung detection */
-  private autoTerminateTimeoutMs: number | null;
-  private hungTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private crashCounts: Map<string, number> = new Map();
   private maxRestarts: number;
   private autoRestart: boolean;
@@ -167,8 +162,6 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     this.maxConcurrent = config.maxConcurrentAgents;
     this.maxRestarts = maxRestarts;
     this.autoRestart = autoRestart;
-    this.autoTerminateTimeoutMs = null;
-
     const self = this;
     this.dispatcher = new CommandDispatcher({
       getAgent: (id) => this.agents.get(id),
@@ -712,7 +705,6 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     agent.onExit((code) => {
       runWithAgentContext(agent.id, agent.role.name, agent.projectId, () => {
       this.flushAgentMessage(agent.id);
-      this.clearHungTimer(agent.id);
       this.dispatcher.clearBuffer(agent.id);
       logger.info({ module: 'agent', msg: 'Agent exited', exitCode: code, role: agent.role.id, status: agent.status });
 
@@ -817,23 +809,6 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       });
     });
 
-    agent.onHung((elapsedMs) => {
-      runWithAgentContext(agent.id, agent.role.name, agent.projectId, () => {
-        this.emit('agent:hung', { agentId: agent.id, elapsedMs });
-
-        if (this.autoTerminateTimeoutMs !== null && !this.hungTimers.has(agent.id)) {
-          const timer = setTimeout(() => {
-            this.hungTimers.delete(agent.id);
-            if (agent.status === 'idle') {
-              this.terminate(agent.id).catch(() => {});
-              this.emit('agent:hung_terminated', { agentId: agent.id });
-            }
-          }, this.autoTerminateTimeoutMs);
-          this.hungTimers.set(agent.id, timer);
-        }
-      });
-    });
-
     // Helper: post-start actions (emit events after cwd is set)
     const postSpawn = () => {
       logger.info({ module: 'agent', msg: 'Agent spawned', role: role.name, parentAgentId: parentId, task });
@@ -893,7 +868,6 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
 
     const agent = this.agents.get(id);
     if (!agent) return false;
-    this.clearHungTimer(id);
     this.dispatcher.clearBuffer(id);
 
     // Release any file locks held by the terminated agent
@@ -1138,19 +1112,6 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
 
   setMaxRestarts(n: number): void {
     this.maxRestarts = n;
-  }
-
-  /** Set auto-terminate timeout (ms) for hung agents. Pass null to disable. */
-  setAutoTerminateTimeout(ms: number | null): void {
-    this.autoTerminateTimeoutMs = ms;
-  }
-
-  private clearHungTimer(agentId: string): void {
-    const timer = this.hungTimers.get(agentId);
-    if (timer) {
-      clearTimeout(timer);
-      this.hungTimers.delete(agentId);
-    }
   }
 
   async shutdownAll(): Promise<void> {

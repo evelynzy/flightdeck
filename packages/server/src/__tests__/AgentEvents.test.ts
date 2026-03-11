@@ -44,13 +44,6 @@ describe('AgentEventEmitter', () => {
     expect(listener).toHaveBeenCalledWith(0);
   });
 
-  it('notifies hung listeners', () => {
-    const listener = vi.fn();
-    emitter.onHung(listener);
-    emitter.notifyHung(30_000);
-    expect(listener).toHaveBeenCalledWith(30_000);
-  });
-
   it('notifies tool call listeners', () => {
     const listener = vi.fn();
     emitter.onToolCall(listener);

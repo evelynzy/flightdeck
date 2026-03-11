@@ -141,9 +141,4 @@ All events follow the shape `{ type: string, payload: object }`.
 | `lead:progress` | `{ agentId/leadId, ...progressData }` | Session progress update |
 | `lead:stalled` | `{ leadId, nudgeCount, idleDuration }` | Lead detected as stalled |
 
-### Context & Health
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `agent:hung` | `{ agentId, elapsedMs }` | Agent appears unresponsive |
-| `agent:hung_killed` | `{ agentId }` | Hung agent was killed |

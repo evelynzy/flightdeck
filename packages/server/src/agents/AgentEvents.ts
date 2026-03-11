@@ -43,7 +43,6 @@ export class AgentEventEmitter {
   private contentListeners: Array<(content: any) => void> = [];
   private thinkingListeners: Array<(text: string) => void> = [];
   private exitListeners: Array<(code: number) => void> = [];
-  private hungListeners: Array<(elapsedMs: number) => void> = [];
   private statusListeners: Array<(status: AgentStatus) => void> = [];
   private toolCallListeners: Array<(info: ToolCallInfo) => void> = [];
   private planListeners: Array<(entries: PlanEntry[]) => void> = [];
@@ -62,7 +61,6 @@ export class AgentEventEmitter {
   onContent(listener: (content: any) => void): void { this.contentListeners.push(listener); }
   onThinking(listener: (text: string) => void): void { this.thinkingListeners.push(listener); }
   onExit(listener: (code: number) => void): void { this.exitListeners.push(listener); }
-  onHung(listener: (elapsedMs: number) => void): void { this.hungListeners.push(listener); }
   onStatus(listener: (status: AgentStatus) => void): void { this.statusListeners.push(listener); }
   onToolCall(listener: (info: ToolCallInfo) => void): void { this.toolCallListeners.push(listener); }
   onPlan(listener: (entries: PlanEntry[]) => void): void { this.planListeners.push(listener); }
@@ -78,7 +76,6 @@ export class AgentEventEmitter {
   notifyContent(content: any): void { for (const l of this.contentListeners) l(content); }
   notifyThinking(text: string): void { for (const l of this.thinkingListeners) l(text); }
   notifyExit(code: number): void { for (const l of this.exitListeners) l(code); }
-  notifyHung(elapsedMs: number): void { for (const l of this.hungListeners) l(elapsedMs); }
   notifyToolCall(info: ToolCallInfo): void { for (const l of this.toolCallListeners) l(info); }
   notifyPlan(entries: PlanEntry[]): void { for (const l of this.planListeners) l(entries); }
   notifySessionReady(sessionId: string): void { for (const l of this.sessionReadyListeners) l(sessionId); }
@@ -112,7 +109,6 @@ export class AgentEventEmitter {
     this.dataListeners.length = 0;
     this.contentListeners.length = 0;
     this.exitListeners.length = 0;
-    this.hungListeners.length = 0;
     this.statusListeners.length = 0;
     this.toolCallListeners.length = 0;
     this.planListeners.length = 0;

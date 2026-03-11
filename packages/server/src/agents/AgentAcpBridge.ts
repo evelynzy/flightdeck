@@ -237,7 +237,6 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
       }
       agent.status = 'idle';
       agent._notifyStatusChange(agent.status);
-      agent._notifyHung(0);
     }
   }));
 

@@ -196,7 +196,6 @@ export class Agent {
   /** @internal */ _notifyContent(content: any): void { this.events.notifyContent(content); }
   /** @internal */ _notifyThinking(text: string): void { this.events.notifyThinking(text); }
   /** @internal */ _notifyExit(code: number): void { this.events.notifyExit(code); }
-  /** @internal */ _notifyHung(elapsedMs: number): void { this.events.notifyHung(elapsedMs); }
   /** @internal */ _notifyStatusChange(status: AgentStatus): void { this.events.notifyStatus(status); }
   /** @internal */ _notifyToolCall(info: ToolCallInfo): void { this.events.notifyToolCall(info); }
   /** @internal */ _notifyPlan(entries: PlanEntry[]): void { this.events.notifyPlan(entries); }
@@ -633,7 +632,6 @@ When you discover something important about the codebase, a pattern, a gotcha, o
   onData(listener: (data: string) => void): void { this.events.onData(listener); }
   onContent(listener: (content: any) => void): void { this.events.onContent(listener); }
   onExit(listener: (code: number) => void): void { this.events.onExit(listener); }
-  onHung(listener: (elapsedMs: number) => void): void { this.events.onHung(listener); }
   onStatus(listener: (status: AgentStatus) => void): void { this.events.onStatus(listener); }
   onToolCall(listener: (info: ToolCallInfo) => void): void { this.events.onToolCall(listener); }
   onPlan(listener: (entries: PlanEntry[]) => void): void { this.events.onPlan(listener); }
