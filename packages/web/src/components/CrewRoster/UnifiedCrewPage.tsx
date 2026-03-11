@@ -420,6 +420,7 @@ function ProfilePanel({ agentId, teamId, onClose }: { agentId: string; teamId: s
   const [showMessageInput, setShowMessageInput] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const ActivityIcon = Activity;
+  const liveAgent = useAppStore(s => s.agents.find(a => a.id === agentId));
 
   useEffect(() => {
     setLoading(true);
@@ -531,8 +532,8 @@ function ProfilePanel({ agentId, teamId, onClose }: { agentId: string; teamId: s
               <div><span className="text-th-text-alt">Team:</span> <span className="text-th-text">{profile.teamId}</span></div>
               <div><span className="text-th-text-alt">Project:</span> <span className="text-th-text">{profile.projectId ?? '—'}</span></div>
               <div><span className="text-th-text-alt">Knowledge:</span> <span className="text-th-text">{profile.knowledgeCount} entries</span></div>
-              <div><span className="text-th-text-alt">Created:</span> <span className="text-th-text">{new Date(profile.createdAt).toLocaleDateString()}</span></div>
-              <div><span className="text-th-text-alt">Last Active:</span> <span className="text-th-text">{new Date(profile.updatedAt).toLocaleDateString()}</span></div>
+              <div><span className="text-th-text-alt">Created:</span> <span className="text-th-text">{new Date(profile.createdAt).toLocaleString()}</span></div>
+              <div><span className="text-th-text-alt">Last Active:</span> <span className="text-th-text">{new Date(profile.updatedAt).toLocaleString()} ({formatRelativeTime(profile.updatedAt)})</span></div>
               {profile.live?.provider && (
                 <div><span className="text-th-text-alt">CLI:</span> <span className="text-th-text capitalize">{profile.live.provider}{profile.live.backend && profile.live.backend !== 'acp' ? ` (${profile.live.backend})` : ''}</span></div>
               )}
@@ -546,6 +547,25 @@ function ProfilePanel({ agentId, teamId, onClose }: { agentId: string; teamId: s
                 </div>
               )}
             </div>
+            {/* Token Usage */}
+            {liveAgent && (liveAgent.inputTokens || liveAgent.outputTokens) && (
+              <div className="p-3 rounded bg-th-bg-alt/50 border border-th-border/50">
+                <div className="flex items-center gap-2 text-th-text-alt text-xs mb-2">
+                  <Zap className="w-3.5 h-3.5" />Token Usage
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="text-th-text-alt">Input:</span> <span className="text-th-text font-medium">{(liveAgent.inputTokens ?? 0).toLocaleString()}</span></div>
+                  <div><span className="text-th-text-alt">Output:</span> <span className="text-th-text font-medium">{(liveAgent.outputTokens ?? 0).toLocaleString()}</span></div>
+                  {(liveAgent.cacheReadTokens ?? 0) > 0 && (
+                    <div><span className="text-th-text-alt">Cache Read:</span> <span className="text-th-text font-medium">{liveAgent.cacheReadTokens!.toLocaleString()}</span></div>
+                  )}
+                  {(liveAgent.cacheWriteTokens ?? 0) > 0 && (
+                    <div><span className="text-th-text-alt">Cache Write:</span> <span className="text-th-text font-medium">{liveAgent.cacheWriteTokens!.toLocaleString()}</span></div>
+                  )}
+                  <div className="col-span-2"><span className="text-th-text-alt">Total:</span> <span className="text-th-text font-medium">{((liveAgent.inputTokens ?? 0) + (liveAgent.outputTokens ?? 0)).toLocaleString()}</span></div>
+                </div>
+              </div>
+            )}
             {profile.lastTaskSummary && (
               <div><span className="text-th-text-alt">Last Task:</span><p className="text-th-text mt-1">{profile.lastTaskSummary}</p></div>
             )}
@@ -837,8 +857,8 @@ export function UnifiedCrewPage({ scope = 'global' }: UnifiedCrewPageProps) {
       </div>
 
       {/* Content: Grouped List + Profile */}
-      <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0 overflow-y-auto mt-4">
-        <div className={`space-y-3 w-full max-w-full md:min-w-[320px] lg:min-w-[400px] ${selectedAgent ? 'md:w-[60%]' : 'w-full'}`}>
+      <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0 mt-4">
+        <div className={`space-y-3 w-full max-w-full md:min-w-[320px] lg:min-w-[400px] overflow-y-auto ${selectedAgent ? 'md:w-[60%]' : 'w-full'}`}>
           {/* Empty: no agents at all */}
           {agents.length === 0 && !loading && (
             <div className="text-center py-12 text-th-text-alt text-sm bg-surface-raised rounded-lg border border-th-border">
@@ -887,6 +907,7 @@ export function UnifiedCrewPage({ scope = 'global' }: UnifiedCrewPageProps) {
             md:static md:inset-auto md:z-auto md:bg-transparent md:transform-none md:transition-none
             ${selectedAgent ? 'translate-x-0' : 'translate-x-full'}
             ${selectedAgent ? 'md:w-[40%] md:min-w-[360px] md:max-w-[480px]' : 'md:w-0 md:hidden'}
+            md:self-start md:sticky md:top-0 md:max-h-full
           `}
         >
           {selectedAgent && (
