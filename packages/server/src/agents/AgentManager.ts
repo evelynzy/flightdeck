@@ -625,7 +625,8 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     });
 
     agent.onUserInputRequest((request) => {
-      // Only root leads (no parent) can ask the user — other agents get an auto-response
+      // Defense-in-depth: non-root agents shouldn't have the ask_user tool
+      // (disabled at SDK level via enableUserInput), but guard here too
       if (agent.parentId) {
         agent.resolveUserInput('User is not available. Use your best judgement.');
         logger.info({ module: 'agent-manager', msg: 'Auto-resolved user input (non-lead agent)', agentId: agent.id, role: agent.role.id });

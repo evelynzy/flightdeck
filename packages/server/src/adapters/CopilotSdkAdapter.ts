@@ -174,16 +174,17 @@ export class CopilotSdkAdapter extends EventEmitter implements AgentAdapter {
     // A hand-rolled handler can miss edge cases the SDK handles internally.
     const permissionHandler = approveAll;
 
-    // User input handler — called when the agent uses ask_user tool
-    const userInputHandler: CopilotUserInputHandler = (request) => {
-      return this.handleUserInputRequest(request);
-    };
+    // Only provide the user input handler for root project leads.
+    // Without this handler, the SDK won't expose the ask_user tool to the agent.
+    const userInputHandler: CopilotUserInputHandler | undefined = opts.enableUserInput
+      ? (request) => this.handleUserInputRequest(request)
+      : undefined;
 
     // Build session config
     const sessionConfig: CopilotSessionConfig = {
       model: this.model,
       onPermissionRequest: permissionHandler,
-      onUserInputRequest: userInputHandler,
+      ...(userInputHandler ? { onUserInputRequest: userInputHandler } : {}),
       infiniteSessions: true,
       ...(this.systemPrompt ? {
         systemMessage: { mode: 'append' as const, content: this.systemPrompt },

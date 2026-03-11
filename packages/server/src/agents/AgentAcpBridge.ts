@@ -114,6 +114,9 @@ export async function startAcp(agent: Agent, config: ServerConfig, initialPrompt
     agentFlag: agentFlagForRole(agent.role.id),
   });
 
+  // Only root project leads get the ask_user tool
+  startOpts.enableUserInput = agent.role.id === 'lead' && !agent.parentId;
+
   conn.start(startOpts).then((sessionId) => {
     agent.sessionId = sessionId;
     agent._notifySessionReady(sessionId);

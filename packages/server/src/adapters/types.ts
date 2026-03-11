@@ -98,6 +98,8 @@ export interface AdapterStartOptions {
   maxTurns?: number;
   /** System prompt override (SDK adapters only) */
   systemPrompt?: string;
+  /** Enable the ask_user tool (only for root project leads) */
+  enableUserInput?: boolean;
 }
 
 // ── Core Interface ──────────────────────────────────────────────────
