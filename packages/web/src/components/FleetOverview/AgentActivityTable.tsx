@@ -4,6 +4,7 @@ import type { AgentInfo } from '../../types';
 import type { FileLock } from './FleetOverview';
 import { Square, RefreshCw, Terminal, Zap, Check, Play } from 'lucide-react';
 import { EmptyState } from '../Shared';
+import { formatTokens } from '../../utils/format';
 
 function shortModelName(model?: string): string {
   if (!model) return '';
@@ -293,9 +294,33 @@ export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props)
                   )}
                 </td>
 
-                {/* Token sparkline — hidden (issue #106) */}
+                {/* Tokens */}
                 <td className="px-3 py-2.5 hidden xl:table-cell">
-                  <span className="text-xs text-th-text-muted">—</span>
+                  {(agent.inputTokens || agent.outputTokens) ? (
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-[10px] text-th-text-muted">
+                        <span title="Input tokens">↓{formatTokens(agent.inputTokens)}</span>
+                        <span title="Output tokens">↑{formatTokens(agent.outputTokens)}</span>
+                      </div>
+                      {(agent.cacheReadTokens != null && agent.cacheReadTokens > 0) && (
+                        <div className="text-[10px] text-green-500/70" title="Cache read tokens">⚡{formatTokens(agent.cacheReadTokens)}</div>
+                      )}
+                      {agent.contextWindowSize && agent.contextWindowUsed ? (() => {
+                        const pct = Math.min(100, Math.round((agent.contextWindowUsed / agent.contextWindowSize) * 100));
+                        const color = pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-yellow-500' : 'bg-blue-500';
+                        return (
+                          <div className="flex items-center gap-1">
+                            <div className="flex-1 bg-th-bg-muted rounded-full h-1 max-w-[60px]">
+                              <div className={`${color} h-1 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-[9px] text-th-text-muted">{pct}%</span>
+                          </div>
+                        );
+                      })() : null}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-th-text-muted">—</span>
+                  )}
                 </td>
 
                 {/* Locks */}
