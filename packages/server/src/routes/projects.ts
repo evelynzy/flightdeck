@@ -759,9 +759,10 @@ export function projectsRoutes(ctx: AppContext): Router {
       }
 
       if (task) {
-        // Delay task delivery longer when team is being respawned so the lead
-        // receives CREW_UPDATE first and doesn't create duplicate agents
-        const TASK_DELIVERY_DELAY_MS = (resumeAll || agentIds) && lastSession ? 10000 : 5000;
+        // Delay task delivery so the lead receives crew roster before the task.
+        // Scale with team size: base 5s + 2s per agent (batched in groups of 3).
+        const teamSize = agentIds?.length ?? (resumeAll && lastSession ? 6 : 0);
+        const TASK_DELIVERY_DELAY_MS = 5000 + Math.ceil(teamSize / 3) * 2000;
         setTimeout(() => {
           agent.sendMessage(task);
         }, TASK_DELIVERY_DELAY_MS);
