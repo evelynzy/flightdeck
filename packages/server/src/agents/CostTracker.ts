@@ -32,7 +32,7 @@ export interface TaskCostSummary {
   totalOutputTokens: number;
   totalCostUsd: number;
   agentCount: number;
-  agents: Array<{ agentId: string; inputTokens: number; outputTokens: number; costUsd: number }>;
+  agents: Array<{ agentId: string; agentRole?: string; inputTokens: number; outputTokens: number; costUsd: number }>;
 }
 
 export interface ProjectCostSummary {
