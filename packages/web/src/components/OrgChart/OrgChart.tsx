@@ -3,11 +3,12 @@ import { useAppStore } from '../../stores/appStore';
 import { useLeadStore, type AgentComm } from '../../stores/leadStore';
 import type { AgentInfo } from '../../types';
 import { EmptyState } from '../Shared';
-import { Network, MessageSquare, Grid3X3, Users, BarChart3 } from 'lucide-react';
+import { Network, MessageSquare, Grid3X3, Users, BarChart3, Share2 } from 'lucide-react';
 import { idColor } from '../../utils/markdown';
 import { CommHeatmap } from '../FleetOverview/CommHeatmap';
 import type { HeatmapMessage, CommType as HeatmapCommType } from '../FleetOverview/CommHeatmap';
 import { useOptionalProjectId } from '../../contexts/ProjectContext';
+import { CommFlowGraph } from '../CommFlow/CommFlowGraph';
 
 // Unified message entry covering both 1:1 comms and group messages
 interface CommEntry {
@@ -309,7 +310,7 @@ export function OrgChart({ api, ws }: Props) {
   const agents = useAppStore((s) => s.agents);
   const projects = useLeadStore((s) => s.projects);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(contextProjectId);
-  const [commView, setCommView] = useState<'list' | 'matrix' | 'heatmap'>('list');
+  const [commView, setCommView] = useState<'graph' | 'list' | 'matrix' | 'heatmap'>('graph');
 
   // Identify leads (role.id === 'lead' with no parent)
   const leads = agents.filter((a) => a.role?.id === 'lead' && !a.parentId);
@@ -450,6 +451,15 @@ export function OrgChart({ api, ws }: Props) {
           </span>
           <div className="ml-auto flex gap-1">
             <button
+              onClick={() => setCommView('graph')}
+              className={`px-2 py-0.5 text-xs rounded flex items-center gap-1 transition-colors ${
+                commView === 'graph' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-300' : 'text-th-text-muted hover:text-th-text'
+              }`}
+            >
+              <Share2 className="w-3 h-3" />
+              Graph
+            </button>
+            <button
               onClick={() => setCommView('list')}
               className={`px-2 py-0.5 text-xs rounded flex items-center gap-1 transition-colors ${
                 commView === 'list' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-300' : 'text-th-text-muted hover:text-th-text'
@@ -478,7 +488,13 @@ export function OrgChart({ api, ws }: Props) {
             </button>
           </div>
         </div>
-        {commView === 'list' ? (
+        {commView === 'graph' ? (
+          selectedLeadId ? (
+            <CommFlowGraph leadId={selectedLeadId} width={700} height={500} agents={teamAgents} />
+          ) : (
+            <EmptyState icon="📡" title="No session selected" description="Select a session above to view the communication graph" compact />
+          )
+        ) : commView === 'list' ? (
           <CommsList entries={allEntries} />
         ) : commView === 'matrix' ? (
           <CommsMatrix entries={allEntries} agents={teamAgents} />
