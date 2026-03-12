@@ -131,7 +131,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
                   <option value="gpt-5.3-codex">GPT-5.3 Codex</option>
                   <option value="gpt-5.2-codex">GPT-5.2 Codex</option>
                   <option value="gpt-5.2">GPT-5.2</option>
-                  <option value="gpt-5.3-codex">GPT-5.3 Codex</option>
+                  <option value="gpt-5.1-codex">GPT-5.1 Codex (Legacy)</option>
                   <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
                 </select>
               </div>
