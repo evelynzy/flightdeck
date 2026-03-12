@@ -759,7 +759,9 @@ export function projectsRoutes(ctx: AppContext): Router {
       }
 
       if (task) {
-        const TASK_DELIVERY_DELAY_MS = 5000;
+        // Delay task delivery longer when team is being respawned so the lead
+        // receives CREW_UPDATE first and doesn't create duplicate agents
+        const TASK_DELIVERY_DELAY_MS = (resumeAll || agentIds) && lastSession ? 10000 : 5000;
         setTimeout(() => {
           agent.sendMessage(task);
         }, TASK_DELIVERY_DELAY_MS);
@@ -824,6 +826,42 @@ export function projectsRoutes(ctx: AppContext): Router {
         spawnTeam().catch((err) => logger.warn({ module: 'project', msg: 'Batch spawn error', err: String(err) }));
         respawnedCount = toResume.length;
         secretaryResumed = toResume.some((a) => a.role === 'secretary');
+
+        // Send crew roster to lead BEFORE the task arrives, so it knows which
+        // agents already exist and doesn't re-create them via CREATE_AGENT
+        const BATCH_COUNT = Math.ceil(toResume.length / BATCH_SIZE);
+        const CREW_NOTIFY_DELAY = INITIAL_DELAY + (BATCH_COUNT * BATCH_DELAY) + 1000;
+        setTimeout(() => {
+          const children = agentManager.getAll().filter(a => a.parentId === agent.id && a.status !== 'terminated' && a.status !== 'failed');
+          if (children.length > 0) {
+            const roster = children.map(a => `- ${a.role.name || a.role.id} (${a.id.slice(0, 8)}) [${a.status}]`).join('\n');
+            agent.sendMessage(
+              `[System — Session Resumed]\n` +
+              `Your team has been restored from the previous session:\n${roster}\n\n` +
+              `⚠ Do NOT create new agents for these roles — delegate to the existing agents above. ` +
+              `Use QUERY_CREW to see the full roster at any time.`
+            );
+          }
+        }, CREW_NOTIFY_DELAY);
+
+        // Inform the lead which agents were excluded so it doesn't re-create them
+        if (Array.isArray(agentIds)) {
+          const excludedAgents = previousAgents.filter((a) => !agentIds.includes(a.agentId));
+          if (excludedAgents.length > 0) {
+            const excludedRoles = excludedAgents.map((a) => a.role).join(', ');
+            const resumedRoles = toResume.map((a) => a.role).join(', ');
+            const TEAM_MSG_DELAY = 2500;
+            setTimeout(() => {
+              agent.sendMessage(
+                `[System — Resume Agent Selection]\n` +
+                `The user chose to resume specific agents only.\n` +
+                `Resumed: ${resumedRoles || 'none'}\n` +
+                `Excluded by user: ${excludedRoles}\n` +
+                `Do NOT re-create or delegate to the excluded roles unless the user explicitly asks.`
+              );
+            }, TEAM_MSG_DELAY);
+          }
+        }
       }
 
       // Auto-spawn Secretary for DAG tracking — only if not already resumed from previous session

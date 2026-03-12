@@ -83,14 +83,14 @@ const MODE_OPTIONS: Array<{ value: ResumeMode; icon: typeof Users; label: string
 export function ResumeSessionDialog({ projectId, lastSession, onClose, onResume }: ResumeSessionDialogProps) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<ResumeMode>('resume-all');
+  const nonLeadAgents = lastSession.agents.filter(a => a.role !== 'lead');
+
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-    () => new Set(lastSession.agents.map(a => a.agentId)),
+    () => new Set(nonLeadAgents.map(a => a.agentId)),
   );
   const [task, setTask] = useState('');
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const nonLeadAgents = lastSession.agents.filter(a => a.role !== 'lead');
 
   const toggleAgent = useCallback((agentId: string) => {
     setSelectedAgents(prev => {

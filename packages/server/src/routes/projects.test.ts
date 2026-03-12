@@ -374,4 +374,43 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
 
     vi.useRealTimers();
   });
+
+  it('sends system message to lead about excluded agents when using selective resume', async () => {
+    vi.useFakeTimers();
+    mockSpawn.mockClear();
+    const fakeAgent = makeFakeAgent('old-lead');
+    mockSpawn.mockReturnValue(fakeAgent);
+    mockGetSessions.mockReturnValue([
+      { id: 1, leadId: 'old-lead', status: 'completed', startedAt: '2026-01-01T10:00:00Z' },
+    ]);
+    mockGetAllAgents.mockReturnValue([
+      { agentId: 'dev-1', role: 'developer', model: 'claude', projectId: 'proj-1', sessionId: 'ses-d1', metadata: { parentId: 'old-lead' } },
+      { agentId: 'rev-1', role: 'code-reviewer', model: 'gpt-4', projectId: 'proj-1', sessionId: 'ses-r1', metadata: { parentId: 'old-lead' } },
+      { agentId: 'arch-1', role: 'architect', model: 'opus-4', projectId: 'proj-1', sessionId: 'ses-a1', metadata: { parentId: 'old-lead' } },
+    ]);
+
+    const res = await fetch(`${baseUrl}/projects/proj-1/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agents: ['dev-1'] }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.respawning).toBe(1);
+
+    // Advance past the team message delay (2.5s)
+    await vi.advanceTimersByTimeAsync(3000);
+
+    // Lead should receive a system message about excluded agents
+    const sendMessageCalls = fakeAgent.sendMessage.mock.calls;
+    const exclusionMsg = sendMessageCalls.find(
+      (call: string[]) => call[0].includes('Resume Agent Selection')
+    );
+    expect(exclusionMsg).toBeDefined();
+    expect(exclusionMsg![0]).toContain('Excluded by user: code-reviewer, architect');
+    expect(exclusionMsg![0]).toContain('Resumed: developer');
+    expect(exclusionMsg![0]).toContain('Do NOT re-create');
+
+    vi.useRealTimers();
+  });
 });
