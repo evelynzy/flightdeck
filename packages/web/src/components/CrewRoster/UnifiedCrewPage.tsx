@@ -883,7 +883,7 @@ export function UnifiedCrewPage({ scope = 'global' }: UnifiedCrewPageProps) {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 p-6">
+    <div className="flex flex-col h-full min-h-0 p-6 max-w-screen-2xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
