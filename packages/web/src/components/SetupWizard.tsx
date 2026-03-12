@@ -36,12 +36,12 @@ const PROVIDER_ICONS: Record<string, string> = {
 };
 
 const PROVIDER_DOCS: Record<string, string> = {
-  copilot: 'https://github.com/features/copilot/cli',
-  claude: 'https://github.com/zed-industries/claude-agent-acp#installation',
-  gemini: 'https://geminicli.com/docs/get-started/installation/',
-  opencode: 'https://opencode.ai/docs/',
+  copilot: 'https://docs.github.com/en/copilot/github-copilot-in-the-cli',
+  claude: 'https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview',
+  gemini: 'https://github.com/google-gemini/gemini-cli',
+  opencode: 'https://github.com/nicholasgriffintn/opencode',
   cursor: 'https://www.cursor.com/',
-  codex: 'https://github.com/zed-industries/codex-acp#installation',
+  codex: 'https://github.com/openai/codex',
 };
 
 // ── Component ───────────────────────────────────────────────────────

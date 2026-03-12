@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Check, RotateCcw, Save, Loader2, X } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
+import { deriveModelName } from '../../hooks/useModels';
+import { getProviderColors } from '../../utils/providerColors';
 
 /** Role ID → allowed model IDs */
 export type ModelConfigMap = Record<string, string[]>;
@@ -16,30 +18,8 @@ interface ModelsListResponse {
   modelsByProvider?: Record<string, string[]>;
 }
 
-/** Human-readable display names for model IDs */
-const MODEL_NAMES: Record<string, string> = {
-  'claude-opus-4.6': 'Opus 4.6',
-  'claude-opus-4.5': 'Opus 4.5',
-  'claude-sonnet-4.6': 'Sonnet 4.6',
-  'claude-sonnet-4.5': 'Sonnet 4.5',
-  'claude-sonnet-4': 'Sonnet 4',
-  'claude-haiku-4.5': 'Haiku 4.5',
-  'gemini-3-pro-preview': 'Gemini 3 Pro',
-  'gemini-3-flash-preview': 'Gemini 3 Flash',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
-  'gpt-5.4': 'GPT-5.4',
-  'gpt-5.3-codex': 'GPT-5.3 Codex',
-  'gpt-5.2-codex': 'GPT-5.2 Codex',
-  'gpt-5.2': 'GPT-5.2',
-  'gpt-5.1-codex-max': 'GPT-5.1 Codex Max',
-  'gpt-5.1-codex': 'GPT-5.1 Codex',
-  'gpt-5.1': 'GPT-5.1',
-  'gpt-5.1-codex-mini': 'GPT-5.1 Codex Mini',
-  'gpt-5-mini': 'GPT-5 Mini',
-  'gpt-4.1': 'GPT-4.1',
-};
+/** Human-readable display names derived from model IDs */
+const modelName = deriveModelName;
 
 /** Role display names */
 const ROLE_NAMES: Record<string, string> = {
@@ -77,13 +57,15 @@ const CONFIG_ROLES = [
   'lead',
 ];
 
-/** Provider tab definitions with display metadata. Model filtering is data-driven from the backend. */
-const PROVIDER_TABS: { id: string; label: string; color: string }[] = [
-  { id: 'copilot', label: 'Copilot', color: 'text-purple-400 border-purple-400' },
-  { id: 'claude', label: 'Claude', color: 'text-orange-400 border-orange-400' },
-  { id: 'gemini', label: 'Gemini', color: 'text-blue-400 border-blue-400' },
-  { id: 'codex', label: 'Codex', color: 'text-green-400 border-green-400' },
-];
+/** Provider tab display metadata. Tabs are generated dynamically from backend modelsByProvider keys. */
+const PROVIDER_META: Record<string, { label: string }> = {
+  copilot: { label: 'Copilot' },
+  claude: { label: 'Claude' },
+  gemini: { label: 'Gemini' },
+  codex: { label: 'Codex' },
+  cursor: { label: 'Cursor' },
+  opencode: { label: 'OpenCode' },
+};
 
 interface Props {
   /** Project ID — if provided, loads/saves config for this project */
@@ -281,28 +263,33 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
         {/* Provider tabs */}
         <div className="flex gap-1 px-1 border-b border-th-border pb-1 overflow-x-auto"
              style={{ scrollbarWidth: 'thin' }}>
-          {PROVIDER_TABS.map((tab) => {
-            const providerModelSet = modelsByProvider[tab.id];
-            const tabModels = providerModelSet
-              ? allModels.filter((m) => providerModelSet.includes(m))
-              : allModels;
-            if (tabModels.length === 0) return null;
-            const isActive = providerTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setProviderTab(tab.id)}
-                className={`px-2 py-0.5 rounded-t text-[10px] font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  isActive
-                    ? `${tab.color} bg-th-bg-alt`
-                    : 'text-th-text-muted border-transparent hover:text-th-text-alt'
-                }`}
-              >
-                {tab.label}
-                <span className="ml-1 opacity-60">({tabModels.length})</span>
+          {Object.keys(modelsByProvider).length > 0
+            ? Object.entries(modelsByProvider).map(([providerId, providerModels]) => {
+                const tabModels = allModels.filter((m) => providerModels.includes(m));
+                if (tabModels.length === 0) return null;
+                const isActive = providerTab === providerId;
+                const meta = PROVIDER_META[providerId];
+                const colors = getProviderColors(providerId);
+                return (
+                  <button
+                    key={providerId}
+                    onClick={() => setProviderTab(providerId)}
+                    className={`px-2 py-0.5 rounded-t text-[10px] font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      isActive
+                        ? `${colors.text} border-current bg-th-bg-alt`
+                        : 'text-th-text-muted border-transparent hover:text-th-text-alt'
+                    }`}
+                  >
+                    {meta?.label ?? providerId}
+                    <span className="ml-1 opacity-60">({tabModels.length})</span>
+                  </button>
+                );
+              })
+            : /* Fallback: show a single "All" tab when backend hasn't responded */
+              <button className="px-2 py-0.5 rounded-t text-[10px] font-medium border-b-2 text-th-text-muted border-current bg-th-bg-alt">
+                All ({allModels.length})
               </button>
-            );
-          })}
+          }
         </div>
       </div>
 
@@ -310,8 +297,7 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
       <div className="space-y-1.5">
         {CONFIG_ROLES.map((roleId) => {
           const allowedModels = config[roleId] ?? defaults[roleId] ?? [];
-          const activeTab = PROVIDER_TABS.find(t => t.id === providerTab) ?? PROVIDER_TABS[0];
-          const providerModelSet = modelsByProvider[activeTab.id];
+          const providerModelSet = modelsByProvider[providerTab];
           const visibleModels = providerModelSet
             ? allModels.filter((m) => providerModelSet.includes(m))
             : allModels;
@@ -333,11 +319,11 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
                           ? 'bg-yellow-600/20 border-yellow-500/50 text-yellow-600 dark:text-yellow-200'
                           : 'bg-th-bg border-th-border text-th-text-muted hover:border-th-border-hover opacity-50'
                       }`}
-                      title={MODEL_NAMES[modelId] || modelId}
+                      title={modelName(modelId)}
                     >
                       {compact
                         ? modelId.replace('claude-', '').replace(/^gemini-/, 'g-').replace('gpt-', 'g')
-                        : MODEL_NAMES[modelId] || modelId}
+                        : modelName(modelId)}
                     </button>
                   );
                 })}

@@ -1,6 +1,6 @@
 import type { Database } from '../db/database.js';
 import { taskCostRecords, agentRoster, utcNow } from '../db/schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 
 export interface CostRecord {
   agentId: string;
@@ -154,7 +154,8 @@ export class CostTracker {
   }
 
   /** Get cost breakdown per agent (across all tasks). */
-  getAgentCosts(): AgentCostSummary[] {
+  getAgentCosts(projectId?: string): AgentCostSummary[] {
+    const condition = projectId ? eq(taskCostRecords.projectId, projectId) : undefined;
     const rows = this.db.drizzle
       .select({
         agentId: taskCostRecords.agentId,
@@ -166,6 +167,7 @@ export class CostTracker {
       })
       .from(taskCostRecords)
       .leftJoin(agentRoster, eq(taskCostRecords.agentId, agentRoster.agentId))
+      .where(condition)
       .groupBy(taskCostRecords.agentId)
       .all();
 
@@ -180,8 +182,12 @@ export class CostTracker {
   }
 
   /** Get cost breakdown per DAG task (across all agents). */
-  getTaskCosts(leadId?: string): TaskCostSummary[] {
-    const condition = leadId ? eq(taskCostRecords.leadId, leadId) : undefined;
+  getTaskCosts(leadId?: string, projectId?: string): TaskCostSummary[] {
+    const conditions = [
+      leadId ? eq(taskCostRecords.leadId, leadId) : undefined,
+      projectId ? eq(taskCostRecords.projectId, projectId) : undefined,
+    ].filter(Boolean) as ReturnType<typeof eq>[];
+    const condition = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Get per-task totals
     const taskTotals = this.db.drizzle

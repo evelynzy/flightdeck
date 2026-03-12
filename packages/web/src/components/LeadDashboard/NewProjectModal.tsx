@@ -4,6 +4,7 @@ import { useLeadStore } from '../../stores/leadStore';
 import { apiFetch } from '../../hooks/useApi';
 import { ModelConfigPanel } from './ModelConfigPanel';
 import { FolderPicker } from '../FolderPicker/FolderPicker';
+import { useModels, deriveModelName } from '../../hooks/useModels';
 
 interface RoleInfo { id: string; name: string; icon: string; description: string; model: string; }
 
@@ -24,6 +25,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
   const [showModelConfig, setShowModelConfig] = useState(false);
   const [newProjectModelConfig, setNewProjectModelConfig] = useState<Record<string, string[]> | null>(null);
   const [error, setError] = useState('');
+  const { models: availableModels } = useModels();
 
   // Fetch available roles on mount
   useEffect(() => {
@@ -124,15 +126,9 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
                   className="w-full bg-th-bg border border-th-border rounded-md px-3 py-2 text-sm font-mono text-th-text-alt focus:outline-none focus:border-yellow-500"
                 >
                   <option value="">Default</option>
-                  <option value="claude-opus-4.6">Claude Opus 4.6</option>
-                  <option value="claude-sonnet-4.6">Claude Sonnet 4.6</option>
-                  <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
-                  <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
-                  <option value="gpt-5.3-codex">GPT-5.3 Codex</option>
-                  <option value="gpt-5.2-codex">GPT-5.2 Codex</option>
-                  <option value="gpt-5.2">GPT-5.2</option>
-                  <option value="gpt-5.1-codex">GPT-5.1 Codex (Legacy)</option>
-                  <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                  {availableModels.map((m) => (
+                    <option key={m} value={m}>{deriveModelName(m)}</option>
+                  ))}
                 </select>
               </div>
               <div>

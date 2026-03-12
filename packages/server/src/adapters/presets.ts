@@ -4,13 +4,24 @@
  * Each preset defines how to spawn a specific CLI tool via ACP stdio transport.
  * The AcpAdapter uses these presets to construct the correct spawn command
  * instead of hardcoding Copilot-specific flags.
+ *
+ * NOTE: Preset data is derived from the central ProviderRegistry in @flightdeck/shared.
+ * To add a new provider, update the registry — presets are auto-generated.
  */
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import {
+  PROVIDER_REGISTRY, PROVIDER_IDS,
+  type ProviderId, type ProviderDefinition,
+} from '@flightdeck/shared';
 
 const execFileAsync = promisify(execFile);
 
+// Re-export ProviderId from the shared registry (canonical source)
+export type { ProviderId } from '@flightdeck/shared';
+
 // ── ProviderPreset Interface ────────────────────────────────
+// Kept for backward compatibility — fields are a subset of ProviderDefinition.
 
 export interface ProviderPreset {
   /** Unique identifier (e.g., 'copilot', 'gemini', 'claude') */
@@ -39,82 +50,27 @@ export interface ProviderPreset {
   supportsAgentFlag?: boolean;
 }
 
-// ── Provider Preset ID Type ─────────────────────────────────
+// ── Derive Presets from Registry ────────────────────────────
 
-export type ProviderId = 'copilot' | 'gemini' | 'opencode' | 'cursor' | 'codex' | 'claude';
+function toPreset(def: ProviderDefinition): ProviderPreset {
+  return {
+    id: def.id,
+    name: def.name,
+    binary: def.binary,
+    args: def.args,
+    requiredEnvVars: def.requiredEnvVars.length > 0 ? def.requiredEnvVars : undefined,
+    transport: def.transport,
+    supportsResume: def.supportsResume,
+    modelFlag: def.modelFlag,
+    defaultModel: def.defaultModel,
+    agentFileFormat: def.agentFileFormat,
+    supportsAgentFlag: def.supportsAgentFlag,
+  };
+}
 
-// ── Preset Definitions ──────────────────────────────────────
-
-export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
-  copilot: {
-    id: 'copilot',
-    name: 'GitHub Copilot',
-    binary: 'copilot',
-    args: ['--acp', '--stdio'],
-    transport: 'stdio',
-    supportsResume: true,
-    modelFlag: '--model',
-    agentFileFormat: '.agent.md',
-    supportsAgentFlag: true,
-  },
-
-  gemini: {
-    id: 'gemini',
-    name: 'Google Gemini CLI',
-    binary: 'gemini',
-    args: ['--acp'],
-    requiredEnvVars: ['GEMINI_API_KEY'],
-    transport: 'stdio',
-    supportsResume: true,
-    modelFlag: '--model',
-    defaultModel: 'gemini-2.5-pro',
-    agentFileFormat: '.gemini/agents/*.md',
-  },
-
-  opencode: {
-    id: 'opencode',
-    name: 'OpenCode',
-    binary: 'opencode',
-    args: ['acp'],
-    transport: 'stdio',
-    supportsResume: true,
-  },
-
-  cursor: {
-    id: 'cursor',
-    name: 'Cursor',
-    binary: 'agent',
-    args: ['acp'],
-    requiredEnvVars: ['CURSOR_API_KEY'],
-    transport: 'stdio',
-    supportsResume: true,
-    agentFileFormat: '.cursorrules',
-  },
-
-  codex: {
-    id: 'codex',
-    name: 'Codex (ACP)',
-    binary: 'codex-acp',
-    args: [],
-    requiredEnvVars: ['OPENAI_API_KEY'],
-    transport: 'stdio',
-    supportsResume: false,
-    defaultModel: 'gpt-5.3-codex',
-  },
-
-  claude: {
-    id: 'claude',
-    name: 'Claude Agent (ACP)',
-    binary: 'claude-agent-acp',
-    args: [],
-    requiredEnvVars: ['ANTHROPIC_API_KEY'],
-    transport: 'stdio',
-    supportsResume: true,
-    modelFlag: '--model',
-    defaultModel: 'claude-sonnet-4',
-    agentFileFormat: 'CLAUDE.md',
-  },
-};
+export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = Object.fromEntries(
+  PROVIDER_IDS.map((id) => [id, toPreset(PROVIDER_REGISTRY[id])]),
+) as Record<ProviderId, ProviderPreset>;
 
 // ── Lookup Functions ────────────────────────────────────────
 
@@ -129,9 +85,7 @@ export function listPresets(): ProviderPreset[] {
 }
 
 /** Check if a string is a valid provider ID. */
-export function isValidProviderId(id: string): id is ProviderId {
-  return id in PROVIDER_PRESETS;
-}
+export { isValidProviderId } from '@flightdeck/shared';
 
 // ── Detection ───────────────────────────────────────────────
 

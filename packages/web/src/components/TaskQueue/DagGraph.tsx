@@ -19,6 +19,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { DagStatus, DagTask } from '../../types';
 import { computeCriticalPath, formatElapsed, type CriticalPathTask } from './dagCriticalPath';
+import { AgentDetailPanel } from '../AgentDetailPanel';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -256,6 +257,7 @@ function DagNodeTooltip({
   allTasks,
   containerHeight,
   onClose,
+  onAgentClick,
 }: {
   tooltip: TooltipState;
   pinned: boolean;
@@ -263,6 +265,7 @@ function DagNodeTooltip({
   allTasks: DagTask[];
   containerHeight: number;
   onClose: () => void;
+  onAgentClick?: (agentId: string) => void;
 }) {
   const { task, x, y } = tooltip;
   const statusColor = TOOLTIP_STATUS_COLORS[task.dagStatus];
@@ -356,7 +359,14 @@ function DagNodeTooltip({
           <span>{task.role}</span>
           {task.model && <span style={{ color: 'var(--graph-text-muted)' }}>· {task.model}</span>}
           {task.assignedAgentId && (
-            <span style={{ color: 'var(--graph-text-accent)', fontSize: 11 }}>🤖 {task.assignedAgentId.slice(0, 8)}</span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); onAgentClick?.(task.assignedAgentId!); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onAgentClick?.(task.assignedAgentId!); } }}
+              style={{ color: 'var(--graph-text-accent)', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 2 }}
+              title="View agent details"
+            >🤖 {task.assignedAgentId.slice(0, 8)}</span>
           )}
         </div>
       </div>
@@ -607,6 +617,9 @@ function DagGraphInner({ dagStatus, containerRef }: { dagStatus: DagStatus; cont
   const [pinnedTooltip, setPinnedTooltip] = useState<TooltipState | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Agent detail modal state ────────────────────────────────────────
+  const [detailAgentId, setDetailAgentId] = useState<string | null>(null);
+
   // ── Edge highlighting state ────────────────────────────────────────
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const highlightedNodeId = pinnedTooltip?.task.id ?? hoveredNodeId;
@@ -789,7 +802,11 @@ function DagGraphInner({ dagStatus, containerRef }: { dagStatus: DagStatus; cont
           allTasks={dagStatus.tasks}
           containerHeight={containerHeight}
           onClose={() => setPinnedTooltip(null)}
+          onAgentClick={setDetailAgentId}
         />
+      )}
+      {detailAgentId && (
+        <AgentDetailPanel agentId={detailAgentId} mode="modal" onClose={() => setDetailAgentId(null)} />
       )}
     </>
   );

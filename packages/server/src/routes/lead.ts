@@ -260,17 +260,19 @@ export function leadRoutes(ctx: AppContext): Router {
   });
 
   // --- Cost tracking ---
-  router.get('/costs/by-agent', (_req, res) => {
+  router.get('/costs/by-agent', (req, res) => {
     const tracker = agentManager.getCostTracker();
     if (!tracker) return res.json([]);
-    res.json(tracker.getAgentCosts());
+    const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
+    res.json(tracker.getAgentCosts(projectId));
   });
 
   router.get('/costs/by-task', (req, res) => {
     const tracker = agentManager.getCostTracker();
     if (!tracker) return res.json([]);
     const leadId = typeof req.query.leadId === 'string' ? req.query.leadId : undefined;
-    res.json(tracker.getTaskCosts(leadId));
+    const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
+    res.json(tracker.getTaskCosts(leadId, projectId));
   });
 
   router.get('/costs/agent/:agentId', (req, res) => {

@@ -25,7 +25,7 @@ import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import { formatTokens } from '../../utils/format';
 import { Tabs } from '../ui/Tabs';
 import type { TabItem } from '../ui/Tabs';
-import { AVAILABLE_MODELS } from '../../constants/models';
+import { useModels, deriveModelName } from '../../hooks/useModels';
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -369,6 +369,7 @@ function AgentRow({ agent, isLead, isSelected, onSelect }: {
 
 function ProfilePanel({ agentId, teamId, onClose }: { agentId: string; teamId: string; onClose: () => void }) {
   const addToast = useToastStore(s => s.add);
+  const { models: availableModels } = useModels();
   const [profile, setProfile] = useState<AgentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
@@ -646,8 +647,8 @@ function ProfilePanel({ agentId, teamId, onClose }: { agentId: string; teamId: s
                   >
                     {(() => {
                       const current = profile.live?.model || profile.model;
-                      const options = AVAILABLE_MODELS.includes(current) ? AVAILABLE_MODELS : [current, ...AVAILABLE_MODELS];
-                      return options.map(m => <option key={m} value={m}>{m}</option>);
+                      const options = availableModels.includes(current) ? availableModels : [current, ...availableModels];
+                      return options.map(m => <option key={m} value={m}>{deriveModelName(m)}</option>);
                     })()}
                   </select>
                 ) : (

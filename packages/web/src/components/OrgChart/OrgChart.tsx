@@ -5,6 +5,7 @@ import type { AgentInfo } from '../../types';
 import { EmptyState } from '../Shared';
 import { Network, MessageSquare, Grid3X3, Users, BarChart3, Share2 } from 'lucide-react';
 import { idColor } from '../../utils/markdown';
+import { shortAgentId } from '../../utils/agentLabel';
 import { CommHeatmap } from '../FleetOverview/CommHeatmap';
 import type { HeatmapMessage, CommType as HeatmapCommType } from '../FleetOverview/CommHeatmap';
 import { useOptionalProjectId } from '../../contexts/ProjectContext';
@@ -43,7 +44,7 @@ const fallbackStatus = { border: 'border-th-border', badge: 'bg-gray-500/20 text
 function AgentNode({ agent, onClick }: { agent: AgentInfo; onClick?: () => void }) {
   const s = statusStyle[agent.status] ?? fallbackStatus;
   const roleName = agent.role?.name ?? agent.role?.id ?? 'Unknown';
-  const shortId = agent.id.slice(0, 8);
+  const shortId = shortAgentId(agent.id);
   // Show last segment of model string (e.g. "sonnet-4" from "claude-sonnet-4")
   const modelLabel = agent.model?.split('/').pop()?.split('-').slice(-2).join('-') ?? '';
 
@@ -188,7 +189,7 @@ function CommsList({ entries }: { entries: CommEntry[] }) {
               <div className="flex items-center gap-1">
                 <span className="text-th-text-muted shrink-0">[{time}]</span>
                 <span className={`shrink-0 ${roleColor(c.fromRole)}`}>
-                  {c.fromRole} ({c.fromId?.slice(0, 6)})
+                  {c.fromRole} ({c.fromId ? shortAgentId(c.fromId) : ''})
                 </span>
                 {c.groupName ? (
                   <>
@@ -202,7 +203,7 @@ function CommsList({ entries }: { entries: CommEntry[] }) {
                   <>
                     <span className="text-th-text-muted"> → </span>
                     <span className={`shrink-0 ${roleColor(c.toRole)}`}>
-                      {c.toRole} ({c.toId?.slice(0, 6)})
+                      {c.toRole} ({c.toId ? shortAgentId(c.toId) : ''})
                     </span>
                   </>
                 )}
@@ -237,11 +238,11 @@ function CommsMatrix({ entries, agents }: { entries: CommEntry[]; agents: AgentI
   // Build a deduplicated list of participants
   const seen = new Map<string, AgentLabel>();
   for (const a of agents) {
-    seen.set(a.id, { id: a.id, role: a.role?.name ?? 'Unknown', shortId: a.id.slice(0, 6) });
+    seen.set(a.id, { id: a.id, role: a.role?.name ?? 'Unknown', shortId: shortAgentId(a.id) });
   }
   for (const c of directComms) {
-    if (!seen.has(c.fromId)) seen.set(c.fromId, { id: c.fromId, role: c.fromRole, shortId: c.fromId.slice(0, 6) });
-    if (!seen.has(c.toId)) seen.set(c.toId, { id: c.toId, role: c.toRole, shortId: c.toId.slice(0, 6) });
+    if (!seen.has(c.fromId)) seen.set(c.fromId, { id: c.fromId, role: c.fromRole, shortId: shortAgentId(c.fromId) });
+    if (!seen.has(c.toId)) seen.set(c.toId, { id: c.toId, role: c.toRole, shortId: shortAgentId(c.toId) });
   }
 
   const participants = Array.from(seen.values());
@@ -387,7 +388,7 @@ export function OrgChart({ api, ws }: Props) {
     () => teamAgents.map(a => ({
       id: a.id,
       role: a.role?.name ?? 'Unknown',
-      name: `${a.role?.icon ?? ''}${a.id.slice(0, 5)}`,
+      name: `${a.role?.icon ?? ''}${shortAgentId(a.id)}`,
     })),
     [teamAgents],
   );
@@ -428,7 +429,7 @@ export function OrgChart({ api, ws }: Props) {
                   : 'border-transparent text-th-text-muted hover:text-th-text hover:border-th-border'
               }`}
             >
-              {l.projectName || l.role?.name || l.id.slice(0, 8)}
+              {l.projectName || l.role?.name || shortAgentId(l.id)}
             </button>
           ))}
         </nav>

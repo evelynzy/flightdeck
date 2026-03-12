@@ -35,7 +35,7 @@ import { Tabs } from '../ui/Tabs';
 import type { TabItem } from '../ui/Tabs';
 import { AgentChatPanel } from '../AgentChatPanel';
 import { getProviderColors } from '../../utils/providerColors';
-import { AVAILABLE_MODELS } from '../../constants/models';
+import { useModels, deriveModelName } from '../../hooks/useModels';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -539,6 +539,7 @@ interface SettingsTabProps {
 
 function SettingsTab({ agentId, profile, isAlive, model, provider, setProfile }: SettingsTabProps) {
   const addToast = useToastStore((s) => s.add);
+  const { models: availableModels } = useModels();
 
   return (
     <div className="p-4 space-y-3 text-sm">
@@ -560,8 +561,8 @@ function SettingsTab({ agentId, profile, isAlive, model, provider, setProfile }:
             className="w-full text-sm bg-th-bg border border-th-border text-th-text rounded px-2 py-1.5 focus:outline-none focus:border-accent cursor-pointer"
           >
             {(() => {
-              const options = AVAILABLE_MODELS.includes(model) ? AVAILABLE_MODELS : [model, ...AVAILABLE_MODELS];
-              return options.map((m) => <option key={m} value={m}>{m}</option>);
+              const options = availableModels.includes(model) ? availableModels : [model, ...availableModels];
+              return options.map((m) => <option key={m} value={m}>{deriveModelName(m)}</option>);
             })()}
           </select>
         ) : (

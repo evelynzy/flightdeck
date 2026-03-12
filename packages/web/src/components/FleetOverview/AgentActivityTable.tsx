@@ -5,7 +5,7 @@ import type { FileLock } from './FleetOverview';
 import { Square, RefreshCw, Terminal, Zap, Check, Play } from 'lucide-react';
 import { EmptyState } from '../Shared';
 import { formatTokens } from '../../utils/format';
-import { AVAILABLE_MODELS } from '../../constants/models';
+import { useModels } from '../../hooks/useModels';
 import { ProviderBadge } from '../ProviderBadge';
 
 function shortModelName(model?: string): string {
@@ -116,6 +116,7 @@ function getCurrentActivity(agent: AgentInfo): { text: string; detail?: string }
 export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props) {
   const setSelectedAgent = useAppStore((s) => s.setSelectedAgent);
   const [confirmTerminateIds, setConfirmTerminateIds] = useState<Set<string>>(new Set());
+  const { models: availableModels } = useModels();
 
   const handleSelect = (id: string) => {
     if (onSelectAgent) onSelectAgent(id);
@@ -219,9 +220,9 @@ export function AgentActivityTable({ agents, locks, api, onSelectAgent }: Props)
                         className="text-[10px] bg-th-bg-alt border border-th-border text-th-text-alt rounded px-1 py-0.5 focus:outline-none focus:border-accent cursor-pointer max-w-[120px]"
                       >
                         {(() => {
-                          const options = AVAILABLE_MODELS.includes(currentModel)
-                            ? AVAILABLE_MODELS
-                            : [currentModel, ...AVAILABLE_MODELS];
+                          const options = availableModels.includes(currentModel)
+                            ? availableModels
+                            : [currentModel, ...availableModels];
                           return options.map((m) => (
                             <option key={m} value={m}>{shortModelName(m) || m}</option>
                           ));

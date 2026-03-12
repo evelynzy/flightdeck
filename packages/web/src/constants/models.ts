@@ -1,7 +1,13 @@
 /**
- * Available models for agent model switching.
- * Keep in sync with KNOWN_MODEL_IDS in packages/server/src/projects/ModelConfigDefaults.ts.
+ * Available models — re-exported from useModels hook for backward compatibility.
+ *
+ * @deprecated Import { useModels } from '../../hooks/useModels' instead.
+ * This static list is only used as a fallback before the /models endpoint responds.
+ * The canonical source is the backend GET /models endpoint.
  */
+export { deriveModelName } from '../hooks/useModels';
+
+/** @deprecated Use useModels() hook instead — this is a static fallback only */
 export const AVAILABLE_MODELS: string[] = [
   // Anthropic
   'claude-opus-4.6',

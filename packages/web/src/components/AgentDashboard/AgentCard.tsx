@@ -6,7 +6,7 @@ import { AgentIdBadge } from '../../utils/markdown';
 import { agentStatusText } from '../../utils/statusColors';
 import { formatTokens } from '../../utils/format';
 import { DiffBadge } from '../DiffPreview';
-import { AVAILABLE_MODELS } from '../../constants/models';
+import { useModels } from '../../hooks/useModels';
 import { getProviderColors } from '../../utils/providerColors';
 
 interface Props {
@@ -21,6 +21,7 @@ export function AgentCard({ agent, api }: Props) {
   const isSelected = selectedAgentId === agent.id;
   const [confirmKill, setConfirmKill] = useState(false);
   const providerColors = getProviderColors(agent.provider);
+  const { models: availableModels } = useModels();
 
   return (
     <div
@@ -158,9 +159,9 @@ export function AgentCard({ agent, api }: Props) {
           >
             {(() => {
               const currentModel = agent.model || '';
-              const options = AVAILABLE_MODELS.includes(currentModel)
-                ? AVAILABLE_MODELS
-                : [currentModel, ...AVAILABLE_MODELS];
+              const options = availableModels.includes(currentModel)
+                ? availableModels
+                : [currentModel, ...availableModels];
               return options.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ));

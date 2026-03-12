@@ -1,14 +1,16 @@
 /**
- * Agent label formatting utilities — shared across heatmap components.
+ * Agent label formatting utilities — shared across all agent UI components.
  *
- * Provides consistent agent ID shortening and role label formatting
- * for AgentHeatmap and CommHeatmap.
+ * Provides consistent agent ID shortening and role label formatting.
+ * Standard short ID length is 8 characters (enough for uniqueness in UUIDs).
  */
 
-/** Shorten an agent UUID to a 5-char alphanumeric string. */
-export function shortAgentId(agentId: string): string {
-  const compactId = agentId.replace(/[^a-zA-Z0-9]/g, '');
-  return (compactId || agentId).slice(0, 5);
+/** Standard short ID length used across the UI. */
+export const SHORT_ID_LENGTH = 8;
+
+/** Shorten an agent ID for display. Default 8 chars. */
+export function shortAgentId(agentId: string, length: number = SHORT_ID_LENGTH): string {
+  return agentId.slice(0, length);
 }
 
 /** Title-case a string (e.g., 'project_lead' → 'Project Lead'). */

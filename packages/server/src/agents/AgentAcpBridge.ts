@@ -206,7 +206,7 @@ export async function startAcp(agent: Agent, config: ServerConfig, initialPrompt
     logger.error({ module: 'agent-bridge', msg: 'Adapter start failed', err: errorMsg, backend, cliCommand: config.cliCommand, cwd: agent.cwd || process.cwd(), role: agent.role?.id });
 
     // Kill the spawned process to prevent orphan leaks
-    conn.terminate().catch(() => { /* already exited */ });
+    Promise.resolve(conn.terminate()).catch(() => { /* already exited */ });
 
     // Store error for exit event (text pipeline is buffered, races with immediate exit)
     agent.exitError = errorMsg;

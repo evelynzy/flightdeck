@@ -24,25 +24,15 @@ export function CostBreakdown({ projectId }: CostBreakdownProps = {}) {
   const [taskCosts, setTaskCosts] = useState<TaskCostSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const agentMap = useAgentMap();
-  const agents = useAppStore((s) => s.agents);
-
-  // Build set of agent IDs belonging to this project for client-side filtering
-  const projectAgentIds = useMemo(() => {
-    if (!projectId) return null;
-    const ids = new Set<string>();
-    for (const a of agents) {
-      if (a.projectId === projectId) ids.add(a.id);
-    }
-    return ids;
-  }, [agents, projectId]);
 
   useEffect(() => {
     let cancelled = false;
+    const params = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
     const fetchCosts = async () => {
       try {
         const [agentRes, taskRes] = await Promise.all([
-          fetch('/api/costs/by-agent'),
-          fetch('/api/costs/by-task'),
+          fetch(`/api/costs/by-agent${params}`),
+          fetch(`/api/costs/by-task${params}`),
         ]);
         if (cancelled) return;
         const agentData = await agentRes.json();
@@ -58,25 +48,15 @@ export function CostBreakdown({ projectId }: CostBreakdownProps = {}) {
     fetchCosts();
     const interval = setInterval(fetchCosts, 10_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, []);
-
-  // Filter costs to project scope when projectId is provided
-  const filteredAgentCosts = useMemo(
-    () => projectAgentIds ? agentCosts.filter((c) => projectAgentIds.has(c.agentId)) : agentCosts,
-    [agentCosts, projectAgentIds],
-  );
-  const filteredTaskCosts = useMemo(
-    () => projectAgentIds ? taskCosts.filter((c) => c.agents.some((a) => projectAgentIds.has(a.agentId))) : taskCosts,
-    [taskCosts, projectAgentIds],
-  );
+  }, [projectId]);
 
   const totalInput = useMemo(
-    () => filteredAgentCosts.reduce((s, c) => s + c.totalInputTokens, 0),
-    [filteredAgentCosts],
+    () => agentCosts.reduce((s, c) => s + c.totalInputTokens, 0),
+    [agentCosts],
   );
   const totalOutput = useMemo(
-    () => filteredAgentCosts.reduce((s, c) => s + c.totalOutputTokens, 0),
-    [filteredAgentCosts],
+    () => agentCosts.reduce((s, c) => s + c.totalOutputTokens, 0),
+    [agentCosts],
   );
   const total = totalInput + totalOutput;
 
@@ -84,7 +64,7 @@ export function CostBreakdown({ projectId }: CostBreakdownProps = {}) {
     return <div className="p-4 text-sm text-th-text-muted">Loading token data…</div>;
   }
 
-  if (filteredAgentCosts.length === 0 && filteredTaskCosts.length === 0) {
+  if (agentCosts.length === 0 && taskCosts.length === 0) {
     return (
       <div className="p-4 text-sm text-th-text-muted">
         No token attribution data yet. Token usage is tracked when agents work on DAG tasks.
@@ -130,9 +110,9 @@ export function CostBreakdown({ projectId }: CostBreakdownProps = {}) {
       {/* Table */}
       <div className="overflow-x-auto rounded-lg border border-th-border/50">
         {view === 'by-agent' ? (
-          <AgentCostTable costs={filteredAgentCosts} agentMap={agentMap} total={total} />
+          <AgentCostTable costs={agentCosts} agentMap={agentMap} total={total} />
         ) : (
-          <TaskCostTable costs={filteredTaskCosts} agentMap={agentMap} total={total} />
+          <TaskCostTable costs={taskCosts} agentMap={agentMap} total={total} />
         )}
       </div>
     </div>
