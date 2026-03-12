@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Check, RotateCcw, Save, Loader2 } from 'lucide-react';
 import { apiFetch } from '../../hooks/useApi';
 
@@ -100,6 +100,7 @@ function configsEqual(a: ModelConfigMap, b: ModelConfigMap): boolean {
   const keysB = Object.keys(b);
   if (keysA.length !== keysB.length) return false;
   for (const key of keysA) {
+    if (!(key in b)) return false;
     const listA = [...(a[key] ?? [])].sort();
     const listB = [...(b[key] ?? [])].sort();
     if (listA.length !== listB.length) return false;
@@ -119,7 +120,7 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isDirty = !configsEqual(config, savedConfig);
+  const isDirty = useMemo(() => !configsEqual(config, savedConfig), [config, savedConfig]);
 
   // Fetch available models and defaults
   useEffect(() => {
@@ -177,7 +178,6 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
 
   const resetToDefaults = useCallback(() => {
     setConfig(defaults);
-    setSavedConfig(defaults);
     onChange?.(defaults);
     setSaved(false);
   }, [defaults, onChange]);
@@ -254,7 +254,7 @@ export function ModelConfigPanel({ projectId, value, onChange, compact }: Props)
       {error && <div className="px-1 text-red-400 text-[10px]">{error}</div>}
 
       {/* Provider tabs */}
-      <div className="flex gap-1 px-1 border-b border-th-border pb-1 overflow-x-auto scrollbar-thin"
+      <div className="flex gap-1 px-1 border-b border-th-border pb-1 overflow-x-auto"
            style={{ scrollbarWidth: 'thin' }}>
         {PROVIDER_TABS.map((tab) => {
           const tabModels = allModels.filter(tab.models);
