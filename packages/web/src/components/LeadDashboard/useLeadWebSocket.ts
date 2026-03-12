@@ -1,49 +1,185 @@
 import { useEffect } from 'react';
 import { useLeadStore } from '../../stores/leadStore';
-import type { AgentInfo, DagStatus } from '../../types';
+import type { AgentInfo, DagStatus, DecisionStatus } from '../../types';
 import { shortAgentId } from '../../utils/agentLabel';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type WsMsg = Record<string, any>;
 type StoreApi = ReturnType<typeof useLeadStore.getState>;
+
+// ── Typed WebSocket message payloads ────────────────────────────
+
+interface WsDecision {
+  type: 'lead:decision';
+  agentId?: string;
+  leadId?: string;
+  agentRole?: string;
+  id: number;
+  title: string;
+  rationale: string;
+  needsConfirmation: boolean;
+  status: string;
+}
+
+interface WsAgentText {
+  type: 'agent:text';
+  agentId: string;
+  text: string | { text?: string };
+}
+
+interface WsAgentThinking {
+  type: 'agent:thinking';
+  agentId: string;
+  text: string | { text?: string };
+}
+
+interface WsAgentContent {
+  type: 'agent:content';
+  agentId: string;
+  content: { text?: string; contentType?: string; mimeType?: string; data?: string; uri?: string };
+}
+
+interface WsAgentStatus {
+  type: 'agent:status';
+  agentId: string;
+  status: string;
+}
+
+interface WsToolCallPayload {
+  toolCallId: string;
+  status?: string;
+  title?: string | { text?: string };
+  kind?: string;
+}
+
+interface WsToolCall {
+  type: 'agent:tool_call';
+  agentId: string;
+  toolCall: WsToolCallPayload;
+}
+
+interface WsDelegation {
+  type: 'agent:delegated';
+  parentId?: string;
+  childId: string;
+  delegation?: { id?: string; toRole?: string; task?: string };
+}
+
+interface WsCompletionReported {
+  type: 'agent:completion_reported';
+  parentId?: string;
+  childId: string;
+  status?: string;
+}
+
+interface WsProgress {
+  type: 'lead:progress';
+  agentId?: string;
+  summary?: string;
+  completed?: string[];
+  in_progress?: string[];
+  blocked?: string[];
+}
+
+interface WsMessageSent {
+  type: 'agent:message_sent';
+  from: string;
+  fromRole?: string;
+  to: string;
+  toRole?: string;
+  content?: string;
+}
+
+interface WsGroupCreated {
+  type: 'group:created';
+  leadId: string;
+}
+
+interface WsGroupMessage {
+  type: 'group:message';
+  leadId: string;
+  groupName: string;
+  message: { fromAgentId: string; fromRole?: string; content?: string };
+}
+
+interface WsDagUpdated {
+  type: 'dag:updated';
+  leadId: string;
+}
+
+interface WsContextCompacted {
+  type: 'agent:context_compacted';
+  agentId?: string;
+  percentDrop?: number;
+  previousUsed?: number;
+  currentUsed?: number;
+}
+
+type WsMsg =
+  | WsDecision
+  | WsAgentText
+  | WsAgentThinking
+  | WsAgentContent
+  | WsAgentStatus
+  | WsToolCall
+  | WsDelegation
+  | WsCompletionReported
+  | WsProgress
+  | WsMessageSent
+  | WsGroupCreated
+  | WsGroupMessage
+  | WsDagUpdated
+  | WsContextCompacted;
 
 // ── Individual message handlers ─────────────────────────────────
 
-function handleDecision(msg: WsMsg, store: StoreApi) {
+function handleDecision(msg: WsDecision, store: StoreApi) {
   if (!msg.agentId) return;
   const targetLeadId = msg.leadId || msg.agentId;
-  store.addDecision(targetLeadId, { ...msg, agentRole: msg.agentRole || 'Lead' } as any);
+  store.addDecision(targetLeadId, {
+    id: String(msg.id),
+    agentId: msg.agentId,
+    agentRole: msg.agentRole || 'Lead',
+    leadId: targetLeadId,
+    projectId: null,
+    title: msg.title,
+    rationale: msg.rationale,
+    needsConfirmation: msg.needsConfirmation,
+    status: msg.status as DecisionStatus,
+    autoApproved: !msg.needsConfirmation,
+    confirmedAt: null,
+    timestamp: new Date().toISOString(),
+    category: 'general' as const,
+  });
 }
 
-function handleText(msg: WsMsg, store: StoreApi) {
+function handleText(msg: WsAgentText, store: StoreApi) {
   const rawText = typeof msg.text === 'string' ? msg.text : msg.text?.text ?? JSON.stringify(msg.text);
   store.appendToLastAgentMessage(msg.agentId, rawText);
 }
 
-function handleThinking(msg: WsMsg, store: StoreApi) {
+function handleThinking(msg: WsAgentThinking, store: StoreApi) {
   const rawText = typeof msg.text === 'string' ? msg.text : msg.text?.text ?? JSON.stringify(msg.text);
   store.appendToThinkingMessage(msg.agentId, rawText);
 }
 
-function handleContent(msg: WsMsg, store: StoreApi) {
+function handleContent(msg: WsAgentContent, store: StoreApi) {
   store.addMessage(msg.agentId, {
     type: 'text',
     text: msg.content.text || '',
     sender: 'agent',
-    contentType: msg.content.contentType,
+    contentType: msg.content.contentType as 'text' | 'image' | 'audio' | 'resource' | undefined,
     mimeType: msg.content.mimeType,
     data: msg.content.data,
     uri: msg.content.uri,
   });
 }
 
-function handleStatus(msg: WsMsg, store: StoreApi) {
+function handleStatus(msg: WsAgentStatus, store: StoreApi) {
   if (msg.status === 'running') {
     store.promoteQueuedMessages(msg.agentId);
   }
 }
 
-function handleToolCall(msg: WsMsg, store: StoreApi, agents: AgentInfo[], leadId: string) {
+function handleToolCall(msg: WsToolCall, store: StoreApi, agents: AgentInfo[], leadId: string) {
   const { agentId, toolCall } = msg;
   const isChild = agents.some((a) => a.id === agentId && a.parentId === leadId);
   if (agentId !== leadId && !isChild) return;
@@ -63,14 +199,14 @@ function handleToolCall(msg: WsMsg, store: StoreApi, agents: AgentInfo[], leadId
 }
 
 /** Extract a human-readable summary from a tool call's title or kind */
-function resolveToolSummary(toolCall: WsMsg): string {
+function resolveToolSummary(toolCall: WsToolCallPayload): string {
   if (typeof toolCall.title === 'string') return toolCall.title;
   if (toolCall.title?.text) return toolCall.title.text;
   if (typeof toolCall.kind === 'string') return toolCall.kind;
   return JSON.stringify(toolCall.kind ?? toolCall.title ?? 'Working...');
 }
 
-function handleDelegation(msg: WsMsg, store: StoreApi, agents: AgentInfo[]) {
+function handleDelegation(msg: WsDelegation, store: StoreApi, agents: AgentInfo[]) {
   if (!msg.parentId) return;
   store.addActivity(msg.parentId, {
     id: msg.delegation?.id || `del-${Date.now()}`,
@@ -93,7 +229,7 @@ function handleDelegation(msg: WsMsg, store: StoreApi, agents: AgentInfo[]) {
   });
 }
 
-function handleCompletionReported(msg: WsMsg, store: StoreApi, agents: AgentInfo[]) {
+function handleCompletionReported(msg: WsCompletionReported, store: StoreApi, agents: AgentInfo[]) {
   if (!msg.parentId) return;
   store.addActivity(msg.parentId, {
     id: `done-${Date.now()}`,
@@ -116,7 +252,7 @@ function handleCompletionReported(msg: WsMsg, store: StoreApi, agents: AgentInfo
   });
 }
 
-function handleProgress(msg: WsMsg, store: StoreApi) {
+function handleProgress(msg: WsProgress, store: StoreApi) {
   const leadId = msg.agentId;
   if (!leadId) return;
   if (msg.summary) store.setProgressSummary(leadId, msg.summary);
@@ -145,7 +281,7 @@ function handleProgress(msg: WsMsg, store: StoreApi) {
   });
 }
 
-function handleMessageSent(msg: WsMsg, store: StoreApi, agents: AgentInfo[], leadId: string) {
+function handleMessageSent(msg: WsMessageSent, store: StoreApi, agents: AgentInfo[], leadId: string) {
   const fromAgent = agents.find((a) => a.id === msg.from);
   const toAgent = agents.find((a) => a.id === msg.to);
   const isBroadcast = msg.to === 'all';
@@ -198,10 +334,20 @@ function handleGroupCreated(store: StoreApi, leadId: string) {
   }).catch(() => { /* group fetch failure is non-critical */ });
 }
 
-function handleGroupMessage(msg: WsMsg, store: StoreApi, leadId: string) {
-  store.addGroupMessage(leadId, msg.groupName, msg.message);
-  if (msg.message) {
-    const gm = msg.message;
+function handleGroupMessage(msg: WsGroupMessage, store: StoreApi, leadId: string) {
+  const gm = msg.message;
+  const fullMessage = {
+    id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    groupName: msg.groupName,
+    leadId: msg.leadId || leadId,
+    fromAgentId: gm.fromAgentId,
+    fromRole: gm.fromRole || 'Agent',
+    content: gm.content ?? '',
+    reactions: {} as Record<string, string[]>,
+    timestamp: new Date().toISOString(),
+  };
+  store.addGroupMessage(leadId, msg.groupName, fullMessage);
+  if (gm) {
     store.addComm(leadId, {
       id: `grp-comm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       fromId: gm.fromAgentId,
@@ -226,7 +372,7 @@ function handleDagUpdated(store: StoreApi, leadId: string, historicalProjectId: 
   }).catch(() => { /* DAG fetch failure is non-critical */ });
 }
 
-function handleContextCompacted(msg: WsMsg, store: StoreApi, agents: AgentInfo[]) {
+function handleContextCompacted(msg: WsContextCompacted, store: StoreApi, agents: AgentInfo[]) {
   const compactedId = msg.agentId;
   if (!compactedId) return;
   let targetLeadId: string | null = null;

@@ -171,7 +171,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       getRunningCount: () => this.getRunningCount(),
       spawnAgent: (role, task, parentId, model, cwd, options) => this.spawn(role, task, parentId, model, cwd, undefined, undefined, options),
       terminateAgent: (id) => this.terminate(id),
-      emit: (event: string, ...args: any[]) => this.emit(event as any, args[0]),
+      emit: (event: string, ...args: unknown[]) => this.emit(event as keyof AgentManagerEvents & string, args[0] as AgentManagerEvents[keyof AgentManagerEvents]),
       roleRegistry: this.roleRegistry,
       config: this.config,
       lockRegistry: this.lockRegistry,
@@ -220,7 +220,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
           return [];
         }
       },
-      emit: (event: string, ...args: any[]) => this.emit(event as any, args[0]),
+      emit: (event: string, ...args: unknown[]) => this.emit(event as keyof AgentManagerEvents & string, args[0] as AgentManagerEvents[keyof AgentManagerEvents]),
     });
     this.heartbeat.start();
 

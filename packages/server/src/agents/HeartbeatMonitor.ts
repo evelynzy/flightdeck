@@ -20,7 +20,7 @@ export interface HeartbeatContext {
   getDagSummary(leadId: string): DagSummary | null;
   getRemainingTasks(leadId: string): RemainingTask[];
   getTaskByAgent(leadId: string, agentId: string): { id: string; dagStatus: string } | null;
-  emit(event: string, ...args: any[]): void;
+  emit(event: string, ...args: unknown[]): void;
 }
 
 /** How often (ms) to send command reminders — default 2 hours */

@@ -246,7 +246,7 @@ export class WebSocketServer {
     });
 
     this.track(agentManager, 'lead:progress', (data: AgentManagerEvents['lead:progress']) => {
-      const projectId = this.resolveAgentProjectId(data.agentId ?? data.leadId);
+      const projectId = this.resolveAgentProjectId(data.agentId);
       this.broadcastToProject({ type: 'lead:progress', ...data }, projectId);
     });
 
