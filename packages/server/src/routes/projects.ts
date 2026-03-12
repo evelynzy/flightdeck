@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.js';
 import type { AppContext } from './context.js';
 import { spawnLimiter } from './context.js';
 import { KNOWN_MODEL_IDS, DEFAULT_MODEL_CONFIG, validateModelConfig, validateModelConfigShape } from '../projects/ModelConfigDefaults.js';
+import { getModelsByProvider } from '../adapters/ModelResolver.js';
 import { dagTasks, projectSessions, chatGroups, chatGroupMessages, chatGroupMembers, conversations, messages } from '../db/schema.js';
 import type { DagTask } from '../tasks/TaskDAG.js';
 import { slugify } from '../utils/projectId.js';
@@ -894,6 +895,7 @@ export function projectsRoutes(ctx: AppContext): Router {
     res.json({
       models: KNOWN_MODEL_IDS,
       defaults: DEFAULT_MODEL_CONFIG,
+      modelsByProvider: getModelsByProvider(),
     });
   });
 
