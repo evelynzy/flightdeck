@@ -90,6 +90,7 @@ export class AlertEngine extends EventEmitter {
 
   private runChecks(): void {
     this.checkStuckAgents();
+    this.checkLongRunningPrompts();
     this.checkContextPressure();
     this.checkDuplicateFileEdits();
     this.checkIdleAgentsWithReadyTasks();
@@ -122,6 +123,25 @@ export class AlertEngine extends EventEmitter {
           agentId: agent.id,
         });
       }
+    }
+  }
+
+  /** 1b. Any agent (including leads) with a prompt running longer than MAX_PROMPTING_MS */
+  private checkLongRunningPrompts(): void {
+    const now = Date.now();
+    for (const agent of this.agentManager.getAll()) {
+      if (!agent.isPrompting) continue;
+      const promptStart = agent.promptingStartedAt;
+      if (promptStart == null) continue;
+      const elapsed = now - promptStart;
+      if (elapsed < MAX_PROMPTING_MS) continue;
+
+      this.addAlert({
+        type: 'long_running_prompt',
+        severity: 'warning',
+        message: `Agent ${agent.role.name} (${agent.id.slice(0, 8)}) has been prompting for ${Math.round(elapsed / 60_000)}min — may be stalled`,
+        agentId: agent.id,
+      });
     }
   }
 
