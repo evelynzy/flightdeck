@@ -1,7 +1,6 @@
 import React from 'react';
-import { RefreshCw, Loader2, MessageSquare } from 'lucide-react';
+import { RefreshCw, Loader2 } from 'lucide-react';
 import { MentionText } from '../../utils/markdown';
-import { Markdown } from '../ui/Markdown';
 import { CollapsibleReasoningBlock, RichContentBlock, AgentTextBlock } from './ChatRenderers';
 import { PromptNav, hasUserMention } from '../PromptNav';
 import { useAppStore } from '../../stores/appStore';
@@ -42,7 +41,7 @@ export function ChatMessages({
   return (
     <div className="flex-1 relative min-h-0">
       <div ref={chatContainerRef} className="absolute inset-0 overflow-y-auto p-4 space-y-1">
-        {messages.filter((msg) => msg.text).map((msg, i, filtered) => {
+        {messages.filter((msg) => msg.text && msg.sender !== 'external').map((msg, i, filtered) => {
           if (msg.queued) return null;
           if (mergedIndices.has(i)) return null;
           const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
@@ -69,21 +68,6 @@ export function ChatMessages({
                     <MentionText text={msg.text} agents={agents} onClickAgent={(id) => useAppStore.getState().setSelectedAgent(id)} />
                   </div>
                 </div>
-              </div>
-            );
-          }
-
-          if (msg.sender === 'external') {
-            return (
-              <div key={i} className="flex items-start gap-2 py-1 bg-amber-500/[0.06] rounded-md border-l-2 border-amber-500/30 pl-2">
-                <div className="max-w-[85%] rounded-lg px-3 py-2 bg-amber-500/10 dark:bg-amber-900/30 border border-amber-400/20 dark:border-amber-600/30 font-mono text-sm whitespace-pre-wrap text-th-text-alt">
-                  <div className="flex items-center gap-1.5 mb-1 text-amber-600 dark:text-amber-400 text-xs font-medium">
-                    <MessageSquare className="w-3 h-3" />
-                    {msg.fromRole || 'Agent'}
-                  </div>
-                  <Markdown text={msg.text} monospace mentionAgents={agents} onMentionClick={(id) => useAppStore.getState().setSelectedAgent(id)} />
-                </div>
-                <span className="text-[10px] text-th-text-muted mt-1.5 shrink-0">{ts}</span>
               </div>
             );
           }

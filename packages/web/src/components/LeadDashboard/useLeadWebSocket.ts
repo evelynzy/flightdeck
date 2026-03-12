@@ -319,7 +319,7 @@ function handleMessageSent(msg: WsMessageSent, store: StoreApi, agents: AgentInf
   } else if (isBroadcast) {
     // Broadcasts tracked in comms panel — don't duplicate in chat
   } else if (msg.to === leadId) {
-    store.addMessage(leadId, { type: 'text', text: msg.content ?? '', sender: 'external', fromRole: `${senderRole} (${senderId})`, timestamp: Date.now() });
+    // Agent-to-lead messages tracked in Agent Reports panel — don't duplicate in chat
   } else if (msg.from === leadId) {
     const recipientRole = msg.toRole || toAgent?.role?.name || 'Agent';
     const recipientId = shortAgentId(msg.to ?? '');
