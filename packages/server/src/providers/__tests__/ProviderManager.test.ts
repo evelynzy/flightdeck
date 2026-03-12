@@ -17,15 +17,61 @@ function createMockDb(): Database {
 describe('ProviderManager', () => {
   let db: Database;
   let exec: ReturnType<typeof vi.fn>;
+  let execAsync: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     db = createMockDb();
     exec = vi.fn().mockReturnValue('');
+    execAsync = vi.fn().mockResolvedValue('');
   });
 
-  function createManager() {
-    return new ProviderManager({ db, execCommand: exec as any });
+  function createManager(opts?: { cacheTtlMs?: number }) {
+    return new ProviderManager({
+      db,
+      execCommand: exec as any,
+      execCommandAsync: execAsync as any,
+      cacheTtlMs: opts?.cacheTtlMs,
+    });
   }
+
+  // ── getProviderConfigs ────────────────────────────────────
+
+  describe('getProviderConfigs', () => {
+    it('returns config for all 6 providers', () => {
+      const configs = createManager().getProviderConfigs();
+      expect(configs).toHaveLength(6);
+      expect(configs.map((c) => c.id).sort()).toEqual(
+        ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode'],
+      );
+    });
+
+    it('returns id, name, enabled only (no CLI status fields)', () => {
+      const configs = createManager().getProviderConfigs();
+      for (const c of configs) {
+        expect(c).toHaveProperty('id');
+        expect(c).toHaveProperty('name');
+        expect(c).toHaveProperty('enabled');
+        expect(c).not.toHaveProperty('installed');
+        expect(c).not.toHaveProperty('authenticated');
+        expect(c).not.toHaveProperty('binaryPath');
+        expect(c).not.toHaveProperty('version');
+      }
+    });
+
+    it('does not make any exec calls', () => {
+      createManager().getProviderConfigs();
+      expect(exec).not.toHaveBeenCalled();
+      expect(execAsync).not.toHaveBeenCalled();
+    });
+
+    it('reflects enabled state from db', () => {
+      const mgr = createManager();
+      mgr.setProviderEnabled('gemini', false);
+      const configs = mgr.getProviderConfigs();
+      const gemini = configs.find((c) => c.id === 'gemini');
+      expect(gemini?.enabled).toBe(false);
+    });
+  });
 
   // ── detectInstalled ──────────────────────────────────────
 
@@ -126,6 +172,169 @@ describe('ProviderManager', () => {
       expect(statuses.map((s) => s.id).sort()).toEqual(
         ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode'],
       );
+    });
+  });
+
+  // ── async detection methods ──────────────────────────────
+
+  describe('detectInstalledAsync', () => {
+    it('detects installed CLI binary', async () => {
+      execAsync.mockResolvedValue('/usr/local/bin/claude');
+      const result = await createManager().detectInstalledAsync('claude');
+      expect(result.installed).toBe(true);
+      expect(result.binaryPath).toBe('/usr/local/bin/claude');
+      expect(execAsync).toHaveBeenCalledWith('which', ['claude-agent-acp']);
+    });
+
+    it('detects missing CLI binary', async () => {
+      execAsync.mockRejectedValue(new Error('not found'));
+      const result = await createManager().detectInstalledAsync('gemini');
+      expect(result.installed).toBe(false);
+      expect(result.binaryPath).toBeNull();
+    });
+
+    it('throws for unknown provider', async () => {
+      await expect(createManager().detectInstalledAsync('unknown' as any)).rejects.toThrow('Unknown provider');
+    });
+  });
+
+  describe('checkAuthenticatedAsync', () => {
+    it('reports authenticated when command succeeds', async () => {
+      execAsync.mockResolvedValue('Logged in');
+      const result = await createManager().checkAuthenticatedAsync('copilot');
+      expect(result.authenticated).toBe(true);
+      expect(execAsync).toHaveBeenCalledWith('gh', ['auth', 'status']);
+    });
+
+    it('reports unauthenticated when command fails', async () => {
+      execAsync.mockRejectedValue(new Error('not logged in'));
+      const result = await createManager().checkAuthenticatedAsync('copilot');
+      expect(result.authenticated).toBe(false);
+      expect(result.error).toBe('not logged in');
+    });
+
+    it('assumes authenticated for providers without auth command', async () => {
+      const result = await createManager().checkAuthenticatedAsync('claude');
+      expect(result.authenticated).toBe(true);
+      expect(execAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('detectVersionAsync', () => {
+    it('returns parsed version', async () => {
+      execAsync.mockResolvedValue('v2.1.0');
+      const version = await createManager().detectVersionAsync('claude');
+      expect(version).toBe('v2.1.0');
+      expect(execAsync).toHaveBeenCalledWith('claude-agent-acp', ['--version']);
+    });
+
+    it('returns null on failure', async () => {
+      execAsync.mockRejectedValue(new Error('crash'));
+      const version = await createManager().detectVersionAsync('claude');
+      expect(version).toBeNull();
+    });
+  });
+
+  // ── getProviderStatusAsync ────────────────────────────────
+
+  describe('getProviderStatusAsync', () => {
+    it('returns full status for installed provider', async () => {
+      execAsync
+        .mockResolvedValueOnce('/usr/local/bin/claude')   // which
+        .mockResolvedValueOnce('v2.1.0');                  // --version
+      const status = await createManager().getProviderStatusAsync('claude');
+      expect(status.id).toBe('claude');
+      expect(status.installed).toBe(true);
+      expect(status.authenticated).toBe(true); // no auth command → true
+      expect(status.version).toBe('v2.1.0');
+      expect(status.binaryPath).toBe('/usr/local/bin/claude');
+    });
+
+    it('returns not-installed status when binary missing', async () => {
+      execAsync.mockRejectedValue(new Error('not found'));
+      const status = await createManager().getProviderStatusAsync('gemini');
+      expect(status.installed).toBe(false);
+      expect(status.authenticated).toBeNull();
+      expect(status.version).toBeNull();
+    });
+
+    it('throws for unknown provider', async () => {
+      await expect(createManager().getProviderStatusAsync('unknown' as any)).rejects.toThrow('Unknown provider');
+    });
+  });
+
+  // ── getAllProviderStatusesAsync ────────────────────────────
+
+  describe('getAllProviderStatusesAsync', () => {
+    it('returns status for all 6 providers in parallel', async () => {
+      execAsync.mockResolvedValue('');
+      const statuses = await createManager().getAllProviderStatusesAsync();
+      expect(statuses).toHaveLength(6);
+      expect(statuses.map((s) => s.id).sort()).toEqual(
+        ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode'],
+      );
+    });
+  });
+
+  // ── cache ────────────────────────────────────────────────
+
+  describe('detection cache', () => {
+    it('returns cached result on second call', async () => {
+      execAsync.mockResolvedValue('/usr/local/bin/claude');
+      const mgr = createManager();
+
+      await mgr.getProviderStatusAsync('claude');
+      await mgr.getProviderStatusAsync('claude');
+
+      // which + version on first call only (2 calls); second call is cached
+      const whichCalls = execAsync.mock.calls.filter(
+        (c: string[]) => c[0] === 'which',
+      );
+      expect(whichCalls).toHaveLength(1);
+    });
+
+    it('invalidateCache forces re-detection', async () => {
+      execAsync.mockResolvedValue('/usr/local/bin/claude');
+      const mgr = createManager();
+
+      await mgr.getProviderStatusAsync('claude');
+      mgr.invalidateCache('claude');
+      await mgr.getProviderStatusAsync('claude');
+
+      const whichCalls = execAsync.mock.calls.filter(
+        (c: string[]) => c[0] === 'which',
+      );
+      expect(whichCalls).toHaveLength(2);
+    });
+
+    it('invalidateCache without args clears all providers', async () => {
+      execAsync.mockResolvedValue('');
+      const mgr = createManager();
+
+      await mgr.getAllProviderStatusesAsync();
+      mgr.invalidateCache();
+      await mgr.getAllProviderStatusesAsync();
+
+      // Two rounds of `which` calls (6 providers each)
+      const whichCalls = execAsync.mock.calls.filter(
+        (c: string[]) => c[0] === 'which',
+      );
+      expect(whichCalls).toHaveLength(12);
+    });
+
+    it('cache expires after TTL', async () => {
+      execAsync.mockResolvedValue('/usr/local/bin/claude');
+      const mgr = createManager({ cacheTtlMs: 1 }); // 1ms TTL
+
+      await mgr.getProviderStatusAsync('claude');
+      // Wait for cache to expire
+      await new Promise((r) => setTimeout(r, 5));
+      await mgr.getProviderStatusAsync('claude');
+
+      const whichCalls = execAsync.mock.calls.filter(
+        (c: string[]) => c[0] === 'which',
+      );
+      expect(whichCalls).toHaveLength(2);
     });
   });
 

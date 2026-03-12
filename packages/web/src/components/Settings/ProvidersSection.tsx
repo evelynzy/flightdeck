@@ -1,7 +1,10 @@
 /**
  * ProvidersSection — provider availability and configuration for Settings.
  *
- * Shows which CLI providers are installed, authenticated, and enabled.
+ * Two-phase loading for instant UI:
+ * 1. Config (id, name, enabled) loads instantly — toggles are interactive immediately
+ * 2. Status (installed, authenticated, version) loads progressively — badges fill in
+ *
  * Includes per-provider configuration: binary override, default model,
  * required environment variables, and default CLI arguments.
  * Drag-and-drop reordering via @dnd-kit/sortable.
@@ -18,6 +21,23 @@ import { EmptyState } from '../ui/EmptyState';
 
 // ── Types ───────────────────────────────────────────────────────────
 
+/** Lightweight config returned instantly (no CLI detection). */
+interface ProviderConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+/** Full status returned from async CLI detection. */
+interface ProviderStatusData {
+  id: string;
+  installed: boolean;
+  authenticated: boolean | null;
+  binaryPath: string | null;
+  version: string | null;
+}
+
+/** Combined view used by ProviderCard. */
 interface ProviderStatus {
   id: string;
   name: string;
@@ -122,16 +142,30 @@ function PreviewBadge() {
   );
 }
 
+/** Skeleton placeholder for status badge while detection loads. */
+function StatusBadgeSkeleton() {
+  return (
+    <span
+      className="inline-flex items-center h-5 w-20 rounded-full bg-th-bg-hover animate-pulse"
+      data-testid="status-badge-skeleton"
+      role="status"
+      aria-label="Loading status"
+    />
+  );
+}
+
 // ── Provider Card ───────────────────────────────────────────────────
 
 function ProviderCard({
   provider,
   rank,
   onToggle,
+  statusLoading,
 }: {
   provider: ProviderStatus;
   rank: number;
   onToggle: (id: string, enabled: boolean) => void;
+  statusLoading: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -212,12 +246,14 @@ function ProviderCard({
             <span className="text-[10px] font-mono text-th-text-muted w-4 text-center">{rank}</span>
             <span className="text-sm font-medium text-th-text-alt">{provider.name}</span>
             {PROVIDER_PREVIEW[provider.id] && <PreviewBadge />}
-            <StatusBadge {...providerStatusProps(provider)} />
+            {statusLoading ? <StatusBadgeSkeleton /> : <StatusBadge {...providerStatusProps(provider)} />}
           </div>
           <div className="text-xs text-th-text-muted">
-            {provider.installed
-              ? `${authLabel}${provider.version ? ` · ${provider.version}` : ''}`
-              : 'CLI not found on PATH'}
+            {statusLoading
+              ? 'Checking status…'
+              : provider.installed
+                ? `${authLabel}${provider.version ? ` · ${provider.version}` : ''}`
+                : 'CLI not found on PATH'}
           </div>
         </div>
         {/* Enable/disable toggle */}
@@ -259,7 +295,7 @@ function ProviderCard({
             <div>
               <span className="text-th-text-muted">Status:</span>{' '}
               <span className={provider.installed ? 'text-green-400' : 'text-th-text-muted'}>
-                {provider.installed ? 'Installed' : 'Not found'}
+                {statusLoading ? 'Checking…' : provider.installed ? 'Installed' : 'Not found'}
                 {provider.version && ` (${provider.version})`}
               </span>
             </div>
@@ -372,20 +408,52 @@ function ProviderCard({
 export function ProvidersSection() {
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [ranking, setRanking] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Phase 1: Load config + ranking instantly (no CLI calls)
   useEffect(() => {
     Promise.all([
-      apiFetch<ProviderStatus[]>('/settings/providers'),
+      apiFetch<ProviderConfig[]>('/settings/providers'),
       apiFetch<{ ranking: string[] }>('/settings/provider-ranking'),
     ])
-      .then(([provs, { ranking: r }]) => {
-        setProviders(provs);
+      .then(([configs, { ranking: r }]) => {
+        // Build initial provider list from config (no status yet)
+        setProviders(configs.map((c) => ({
+          ...c,
+          installed: false,
+          authenticated: null,
+          binaryPath: null,
+          version: null,
+        })));
         setRanking(r);
+        setConfigLoading(false);
+
+        // Phase 2: Load CLI detection statuses asynchronously
+        apiFetch<ProviderStatusData[]>('/settings/providers/status')
+          .then((statuses) => {
+            const statusMap = new Map(statuses.map((s) => [s.id, s]));
+            setProviders((prev) =>
+              prev.map((p) => {
+                const status = statusMap.get(p.id);
+                return status
+                  ? { ...p, installed: status.installed, authenticated: status.authenticated, binaryPath: status.binaryPath, version: status.version }
+                  : p;
+              }),
+            );
+          })
+          .catch((err) => {
+            // Status fetch failure is non-critical — toggles still work
+            logger.warn('Failed to load provider statuses:', err);
+          })
+          .finally(() => setStatusLoading(false));
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message);
+        setConfigLoading(false);
+        setStatusLoading(false);
+      });
   }, []);
 
   // Sort providers by ranking
@@ -447,14 +515,14 @@ export function ProvidersSection() {
             — drag to reorder
           </span>
         </h3>
-        {!loading && (
-          <span className="text-[10px] text-th-text-muted">
-            {installedCount}/{providers.length} installed
+        {!configLoading && (
+          <span className="text-[10px] text-th-text-muted" data-testid="installed-count">
+            {statusLoading ? `${providers.length} providers` : `${installedCount}/${providers.length} installed`}
           </span>
         )}
       </div>
 
-      {loading && (
+      {configLoading && (
         <div className="flex items-center justify-center py-8 text-th-text-muted">
           <Loader2 className="animate-spin mr-2" size={16} />
           <span className="text-sm">Loading providers…</span>
@@ -467,7 +535,7 @@ export function ProvidersSection() {
         </div>
       )}
 
-      {!loading && !error && sortedProviders.length === 0 && (
+      {!configLoading && !error && sortedProviders.length === 0 && (
         <EmptyState
           icon={<Cpu className="w-10 h-10 opacity-50" />}
           title="No providers configured"
@@ -476,7 +544,7 @@ export function ProvidersSection() {
         />
       )}
 
-      {!loading && !error && sortedProviders.length > 0 && (
+      {!configLoading && !error && sortedProviders.length > 0 && (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -490,6 +558,7 @@ export function ProvidersSection() {
                   provider={provider}
                   rank={idx + 1}
                   onToggle={handleToggle}
+                  statusLoading={statusLoading}
                 />
               ))}
             </div>
@@ -499,3 +568,10 @@ export function ProvidersSection() {
     </section>
   );
 }
+
+// Non-UI logger (safe no-op in browser if console not available)
+const logger = {
+  warn: (...args: unknown[]) => {
+    if (typeof console !== 'undefined') console.warn('[ProvidersSection]', ...args);
+  },
+};

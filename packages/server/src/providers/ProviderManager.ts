@@ -6,14 +6,22 @@
  * 2. Checks if the provider is authenticated (via status command)
  * 3. Gets/sets model preferences per provider
  * 4. Toggles providers enabled/disabled
+ *
+ * Two access patterns:
+ * - **Config** (`getProviderConfigs`) — instant, no shell calls, for initial UI render
+ * - **Status** (`getAllProviderStatusesAsync`) — async parallel detection with caching
  */
 
 import { execSync } from 'node:child_process';
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { Database } from '../db/database.js';
 import type { ConfigStore } from '../config/ConfigStore.js';
 import { PROVIDER_PRESETS, type ProviderId } from '../adapters/presets.js';
 import { PROVIDER_REGISTRY, PROVIDER_IDS } from '@flightdeck/shared';
 import { logger } from '../utils/logger.js';
+
+const execFileAsync = promisify(execFileCb);
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -32,6 +40,13 @@ export interface ProviderStatus {
   version: string | null;
 }
 
+/** Lightweight config-only view for instant UI rendering (no CLI detection). */
+export interface ProviderConfig {
+  id: ProviderId;
+  name: string;
+  enabled: boolean;
+}
+
 export interface AuthCheckResult {
   authenticated: boolean;
   error?: string;
@@ -40,6 +55,15 @@ export interface AuthCheckResult {
 export interface ModelPreferences {
   defaultModel?: string;
   preferredModels?: string[];
+}
+
+/** Cached detection result with expiry timestamp. */
+interface CachedDetection {
+  installed: boolean;
+  authenticated: boolean | null;
+  binaryPath: string | null;
+  version: string | null;
+  expiresAt: number;
 }
 
 // ── Auth status commands per provider ────────────────────────────
@@ -57,6 +81,8 @@ const AUTH_COMMANDS: Partial<Record<ProviderId, string>> = Object.fromEntries(
 // ── Constants ────────────────────────────────────────────────────
 
 const SETTING_PREFIX = 'provider:';
+const CACHE_TTL_MS = 60_000; // 60 seconds
+const ASYNC_EXEC_TIMEOUT_MS = 5_000;
 
 // ── ProviderManager ──────────────────────────────────────────────
 
@@ -64,18 +90,46 @@ export class ProviderManager {
   private readonly db: Database | undefined;
   private readonly configStore: ConfigStore | undefined;
   private readonly exec: (cmd: string) => string;
+  private readonly execAsync: (cmd: string, args: string[]) => Promise<string>;
+
+  /** In-memory cache for CLI detection results (keyed by provider ID). */
+  private readonly detectionCache = new Map<ProviderId, CachedDetection>();
+
+  /** Configurable TTL for testing. */
+  readonly cacheTtlMs: number;
 
   constructor(opts: {
     db?: Database;
     configStore?: ConfigStore;
     execCommand?: (cmd: string) => string;
+    execCommandAsync?: (cmd: string, args: string[]) => Promise<string>;
+    cacheTtlMs?: number;
   } = {}) {
     this.db = opts.db;
     this.configStore = opts.configStore;
     this.exec = opts.execCommand ?? ((cmd) => execSync(cmd, { encoding: 'utf8', timeout: 5_000 }).trim());
+    this.execAsync = opts.execCommandAsync ?? (async (cmd, args) => {
+      const { stdout } = await execFileAsync(cmd, args, {
+        encoding: 'utf8',
+        timeout: ASYNC_EXEC_TIMEOUT_MS,
+      });
+      return stdout.trim();
+    });
+    this.cacheTtlMs = opts.cacheTtlMs ?? CACHE_TTL_MS;
   }
 
-  // ── Detection ────────────────────────────────────────────
+  // ── Config (instant, no CLI calls) ──────────────────────
+
+  /** Get lightweight config for all providers — instant, no shell calls. */
+  getProviderConfigs(): ProviderConfig[] {
+    return (Object.keys(PROVIDER_PRESETS) as ProviderId[]).map((id) => ({
+      id,
+      name: PROVIDER_PRESETS[id].name,
+      enabled: this.isProviderEnabled(id),
+    }));
+  }
+
+  // ── Detection (sync, legacy) ────────────────────────────
 
   /** Check if a provider's CLI binary is on PATH. */
   detectInstalled(provider: ProviderId): { installed: boolean; binaryPath: string | null } {
@@ -114,15 +168,13 @@ export class ProviderManager {
 
     try {
       const raw = this.exec(cmd);
-      // Extract version-like pattern (e.g., "v1.2.3" or "1.2.3")
-      const match = raw.match(/v?(\d+\.\d+(?:\.\d+)?(?:[-.]\w+)*)/);
-      return match ? match[0] : raw.split('\n')[0].trim().slice(0, 50);
+      return this.parseVersion(raw);
     } catch {
       return null;
     }
   }
 
-  /** Get full status for a single provider. */
+  /** Get full status for a single provider (sync). */
   getProviderStatus(provider: ProviderId): ProviderStatus {
     const preset = PROVIDER_PRESETS[provider];
     if (!preset) throw new Error(`Unknown provider: ${provider}`);
@@ -142,11 +194,136 @@ export class ProviderManager {
     };
   }
 
-  /** Get status for all providers. */
+  /** Get status for all providers (sync). */
   getAllProviderStatuses(): ProviderStatus[] {
     return (Object.keys(PROVIDER_PRESETS) as ProviderId[]).map((id) =>
       this.getProviderStatus(id),
     );
+  }
+
+  // ── Detection (async, parallel, cached) ─────────────────
+
+  /** Async installed check — uses `which` via execFile. */
+  async detectInstalledAsync(provider: ProviderId): Promise<{ installed: boolean; binaryPath: string | null }> {
+    const preset = PROVIDER_PRESETS[provider];
+    if (!preset) throw new Error(`Unknown provider: ${provider}`);
+
+    try {
+      const path = await this.execAsync('which', [preset.binary]);
+      return { installed: true, binaryPath: path };
+    } catch {
+      return { installed: false, binaryPath: null };
+    }
+  }
+
+  /** Async auth check. */
+  async checkAuthenticatedAsync(provider: ProviderId): Promise<AuthCheckResult> {
+    const cmd = AUTH_COMMANDS[provider];
+    if (!cmd) return { authenticated: true };
+
+    const parts = cmd.split(/\s+/);
+    const binary = parts[0];
+    const args = parts.slice(1);
+
+    try {
+      await this.execAsync(binary, args);
+      return { authenticated: true };
+    } catch (err: any) {
+      return { authenticated: false, error: err.message || String(err) };
+    }
+  }
+
+  /** Async version detection. */
+  async detectVersionAsync(provider: ProviderId): Promise<string | null> {
+    const preset = PROVIDER_PRESETS[provider];
+    if (!preset) return null;
+
+    try {
+      const raw = await this.execAsync(preset.binary, ['--version']);
+      return this.parseVersion(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Get full status for a single provider (async, uses cache). */
+  async getProviderStatusAsync(provider: ProviderId): Promise<ProviderStatus> {
+    const preset = PROVIDER_PRESETS[provider];
+    if (!preset) throw new Error(`Unknown provider: ${provider}`);
+
+    const cached = this.getCachedDetection(provider);
+    if (cached) {
+      return {
+        id: provider,
+        name: preset.name,
+        installed: cached.installed,
+        authenticated: cached.authenticated,
+        enabled: this.isProviderEnabled(provider),
+        binaryPath: cached.binaryPath,
+        version: cached.version,
+      };
+    }
+
+    const { installed, binaryPath } = await this.detectInstalledAsync(provider);
+    const [auth, version] = await Promise.all([
+      installed ? this.checkAuthenticatedAsync(provider) : Promise.resolve(null),
+      installed ? this.detectVersionAsync(provider) : Promise.resolve(null),
+    ]);
+
+    const detection: CachedDetection = {
+      installed,
+      authenticated: auth?.authenticated ?? null,
+      binaryPath,
+      version,
+      expiresAt: Date.now() + this.cacheTtlMs,
+    };
+    this.detectionCache.set(provider, detection);
+
+    return {
+      id: provider,
+      name: preset.name,
+      installed,
+      authenticated: auth?.authenticated ?? null,
+      enabled: this.isProviderEnabled(provider),
+      binaryPath,
+      version,
+    };
+  }
+
+  /** Get status for all providers in parallel (async, cached). */
+  async getAllProviderStatusesAsync(): Promise<ProviderStatus[]> {
+    const ids = Object.keys(PROVIDER_PRESETS) as ProviderId[];
+    return Promise.all(ids.map((id) => this.getProviderStatusAsync(id)));
+  }
+
+  // ── Cache Management ────────────────────────────────────
+
+  /** Get cached detection if still valid. */
+  private getCachedDetection(provider: ProviderId): CachedDetection | undefined {
+    const cached = this.detectionCache.get(provider);
+    if (!cached) return undefined;
+    if (Date.now() >= cached.expiresAt) {
+      this.detectionCache.delete(provider);
+      return undefined;
+    }
+    return cached;
+  }
+
+  /** Invalidate cache for a provider or all providers. */
+  invalidateCache(provider?: ProviderId): void {
+    if (provider) {
+      this.detectionCache.delete(provider);
+    } else {
+      this.detectionCache.clear();
+    }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────
+
+  /** Extract version-like pattern from CLI output. */
+  private parseVersion(raw: string): string {
+    const match = raw.match(/v?(\d+\.\d+(?:\.\d+)?(?:[-.]\w+)*)/);
+    return match ? match[0] : raw.split('\n')[0].trim().slice(0, 50);
   }
 
   // ── Enabled/Disabled ─────────────────────────────────────

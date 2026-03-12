@@ -1,7 +1,7 @@
 /**
  * Settings route tests.
  *
- * Covers: provider listing, single provider details, connection test,
+ * Covers: provider config listing, async status detection, connection test,
  * enable/disable toggle, model preferences, error cases.
  *
  * Uses a mock ProviderManager to avoid real CLI binary checks.
@@ -18,24 +18,32 @@ vi.mock('../middleware/rateLimit.js', () => ({
 }));
 
 // Mock ProviderManager so tests don't require real CLI binaries
-const mockGetAllStatuses = vi.fn();
-const mockGetStatus = vi.fn();
-const mockDetectInstalled = vi.fn();
-const mockCheckAuth = vi.fn();
+const mockGetProviderConfigs = vi.fn();
+const mockGetAllStatusesAsync = vi.fn();
+const mockGetStatusAsync = vi.fn();
+const mockDetectInstalledAsync = vi.fn();
+const mockCheckAuthAsync = vi.fn();
+const mockInvalidateCache = vi.fn();
 const mockGetModelPrefs = vi.fn();
 const mockSetModelPrefs = vi.fn();
 const mockSetEnabled = vi.fn();
 
 vi.mock('../providers/ProviderManager.js', () => ({
   ProviderManager: class MockProviderManager {
-    getAllProviderStatuses() { return mockGetAllStatuses(); }
-    getProviderStatus(id: string) { return mockGetStatus(id); }
-    detectInstalled(id: string) { return mockDetectInstalled(id); }
-    checkAuthenticated(id: string) { return mockCheckAuth(id); }
+    getProviderConfigs() { return mockGetProviderConfigs(); }
+    getAllProviderStatusesAsync() { return mockGetAllStatusesAsync(); }
+    getProviderStatusAsync(id: string) { return mockGetStatusAsync(id); }
+    detectInstalledAsync(id: string) { return mockDetectInstalledAsync(id); }
+    checkAuthenticatedAsync(id: string) { return mockCheckAuthAsync(id); }
+    invalidateCache(id?: string) { return mockInvalidateCache(id); }
     getModelPreferences(id: string) { return mockGetModelPrefs(id); }
     setModelPreferences(id: string, prefs: any) { return mockSetModelPrefs(id, prefs); }
     setProviderEnabled(id: string, enabled: boolean) { return mockSetEnabled(id, enabled); }
     isProviderEnabled() { return true; }
+    getActiveProviderId() { return 'copilot'; }
+    setActiveProviderId() {}
+    getProviderRanking() { return ['copilot', 'claude', 'gemini', 'opencode', 'cursor', 'codex']; }
+    setProviderRanking() {}
   },
 }));
 
@@ -44,13 +52,22 @@ import type { AppContext } from './context.js';
 
 // ── Fixtures ────────────────────────────────────────────────────────
 
+const MOCK_CONFIGS = [
+  { id: 'copilot', name: 'GitHub Copilot SDK', enabled: true },
+  { id: 'claude', name: 'Claude Code', enabled: true },
+  { id: 'gemini', name: 'Google Gemini CLI', enabled: true },
+  { id: 'opencode', name: 'OpenCode', enabled: true },
+  { id: 'cursor', name: 'Cursor', enabled: false },
+  { id: 'codex', name: 'Codex (ACP)', enabled: true },
+];
+
 const MOCK_STATUSES = [
-  { id: 'copilot', name: 'GitHub Copilot SDK', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/copilot' },
-  { id: 'claude', name: 'Claude Code', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/claude' },
-  { id: 'gemini', name: 'Google Gemini CLI', installed: false, authenticated: null, enabled: true, binaryPath: null },
-  { id: 'opencode', name: 'OpenCode', installed: false, authenticated: null, enabled: true, binaryPath: null },
-  { id: 'cursor', name: 'Cursor', installed: false, authenticated: null, enabled: false, binaryPath: null },
-  { id: 'codex', name: 'Codex (ACP)', installed: true, authenticated: false, enabled: true, binaryPath: '/usr/bin/codex-acp' },
+  { id: 'copilot', name: 'GitHub Copilot SDK', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/copilot', version: '1.0.0' },
+  { id: 'claude', name: 'Claude Code', installed: true, authenticated: true, enabled: true, binaryPath: '/usr/bin/claude', version: '2.1.0' },
+  { id: 'gemini', name: 'Google Gemini CLI', installed: false, authenticated: null, enabled: true, binaryPath: null, version: null },
+  { id: 'opencode', name: 'OpenCode', installed: false, authenticated: null, enabled: true, binaryPath: null, version: null },
+  { id: 'cursor', name: 'Cursor', installed: false, authenticated: null, enabled: false, binaryPath: null, version: null },
+  { id: 'codex', name: 'Codex (ACP)', installed: true, authenticated: false, enabled: true, binaryPath: '/usr/bin/codex-acp', version: '0.5.0' },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -100,8 +117,9 @@ describe('settings routes', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    mockGetAllStatuses.mockReturnValue(MOCK_STATUSES);
-    mockGetStatus.mockImplementation((id: string) =>
+    mockGetProviderConfigs.mockReturnValue(MOCK_CONFIGS);
+    mockGetAllStatusesAsync.mockResolvedValue(MOCK_STATUSES);
+    mockGetStatusAsync.mockImplementation(async (id: string) =>
       MOCK_STATUSES.find((s) => s.id === id) ?? (() => { throw new Error('Unknown'); })(),
     );
     mockGetModelPrefs.mockReturnValue({});
@@ -112,23 +130,26 @@ describe('settings routes', () => {
     await srv.stop();
   });
 
+  // ── GET /settings/providers (instant config) ──────────────
+
   describe('GET /settings/providers', () => {
-    it('returns all 6 providers', async () => {
+    it('returns all 6 provider configs', async () => {
       const res = await fetch(`${baseUrl}/settings/providers`);
       expect(res.status).toBe(200);
-      const providers = await res.json();
-      expect(providers).toHaveLength(6);
+      const configs = await res.json();
+      expect(configs).toHaveLength(6);
     });
 
-    it('includes installed/authenticated/enabled fields', async () => {
+    it('returns only config fields (id, name, enabled) — no CLI status', async () => {
       const res = await fetch(`${baseUrl}/settings/providers`);
-      const providers = await res.json();
-      for (const p of providers) {
-        expect(p).toHaveProperty('id');
-        expect(p).toHaveProperty('name');
-        expect(p).toHaveProperty('installed');
-        expect(p).toHaveProperty('authenticated');
-        expect(p).toHaveProperty('enabled');
+      const configs = await res.json();
+      for (const c of configs) {
+        expect(c).toHaveProperty('id');
+        expect(c).toHaveProperty('name');
+        expect(c).toHaveProperty('enabled');
+        expect(c).not.toHaveProperty('installed');
+        expect(c).not.toHaveProperty('authenticated');
+        expect(c).not.toHaveProperty('binaryPath');
       }
     });
 
@@ -140,17 +161,54 @@ describe('settings routes', () => {
       expect(raw).not.toContain('requiredEnvVars');
     });
 
+    it('calls getProviderConfigs (not getAllProviderStatuses)', async () => {
+      await fetch(`${baseUrl}/settings/providers`);
+      expect(mockGetProviderConfigs).toHaveBeenCalledTimes(1);
+      expect(mockGetAllStatusesAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── GET /settings/providers/status (async detection) ──────
+
+  describe('GET /settings/providers/status', () => {
+    it('returns all 6 provider statuses', async () => {
+      const res = await fetch(`${baseUrl}/settings/providers/status`);
+      expect(res.status).toBe(200);
+      const statuses = await res.json();
+      expect(statuses).toHaveLength(6);
+    });
+
+    it('includes installed/authenticated/version fields', async () => {
+      const res = await fetch(`${baseUrl}/settings/providers/status`);
+      const statuses = await res.json();
+      for (const s of statuses) {
+        expect(s).toHaveProperty('id');
+        expect(s).toHaveProperty('installed');
+        expect(s).toHaveProperty('authenticated');
+      }
+    });
+
     it('shows correct installed/auth status per provider', async () => {
-      const res = await fetch(`${baseUrl}/settings/providers`);
-      const providers = await res.json();
-      const copilot = providers.find((p: any) => p.id === 'copilot');
+      const res = await fetch(`${baseUrl}/settings/providers/status`);
+      const statuses = await res.json();
+      const copilot = statuses.find((s: any) => s.id === 'copilot');
       expect(copilot.installed).toBe(true);
       expect(copilot.authenticated).toBe(true);
-      const gemini = providers.find((p: any) => p.id === 'gemini');
+      const gemini = statuses.find((s: any) => s.id === 'gemini');
       expect(gemini.installed).toBe(false);
       expect(gemini.authenticated).toBeNull();
     });
+
+    it('returns 500 when async detection throws', async () => {
+      mockGetAllStatusesAsync.mockRejectedValue(new Error('detection failed'));
+      const res = await fetch(`${baseUrl}/settings/providers/status`);
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.error).toContain('detection failed');
+    });
   });
+
+  // ── GET /settings/providers/:provider ─────────────────────
 
   describe('GET /settings/providers/:provider', () => {
     it('returns single provider status with model prefs', async () => {
@@ -168,18 +226,27 @@ describe('settings routes', () => {
     });
   });
 
+  // ── POST /settings/providers/:provider/test ────────────────
+
   describe('POST /settings/providers/:provider/test', () => {
     it('returns success when installed and authenticated', async () => {
-      mockDetectInstalled.mockReturnValue({ installed: true, binaryPath: '/usr/bin/claude' });
-      mockCheckAuth.mockReturnValue({ authenticated: true });
+      mockDetectInstalledAsync.mockResolvedValue({ installed: true, binaryPath: '/usr/bin/claude' });
+      mockCheckAuthAsync.mockResolvedValue({ authenticated: true });
       const res = await fetch(`${baseUrl}/settings/providers/claude/test`, { method: 'POST' });
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(body.message).toContain('installed and responsive');
     });
 
+    it('invalidates cache after successful test', async () => {
+      mockDetectInstalledAsync.mockResolvedValue({ installed: true, binaryPath: '/usr/bin/claude' });
+      mockCheckAuthAsync.mockResolvedValue({ authenticated: true });
+      await fetch(`${baseUrl}/settings/providers/claude/test`, { method: 'POST' });
+      expect(mockInvalidateCache).toHaveBeenCalledWith('claude');
+    });
+
     it('returns failure when not installed', async () => {
-      mockDetectInstalled.mockReturnValue({ installed: false, binaryPath: null });
+      mockDetectInstalledAsync.mockResolvedValue({ installed: false, binaryPath: null });
       const res = await fetch(`${baseUrl}/settings/providers/gemini/test`, { method: 'POST' });
       const body = await res.json();
       expect(body.success).toBe(false);
@@ -187,8 +254,8 @@ describe('settings routes', () => {
     });
 
     it('returns failure when auth check fails', async () => {
-      mockDetectInstalled.mockReturnValue({ installed: true, binaryPath: '/usr/bin/codex-acp' });
-      mockCheckAuth.mockReturnValue({ authenticated: false, error: 'not logged in' });
+      mockDetectInstalledAsync.mockResolvedValue({ installed: true, binaryPath: '/usr/bin/codex-acp' });
+      mockCheckAuthAsync.mockResolvedValue({ authenticated: false, error: 'not logged in' });
       const res = await fetch(`${baseUrl}/settings/providers/codex/test`, { method: 'POST' });
       const body = await res.json();
       expect(body.success).toBe(false);
@@ -201,9 +268,11 @@ describe('settings routes', () => {
     });
   });
 
+  // ── PUT /settings/providers/:provider ──────────────────────
+
   describe('PUT /settings/providers/:provider', () => {
     it('updates enabled state', async () => {
-      mockGetStatus.mockReturnValue(MOCK_STATUSES[0]);
+      mockGetStatusAsync.mockResolvedValue(MOCK_STATUSES[0]);
       const res = await fetch(`${baseUrl}/settings/providers/copilot`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -214,7 +283,7 @@ describe('settings routes', () => {
     });
 
     it('updates model preferences', async () => {
-      mockGetStatus.mockReturnValue(MOCK_STATUSES[1]);
+      mockGetStatusAsync.mockResolvedValue(MOCK_STATUSES[1]);
       const prefs = { defaultModel: 'claude-opus-4', preferredModels: ['claude-opus-4', 'claude-sonnet-4'] };
       const res = await fetch(`${baseUrl}/settings/providers/claude`, {
         method: 'PUT',
@@ -226,7 +295,7 @@ describe('settings routes', () => {
     });
 
     it('returns updated status in response', async () => {
-      mockGetStatus.mockReturnValue({ ...MOCK_STATUSES[0], enabled: false });
+      mockGetStatusAsync.mockResolvedValue({ ...MOCK_STATUSES[0], enabled: false });
       mockGetModelPrefs.mockReturnValue({ defaultModel: 'gpt-5' });
       const res = await fetch(`${baseUrl}/settings/providers/copilot`, {
         method: 'PUT',
