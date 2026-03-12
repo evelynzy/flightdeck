@@ -26,7 +26,6 @@ import {
 import { getCommCommands } from './commands/CommCommands.js';
 import { getTaskCommands } from './commands/TaskCommands.js';
 import { getCoordCommands } from './commands/CoordCommands.js';
-import { getDeferredCommands } from './commands/DeferredCommands.js';
 import { getSystemCommands } from './commands/SystemCommands.js';
 import { getTimerCommands } from './commands/TimerCommands.js';
 import { getCapabilityCommands } from './commands/CapabilityCommands.js';
@@ -67,7 +66,6 @@ export class CommandDispatcher {
       ...getCommCommands(this.handlerCtx),
       ...getTaskCommands(this.handlerCtx),
       ...getCoordCommands(this.handlerCtx),
-      ...getDeferredCommands(this.handlerCtx),
       ...getSystemCommands(this.handlerCtx),
       ...getTimerCommands(this.handlerCtx),
       ...getCapabilityCommands(this.handlerCtx),

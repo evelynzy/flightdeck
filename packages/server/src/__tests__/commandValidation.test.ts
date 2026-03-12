@@ -10,7 +10,6 @@ import { getAgentCommands } from '../agents/commands/AgentCommands.js';
 import { getCoordCommands } from '../agents/commands/CoordCommands.js';
 import { getSystemCommands } from '../agents/commands/SystemCommands.js';
 import { getTimerCommands } from '../agents/commands/TimerCommands.js';
-import { getDeferredCommands } from '../agents/commands/DeferredCommands.js';
 import { getCapabilityCommands } from '../agents/commands/CapabilityCommands.js';
 import { getDirectMessageCommands } from '../agents/commands/DirectMessageCommands.js';
 import { getTemplateCommands } from '../agents/commands/TemplateCommands.js';
@@ -84,12 +83,6 @@ function makeCtx(overrides: Record<string, any> = {}): CommandHandlerContext {
       hasAnyTasks: vi.fn().mockReturnValue(false),
       failTask: vi.fn(),
       getTaskByAgent: vi.fn(),
-    },
-    deferredIssueRegistry: {
-      add: vi.fn().mockReturnValue({ id: 1, severity: 'P1', description: 'test' }),
-      list: vi.fn().mockReturnValue([]),
-      resolve: vi.fn(),
-      dismiss: vi.fn(),
     },
     timerRegistry: {
       create: vi.fn().mockReturnValue({ id: 'timer-1', label: 'test', repeat: false }),
@@ -609,30 +602,6 @@ describe('TimerCommands validation', () => {
   });
 });
 
-// ── DeferredCommands validation ──────────────────────────────────────
-
-describe('DeferredCommands validation', () => {
-  it('DEFER_ISSUE rejects missing "description"', () => {
-    const ctx = makeCtx();
-    const agent = makeAgent();
-    const cmd = findHandler(getDeferredCommands(ctx), 'DEFER_ISSUE');
-    cmd.handler(agent, '⟦⟦ DEFER_ISSUE {"severity": "P2"} ⟧⟧');
-    expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('Missing required field "description"'),
-    );
-  });
-
-  it('RESOLVE_DEFERRED rejects missing "issueId"', () => {
-    const ctx = makeCtx();
-    const agent = makeAgent();
-    const cmd = findHandler(getDeferredCommands(ctx), 'RESOLVE_DEFERRED');
-    cmd.handler(agent, '⟦⟦ RESOLVE_DEFERRED {} ⟧⟧');
-    expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('RESOLVE_DEFERRED validation error'),
-    );
-  });
-});
-
 // ── CapabilityCommands validation ────────────────────────────────────
 
 describe('CapabilityCommands validation', () => {
@@ -828,52 +797,6 @@ describe('TaskCommands validation', () => {
     cmd.handler(agent, `⟦⟦ DELEGATE {"to":"dev","task":"${bigTask}"} ⟧⟧`);
     expect(agent.sendMessage).toHaveBeenCalledWith(
       expect.stringContaining('DELEGATE validation error'),
-    );
-  });
-});
-
-// ── QUERY_DEFERRED validation ────────────────────────────────────────
-
-describe('QUERY_DEFERRED validation', () => {
-  it('accepts valid status filter', () => {
-    const ctx = makeCtx();
-    const agent = makeAgent();
-    const cmd = findHandler(getDeferredCommands(ctx), 'QUERY_DEFERRED');
-    cmd.handler(agent, '⟦⟦ QUERY_DEFERRED {"status": "open"} ⟧⟧');
-    // Should not get a validation error (may get "no deferred issues" which is fine)
-    expect(agent.sendMessage).not.toHaveBeenCalledWith(
-      expect.stringContaining('QUERY_DEFERRED validation error'),
-    );
-  });
-
-  it('accepts no payload', () => {
-    const ctx = makeCtx();
-    const agent = makeAgent();
-    const cmd = findHandler(getDeferredCommands(ctx), 'QUERY_DEFERRED');
-    cmd.handler(agent, '⟦⟦ QUERY_DEFERRED ⟧⟧');
-    // Should not get a validation error
-    expect(agent.sendMessage).not.toHaveBeenCalledWith(
-      expect.stringContaining('QUERY_DEFERRED validation error'),
-    );
-  });
-
-  it('rejects invalid status value', () => {
-    const ctx = makeCtx();
-    const agent = makeAgent();
-    const cmd = findHandler(getDeferredCommands(ctx), 'QUERY_DEFERRED');
-    cmd.handler(agent, '⟦⟦ QUERY_DEFERRED {"status": "invalid"} ⟧⟧');
-    expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('QUERY_DEFERRED validation error'),
-    );
-  });
-
-  it('rejects invalid JSON payload', () => {
-    const ctx = makeCtx();
-    const agent = makeAgent();
-    const cmd = findHandler(getDeferredCommands(ctx), 'QUERY_DEFERRED');
-    cmd.handler(agent, '⟦⟦ QUERY_DEFERRED {bad json} ⟧⟧');
-    expect(agent.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('QUERY_DEFERRED error: invalid JSON'),
     );
   });
 });

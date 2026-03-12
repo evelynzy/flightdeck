@@ -15,7 +15,6 @@ import type { DecisionLog } from '../../coordination/decisions/DecisionLog.js';
 import type { AgentMemory } from '../AgentMemory.js';
 import type { ChatGroupRegistry } from '../../comms/ChatGroupRegistry.js';
 import type { TaskDAG } from '../../tasks/TaskDAG.js';
-import type { DeferredIssueRegistry } from '../../tasks/DeferredIssueRegistry.js';
 import type { TimerRegistry } from '../../coordination/scheduling/TimerRegistry.js';
 import type { CapabilityInjector } from '../capabilities/CapabilityInjector.js';
 import type { TaskTemplateRegistry } from '../../tasks/TaskTemplates.js';
@@ -48,7 +47,6 @@ export interface CommandContext {
   agentMemory: AgentMemory;
   chatGroupRegistry: ChatGroupRegistry;
   taskDAG: TaskDAG;
-  deferredIssueRegistry: DeferredIssueRegistry;
   timerRegistry?: TimerRegistry;
   capabilityInjector?: CapabilityInjector;
   taskTemplateRegistry?: TaskTemplateRegistry;

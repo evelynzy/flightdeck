@@ -9,7 +9,6 @@ const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   task_started: 'Task Started',
   decision_made: 'Decision Made',
   delegated: 'Delegated',
-  deferred_issue: 'Deferred Issue',
 };
 
 export function ActivityDetailModal({

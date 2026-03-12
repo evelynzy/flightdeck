@@ -22,7 +22,6 @@ import { DecisionLog } from './coordination/decisions/DecisionLog.js';
 import { AgentMemory } from './agents/AgentMemory.js';
 import { ChatGroupRegistry } from './comms/ChatGroupRegistry.js';
 import { TaskDAG } from './tasks/TaskDAG.js';
-import { DeferredIssueRegistry } from './tasks/DeferredIssueRegistry.js';
 import { ProjectRegistry } from './projects/ProjectRegistry.js';
 import { TimerRegistry } from './coordination/scheduling/TimerRegistry.js';
 import { CostTracker } from './agents/CostTracker.js';
@@ -108,7 +107,6 @@ export interface ServiceContainer extends AppContext {
     agentMemory: AgentMemory;
     chatGroupRegistry: ChatGroupRegistry;
     taskDAG: TaskDAG;
-    deferredIssueRegistry: DeferredIssueRegistry;
     contextRefresher: ContextRefresher;
     scheduler: Scheduler;
     /** Null until wireHttpLayer() is called. */
@@ -169,7 +167,6 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   const agentMemory = new AgentMemory(db);
   const chatGroupRegistry = new ChatGroupRegistry(db);
   const taskDAG = new TaskDAG(db);
-  const deferredIssueRegistry = new DeferredIssueRegistry(db);
   const projectRegistry = new ProjectRegistry(db);
   const storageManager = new StorageManager();
   const knowledgeStore = new KnowledgeStore(db);
@@ -234,7 +231,7 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
     effectiveConfig, roleRegistry, lockRegistry, activityLedger,
     messageBus, decisionLog, agentMemory, chatGroupRegistry,
     taskDAG, {
-      db, deferredIssueRegistry, timerRegistry, capabilityInjector,
+      db, timerRegistry, capabilityInjector,
       taskTemplateRegistry, taskDecomposer, worktreeManager, costTracker,
       governancePipeline, messageQueueStore, agentRosterRepository, activeDelegationRepository,
       knowledgeInjector,
@@ -397,7 +394,6 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
       agentMemory,
       chatGroupRegistry,
       taskDAG,
-      deferredIssueRegistry,
       contextRefresher,
       scheduler,
       wsServer: null,

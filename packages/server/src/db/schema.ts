@@ -180,24 +180,6 @@ export const dagTasks = sqliteTable('dag_tasks', {
   index('idx_dag_tasks_id_team').on(table.id, table.teamId),
 ]);
 
-// ── Deferred Issues ──────────────────────────────────────────────
-
-export const deferredIssues = sqliteTable('deferred_issues', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  leadId: text('lead_id').notNull(),
-  reviewerAgentId: text('reviewer_agent_id').notNull(),
-  reviewerRole: text('reviewer_role').notNull(),
-  severity: text('severity').notNull().default('P1'),
-  description: text('description').notNull(),
-  sourceFile: text('source_file').default(''),
-  status: text('status').notNull().default('open'),       // open | resolved | dismissed
-  createdAt: text('created_at').default(utcNow),
-  resolvedAt: text('resolved_at'),
-}, (table) => [
-  index('idx_deferred_issues_lead').on(table.leadId),
-  index('idx_deferred_issues_status').on(table.status),
-]);
-
 // ── Agent Plans ──────────────────────────────────────────────────────
 
 export const agentPlans = sqliteTable('agent_plans', {

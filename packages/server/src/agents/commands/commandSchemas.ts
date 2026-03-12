@@ -171,23 +171,6 @@ export const cancelTimerSchema = z.object({
   { message: 'Requires either "timerId" (timer ID) or "label" (timer label)' },
 );
 
-// ── Deferred Commands ────────────────────────────────────────────────
-
-export const deferIssueSchema = z.object({
-  description: z.string({ message: 'Missing required field "description"' }).min(1, 'Missing required field "description"').max(MAX_CONTENT_LENGTH, `"description" too long (max ${MAX_CONTENT_LENGTH})`).describe('Issue description'),
-  severity: z.string().max(MAX_NAME_LENGTH).optional().describe('Severity level'),
-  filePath: z.string().max(500).optional().describe('Related file path'),
-});
-
-export const resolveDeferredSchema = z.object({
-  issueId: z.number({ message: 'Missing required field "issueId" (number)' }).describe('Deferred issue ID'),
-  dismiss: z.boolean().optional().describe('Dismiss instead of resolve'),
-});
-
-export const queryDeferredSchema = z.object({
-  status: z.enum(['open', 'resolved', 'dismissed'], { message: '"status" must be one of: open, resolved, dismissed' }).optional().describe('Filter by status'),
-});
-
 // ── Capability Commands ──────────────────────────────────────────────
 
 export const acquireCapabilitySchema = z.object({

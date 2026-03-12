@@ -107,7 +107,6 @@ describe('createContainer', () => {
     expect(container.internal.agentMemory).toBeDefined();
     expect(container.internal.chatGroupRegistry).toBeDefined();
     expect(container.internal.taskDAG).toBeDefined();
-    expect(container.internal.deferredIssueRegistry).toBeDefined();
     expect(container.internal.contextRefresher).toBeDefined();
     expect(container.internal.scheduler).toBeDefined();
     expect(container.internal.worktreeManager).toBeDefined();

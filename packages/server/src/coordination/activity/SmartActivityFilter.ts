@@ -29,7 +29,6 @@ const PRIORITY_MAP: Record<ActionType, ActivityPriority> = {
   message_sent: 'medium',
   group_message: 'medium',
   task_started: 'medium',
-  deferred_issue: 'medium',
   limit_change_requested: 'medium',
 
   // LOW — noisy, only shown if space remains

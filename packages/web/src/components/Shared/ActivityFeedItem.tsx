@@ -17,7 +17,6 @@ const ACTIVITY_ICONS: Record<string, string> = {
   task_started: '▶️',
   decision_made: '⚖️',
   delegated: '📋',
-  deferred_issue: '📌',
 };
 
 export { ACTIVITY_ICONS };
