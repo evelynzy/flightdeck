@@ -9,6 +9,7 @@ import { CommHeatmap } from '../FleetOverview/CommHeatmap';
 import type { HeatmapMessage, CommType as HeatmapCommType } from '../FleetOverview/CommHeatmap';
 import { useOptionalProjectId } from '../../contexts/ProjectContext';
 import { CommFlowGraph } from '../CommFlow/CommFlowGraph';
+import { AgentDetailModal } from '../AgentDetailModal';
 
 // Unified message entry covering both 1:1 comms and group messages
 interface CommEntry {
@@ -39,7 +40,7 @@ const fallbackStatus = { border: 'border-th-border', badge: 'bg-gray-500/20 text
 // ---------------------------------------------------------------------------
 // AgentNode — a single card in the tree
 // ---------------------------------------------------------------------------
-function AgentNode({ agent }: { agent: AgentInfo }) {
+function AgentNode({ agent, onClick }: { agent: AgentInfo; onClick?: () => void }) {
   const s = statusStyle[agent.status] ?? fallbackStatus;
   const roleName = agent.role?.name ?? agent.role?.id ?? 'Unknown';
   const shortId = agent.id.slice(0, 8);
@@ -47,7 +48,15 @@ function AgentNode({ agent }: { agent: AgentInfo }) {
   const modelLabel = agent.model?.split('/').pop()?.split('-').slice(-2).join('-') ?? '';
 
   return (
-    <div className={`border-2 rounded-lg px-3 py-2 text-center min-w-[140px] ${s.border}`}>
+    <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      className={`border-2 rounded-lg px-3 py-2 text-center min-w-[140px] transition-all ${s.border} ${
+        onClick ? 'cursor-pointer hover:brightness-125 hover:shadow-lg hover:scale-[1.03] active:scale-100' : ''
+      }`}
+    >
       {agent.role?.icon && <span className="mr-1">{agent.role.icon}</span>}
       <span className="text-sm font-medium text-th-text">{roleName}</span>
       <div className="text-xs font-mono" style={{ color: idColor(agent.id) }}>{shortId}</div>
@@ -67,7 +76,7 @@ function AgentNode({ agent }: { agent: AgentInfo }) {
 // ---------------------------------------------------------------------------
 // HierarchyTree — top-down tree of agents
 // ---------------------------------------------------------------------------
-function HierarchyTree({ agents }: { agents: AgentInfo[] }) {
+function HierarchyTree({ agents, onAgentClick }: { agents: AgentInfo[]; onAgentClick?: (agentId: string) => void }) {
   // Index children by parentId
   const byParent = new Map<string, AgentInfo[]>();
   const rootAgents: AgentInfo[] = [];
@@ -86,7 +95,7 @@ function HierarchyTree({ agents }: { agents: AgentInfo[] }) {
     const children = byParent.get(parent.id);
     return (
       <div key={parent.id} className="flex flex-col items-center gap-2">
-        <AgentNode agent={parent} />
+        <AgentNode agent={parent} onClick={onAgentClick ? () => onAgentClick(parent.id) : undefined} />
         {children && children.length > 0 && (
           <>
             <div className="w-px h-4 bg-th-bg-hover" />
@@ -311,6 +320,7 @@ export function OrgChart({ api, ws }: Props) {
   const projects = useLeadStore((s) => s.projects);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(contextProjectId);
   const [commView, setCommView] = useState<'graph' | 'list' | 'matrix' | 'heatmap'>('graph');
+  const [detailAgentId, setDetailAgentId] = useState<string | null>(null);
 
   // Identify leads (role.id === 'lead' with no parent)
   const leads = agents.filter((a) => a.role?.id === 'lead' && !a.parentId);
@@ -437,7 +447,7 @@ export function OrgChart({ api, ws }: Props) {
           <h3 className="text-sm font-medium text-th-text">Agent Hierarchy</h3>
           <span className="text-xs text-th-text-muted">{teamAgents.length} agents</span>
         </div>
-        <HierarchyTree agents={teamAgents} />
+        <HierarchyTree agents={teamAgents} onAgentClick={setDetailAgentId} />
       </section>
 
       {/* Communication section */}
@@ -503,6 +513,10 @@ export function OrgChart({ api, ws }: Props) {
         )}
       </section>
       </div>
+
+      {detailAgentId && (
+        <AgentDetailModal agentId={detailAgentId} onClose={() => setDetailAgentId(null)} />
+      )}
     </div>
   );
 }
