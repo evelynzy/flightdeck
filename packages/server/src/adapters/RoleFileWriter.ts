@@ -8,6 +8,7 @@
  * See docs/research/custom-agents-cross-cli.md for format details.
  */
 import { mkdir, writeFile, readdir, unlink, readFile } from 'fs/promises';
+import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { assertPathWithinDir } from '../utils/pathValidation.js';
 
@@ -134,15 +135,25 @@ export class ClaudeRoleFileWriter implements RoleFileWriter {
   }
 }
 
-// ── Gemini: .gemini/agents/<role>.md ────────────────────────────────
+// ── Gemini: ~/.gemini/agents/<role>.md ───────────────────────────────
+//
+// Gemini CLI reads agent definitions from the USER's home directory
+// (~/.gemini/agents/), not from the project directory. This makes
+// agent configs shared across all projects for a given user.
 
 export class GeminiRoleFileWriter implements RoleFileWriter {
+  private readonly homeDir: string;
+
+  constructor(homeDir?: string) {
+    this.homeDir = homeDir ?? homedir();
+  }
+
   getFormat(): string {
     return 'gemini-agent-md';
   }
 
-  async writeRoleFiles(roles: RoleDefinition[], targetDir: string): Promise<string[]> {
-    const dir = join(targetDir, '.gemini', 'agents');
+  async writeRoleFiles(roles: RoleDefinition[], _targetDir: string): Promise<string[]> {
+    const dir = join(this.homeDir, '.gemini', 'agents');
     await mkdir(dir, { recursive: true });
 
     const writtenFiles: string[] = [];
@@ -168,8 +179,8 @@ export class GeminiRoleFileWriter implements RoleFileWriter {
     return writtenFiles;
   }
 
-  async cleanRoleFiles(targetDir: string): Promise<void> {
-    const dir = join(targetDir, '.gemini', 'agents');
+  async cleanRoleFiles(_targetDir: string): Promise<void> {
+    const dir = join(this.homeDir, '.gemini', 'agents');
     await removeMatchingFlightdeckFiles(dir, 'flightdeck-', '.md');
   }
 }

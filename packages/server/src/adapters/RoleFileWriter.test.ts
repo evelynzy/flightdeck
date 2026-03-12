@@ -198,24 +198,38 @@ describe('ClaudeRoleFileWriter', () => {
 // ── Gemini Writer ───────────────────────────────────────────────────
 
 describe('GeminiRoleFileWriter', () => {
-  const writer = new GeminiRoleFileWriter();
+  let geminiHomeDir: string;
+  let writer: GeminiRoleFileWriter;
+
+  beforeEach(async () => {
+    geminiHomeDir = await mkdtemp(join(tmpdir(), 'gemini-home-'));
+    writer = new GeminiRoleFileWriter(geminiHomeDir);
+  });
+
+  afterEach(async () => {
+    await rm(geminiHomeDir, { recursive: true, force: true });
+  });
 
   it('returns correct format identifier', () => {
     expect(writer.getFormat()).toBe('gemini-agent-md');
   });
 
-  it('writes .md files to .gemini/agents/', async () => {
+  it('writes .md files to ~/.gemini/agents/ (user home, not project dir)', async () => {
     const files = await writer.writeRoleFiles(sampleRoles, tempDir);
 
     expect(files).toHaveLength(2);
-    expect(files[0]).toContain('.gemini/agents/flightdeck-developer.md');
-    expect(files[1]).toContain('.gemini/agents/flightdeck-architect.md');
+    // Files should be in the home directory, NOT in tempDir (project dir)
+    expect(files[0]).toContain(join(geminiHomeDir, '.gemini', 'agents', 'flightdeck-developer.md'));
+    expect(files[1]).toContain(join(geminiHomeDir, '.gemini', 'agents', 'flightdeck-architect.md'));
+    // Ensure files are NOT in the project directory
+    expect(files[0]).not.toContain(tempDir);
+    expect(files[1]).not.toContain(tempDir);
   });
 
   it('produces pure markdown without YAML frontmatter', async () => {
     await writer.writeRoleFiles(sampleRoles, tempDir);
     const content = await readFile(
-      join(tempDir, '.gemini', 'agents', 'flightdeck-developer.md'),
+      join(geminiHomeDir, '.gemini', 'agents', 'flightdeck-developer.md'),
       'utf-8',
     );
 
@@ -226,18 +240,29 @@ describe('GeminiRoleFileWriter', () => {
     expect(content).toContain('You are a developer. Write clean code and tests.');
   });
 
-  it('cleanRoleFiles removes generated files', async () => {
+  it('cleanRoleFiles removes generated files from home directory', async () => {
     await writer.writeRoleFiles(singleRole, tempDir);
     await writer.cleanRoleFiles(tempDir);
 
-    const dir = join(tempDir, '.gemini', 'agents');
+    const dir = join(geminiHomeDir, '.gemini', 'agents');
     const { readdir } = await import('fs/promises');
     const remaining = await readdir(dir);
     expect(remaining).toHaveLength(0);
   });
 
   it('cleanRoleFiles is safe when directory does not exist', async () => {
-    await expect(writer.cleanRoleFiles(join(tempDir, 'nonexistent'))).resolves.not.toThrow();
+    const freshWriter = new GeminiRoleFileWriter(join(tempDir, 'nonexistent-home'));
+    await expect(freshWriter.cleanRoleFiles(tempDir)).resolves.not.toThrow();
+  });
+
+  it('ignores targetDir parameter (uses home dir instead)', async () => {
+    const projectDir = join(tempDir, 'some-project');
+    await mkdir(projectDir, { recursive: true });
+    const files = await writer.writeRoleFiles(singleRole, projectDir);
+
+    // Written to home dir, not project dir
+    expect(files[0]).toContain(geminiHomeDir);
+    expect(files[0]).not.toContain(projectDir);
   });
 });
 
