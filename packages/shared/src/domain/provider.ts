@@ -165,7 +165,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     color: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-l-blue-500', tab: 'text-blue-400 border-blue-400' },
     docsUrl: 'https://github.com/google-gemini/gemini-cli',
     setupLinks: [{ label: 'Installation guide', url: 'https://geminicli.com/docs/get-started/installation/' }],
-    isPreview: true,
+    isPreview: false,
   },
 
   claude: {
@@ -195,7 +195,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     color: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-l-amber-500', tab: 'text-orange-400 border-orange-400' },
     docsUrl: 'https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview',
     setupLinks: [{ label: 'Installation guide', url: 'https://github.com/zed-industries/claude-agent-acp#installation' }],
-    isPreview: true,
+    isPreview: false,
   },
 
   codex: {
