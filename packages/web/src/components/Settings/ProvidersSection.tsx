@@ -322,7 +322,7 @@ function ProviderCard({
           </div>
 
           {/* Authentication info */}
-          {!provider.authenticated && (
+          {provider.authenticated === false && (
             <div className="bg-th-bg-alt border border-th-border rounded-md p-2.5 text-xs flex items-center gap-2">
               <LogIn className="w-3.5 h-3.5 text-accent shrink-0" />
               <span className="text-th-text-alt">{loginLabel}</span>
