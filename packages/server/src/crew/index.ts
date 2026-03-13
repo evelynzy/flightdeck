@@ -1,5 +1,5 @@
 /**
- * Teams module barrel export.
+ * Crews module barrel export.
  */
 export {
   BUNDLE_FORMAT_VERSION,
@@ -17,6 +17,6 @@ export type {
   KnowledgeExport,
   CorrectionExport,
   FeedbackExport,
-  TeamBundle,
+  CrewBundle,
   ExportOptions,
 } from './bundle-format.js';

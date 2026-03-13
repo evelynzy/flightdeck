@@ -12,11 +12,11 @@ import {
   verifyChecksum,
   BUNDLE_FORMAT_VERSION,
 } from './bundle-format.js';
-import type { TeamBundle, KnowledgeCategory } from './bundle-format.js';
+import type { CrewBundle, KnowledgeCategory } from './bundle-format.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function makeContent(): Omit<import('./bundle-format.js').TeamBundle, 'manifest'> {
+function makeContent(): Omit<import('./bundle-format.js').CrewBundle, 'manifest'> {
   return {
     agents: [
       { name: 'dev-1', role: 'developer', model: 'gpt-4', status: 'idle', config: {} },
@@ -65,12 +65,12 @@ describe('bundle-format', () => {
   describe('createManifest', () => {
     it('creates manifest with correct stats', () => {
       const content = makeContent();
-      const manifest = createManifest(content, { projectId: 'proj-1', teamId: 'team-1' });
+      const manifest = createManifest(content, { projectId: 'proj-1', crewId: 'crew-1' });
 
       expect(manifest.bundleFormat).toBe('1.0');
       expect(manifest.exportedAt).toBeTruthy();
       expect(manifest.sourceProjectId).toBe('proj-1');
-      expect(manifest.sourceTeamId).toBe('team-1');
+      expect(manifest.sourceCrewId).toBe('crew-1');
       expect(manifest.checksum).toMatch(/^[a-f0-9]{64}$/);
       expect(manifest.stats.agentCount).toBe(1);
       expect(manifest.stats.knowledgeCount).toBe(1);
@@ -81,7 +81,7 @@ describe('bundle-format', () => {
     it('works without projectId/teamId', () => {
       const manifest = createManifest(makeContent());
       expect(manifest.sourceProjectId).toBeUndefined();
-      expect(manifest.sourceTeamId).toBeUndefined();
+      expect(manifest.sourceCrewId).toBeUndefined();
     });
 
     it('counts knowledge across all categories', () => {
@@ -134,14 +134,14 @@ describe('bundle-format', () => {
     it('returns true for valid bundle', () => {
       const content = makeContent();
       const manifest = createManifest(content);
-      const bundle: TeamBundle = { manifest, ...content };
+      const bundle: CrewBundle = { manifest, ...content };
       expect(verifyChecksum(bundle)).toBe(true);
     });
 
     it('returns false when content is tampered', () => {
       const content = makeContent();
       const manifest = createManifest(content);
-      const bundle: TeamBundle = { manifest, ...content };
+      const bundle: CrewBundle = { manifest, ...content };
 
       // Tamper with agents
       bundle.agents.push({ name: 'hacker', role: 'evil', model: 'x', status: 'idle', config: {} });
@@ -152,7 +152,7 @@ describe('bundle-format', () => {
       const content = makeContent();
       const manifest = createManifest(content);
       manifest.checksum = 'a'.repeat(64);
-      const bundle: TeamBundle = { manifest, ...content };
+      const bundle: CrewBundle = { manifest, ...content };
       expect(verifyChecksum(bundle)).toBe(false);
     });
   });

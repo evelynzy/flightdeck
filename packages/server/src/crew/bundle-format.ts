@@ -1,5 +1,5 @@
 /**
- * Team export bundle format — versioned structure for portable teams.
+ * Crew export bundle format — versioned structure for portable crews.
  *
  * A bundle is a directory (`.flightdeck-team/`) containing:
  *   manifest.json   — version, metadata, checksum
@@ -7,7 +7,7 @@
  *   knowledge/      — entries by category (core.json, procedural.json, etc.)
  *   training/       — corrections.json, feedback.json
  *
- * Design: docs/design/agent-server-architecture.md (Portable Teams)
+ * Design: docs/design/agent-server-architecture.md (Portable Crews)
  */
 import { createHash } from 'node:crypto';
 
@@ -21,7 +21,7 @@ export interface BundleManifest {
   bundleFormat: string;
   exportedAt: string;
   sourceProjectId?: string;
-  sourceTeamId?: string;
+  sourceCrewId?: string;
   checksum: string;
   stats: BundleStats;
 }
@@ -91,7 +91,7 @@ export interface FeedbackExport {
 
 // ── Full Bundle ─────────────────────────────────────────────────────
 
-export interface TeamBundle {
+export interface CrewBundle {
   manifest: BundleManifest;
   agents: AgentExport[];
   knowledge: Record<KnowledgeCategory, KnowledgeExport[]>;
@@ -117,7 +117,7 @@ export interface ExportOptions {
  * Compute SHA-256 checksum of bundle content (agents + knowledge + training).
  * The manifest itself is excluded from the checksum.
  */
-export function computeChecksum(bundle: Omit<TeamBundle, 'manifest'>): string {
+export function computeChecksum(bundle: Omit<CrewBundle, 'manifest'>): string {
   const hash = createHash('sha256');
   hash.update(JSON.stringify(bundle.agents));
   hash.update(JSON.stringify(bundle.knowledge));
@@ -127,14 +127,14 @@ export function computeChecksum(bundle: Omit<TeamBundle, 'manifest'>): string {
 
 /** Create a manifest from bundle content. */
 export function createManifest(
-  bundle: Omit<TeamBundle, 'manifest'>,
-  opts?: { projectId?: string; teamId?: string },
+  bundle: Omit<CrewBundle, 'manifest'>,
+  opts?: { projectId?: string; crewId?: string },
 ): BundleManifest {
   return {
     bundleFormat: BUNDLE_FORMAT_VERSION,
     exportedAt: new Date().toISOString(),
     sourceProjectId: opts?.projectId,
-    sourceTeamId: opts?.teamId,
+    sourceCrewId: opts?.crewId,
     checksum: computeChecksum(bundle),
     stats: {
       agentCount: bundle.agents.length,
@@ -162,7 +162,7 @@ export function validateManifest(manifest: unknown): manifest is BundleManifest 
 }
 
 /** Verify bundle integrity by recomputing checksum. */
-export function verifyChecksum(bundle: TeamBundle): boolean {
+export function verifyChecksum(bundle: CrewBundle): boolean {
   const expected = bundle.manifest.checksum;
   const actual = computeChecksum({
     agents: bundle.agents,

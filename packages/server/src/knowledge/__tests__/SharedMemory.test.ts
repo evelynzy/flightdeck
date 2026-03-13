@@ -95,7 +95,7 @@ describe('SharedMemory', () => {
         { category: 'semantic', key: 'fact', content: 'v2' },
       ]);
 
-      const insights = shared.getTeamInsights(projectId);
+      const insights = shared.getCrewInsights(projectId);
       expect(insights.totalEntries).toBe(1);
       expect(insights.entries[0].metadata?.contributors).toEqual(['agent-1']);
       expect(insights.entries[0].content).toBe('v2');
@@ -129,7 +129,7 @@ describe('SharedMemory', () => {
         ]);
       }
 
-      const entry = shared.getTeamInsights(projectId).entries[0];
+      const entry = shared.getCrewInsights(projectId).entries[0];
       expect(entry.metadata?.confidence).toBeLessThanOrEqual(1.0);
     });
   });
@@ -192,7 +192,7 @@ describe('SharedMemory', () => {
     });
   });
 
-  describe('getTeamInsights', () => {
+  describe('getCrewInsights', () => {
     it('returns aggregated stats across all agents', () => {
       shared.share(projectId, 'agent-1', [
         { category: 'semantic', key: 'f1', content: 'Fact 1' },
@@ -202,7 +202,7 @@ describe('SharedMemory', () => {
         { category: 'procedural', key: 'p1', content: 'Proc 1' },
       ]);
 
-      const insights = shared.getTeamInsights(projectId);
+      const insights = shared.getCrewInsights(projectId);
       expect(insights.totalEntries).toBe(3);
       expect(insights.contributors).toContain('agent-1');
       expect(insights.contributors).toContain('agent-2');
@@ -211,7 +211,7 @@ describe('SharedMemory', () => {
     });
 
     it('returns empty insights for project with no shared knowledge', () => {
-      const insights = shared.getTeamInsights('empty-project');
+      const insights = shared.getCrewInsights('empty-project');
       expect(insights.totalEntries).toBe(0);
       expect(insights.contributors).toEqual([]);
       expect(insights.entries).toEqual([]);
@@ -250,7 +250,7 @@ describe('SharedMemory', () => {
       const deleted = shared.deleteOwnEntry(projectId, 'agent-1', 'semantic', 'deletable');
       expect(deleted).toBe(true);
 
-      const insights = shared.getTeamInsights(projectId);
+      const insights = shared.getCrewInsights(projectId);
       expect(insights.totalEntries).toBe(0);
     });
 
@@ -263,7 +263,7 @@ describe('SharedMemory', () => {
       expect(deleted).toBe(false);
 
       // Entry should still exist
-      expect(shared.getTeamInsights(projectId).totalEntries).toBe(1);
+      expect(shared.getCrewInsights(projectId).totalEntries).toBe(1);
     });
 
     it('returns false for non-existent entry deletion', () => {
@@ -341,7 +341,7 @@ describe('SharedMemory', () => {
       const entries = shared.getSharedKnowledge('proj-B', 'agent-2', { includeSelf: true });
       expect(entries).toHaveLength(0);
 
-      const insights = shared.getTeamInsights('proj-B');
+      const insights = shared.getCrewInsights('proj-B');
       expect(insights.totalEntries).toBe(0);
     });
   });

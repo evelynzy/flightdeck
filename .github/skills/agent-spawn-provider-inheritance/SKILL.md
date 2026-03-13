@@ -22,7 +22,7 @@ When a new agent is spawned (via DELEGATE command or API), the flow is:
 ```sql
 -- Note: provider is stored in the `metadata` JSON column, not a top-level column
 -- The agent_roster schema has: agent_id, role, model, status, session_id, project_id, 
---   created_at, updated_at, last_task_summary, metadata, team_id
+--   created_at, updated_at, last_task_summary, metadata, team_id (crew assignment; stored as `team_id` column for legacy reasons)
 ```
 
 ## Two Provider Inheritance Bugs

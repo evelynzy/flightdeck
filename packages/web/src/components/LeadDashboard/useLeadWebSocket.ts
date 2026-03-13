@@ -292,7 +292,7 @@ function handleMessageSent(msg: WsMessageSent, store: StoreApi, agents: AgentInf
     fromId: msg.from,
     fromRole: msg.fromRole || fromAgent?.role?.name || 'Unknown',
     toId: msg.to,
-    toRole: isBroadcast ? 'Team' : (msg.toRole || toAgent?.role?.name || 'Unknown'),
+    toRole: isBroadcast ? 'Crew' : (msg.toRole || toAgent?.role?.name || 'Unknown'),
     content: msg.content ?? '',
     timestamp: Date.now(),
     type: isBroadcast ? 'broadcast' : 'message',

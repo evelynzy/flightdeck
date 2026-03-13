@@ -202,7 +202,7 @@ export class ProjectRegistry {
     }
 
     if (briefing.memories.length > 0) {
-      lines.push('', '## Team Knowledge');
+      lines.push('', '## Crew Knowledge');
       for (const m of briefing.memories) {
         lines.push(`- **${m.key}**: ${m.value}`);
       }

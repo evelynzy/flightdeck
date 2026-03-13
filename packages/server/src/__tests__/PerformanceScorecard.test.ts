@@ -142,7 +142,7 @@ describe('PerformanceTracker', () => {
     expect(card.metrics.collaboration.score).toBe(30);
   });
 
-  it('getTeamScorecards returns all non-terminal team members', () => {
+  it('getCrewScorecards returns all non-terminal team members', () => {
     const agents = [
       makeAgent(LEAD_ID, 'lead', undefined, 0),
       makeAgent(DEV_ID, 'developer', LEAD_ID, 5000),
@@ -154,7 +154,7 @@ describe('PerformanceTracker', () => {
       makeEntry('qa-1', 'task_completed', 2),
     ];
     const t = new PerformanceTracker(makeLedger(entries), makeAgentManager(agents));
-    const cards = t.getTeamScorecards(LEAD_ID);
+    const cards = t.getCrewScorecards(LEAD_ID);
     // lead itself + dev + qa (all have parentId===leadId or id===leadId)
     expect(cards.length).toBe(3);
     const ids = cards.map((c) => c.agentId);
