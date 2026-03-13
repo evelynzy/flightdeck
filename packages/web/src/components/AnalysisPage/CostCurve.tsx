@@ -47,7 +47,13 @@ export function CostCurve({ data, width = 260, height = 210 }: CostCurveProps) {
       };
     }
     const times = data.map((d) => d.time);
-    const maxTokens = Math.max(...data.map((d) => d.cumulativeCost), 1);
+    const maxTokens = hasBreakdown
+      ? Math.max(
+          ...data.map((d) => d.cumulativeInput ?? 0),
+          ...data.map((d) => d.cumulativeOutput ?? 0),
+          1,
+        )
+      : Math.max(...data.map((d) => d.cumulativeCost), 1);
 
     return {
       xScale: scaleTime({
@@ -110,38 +116,36 @@ export function CostCurve({ data, width = 260, height = 210 }: CostCurveProps) {
         <Group left={MARGIN.left} top={MARGIN.top}>
           {hasBreakdown ? (
             <>
-              {/* Stacked areas: output on top of input */}
-              <AreaClosed
-                data={data}
-                x={(d) => xScale(new Date(d.time)) ?? 0}
-                y={(d) => yScale(d.cumulativeCost) ?? 0}
-                yScale={yScale}
-                fill={OUTPUT_COLOR}
-                fillOpacity={0.2}
-              />
+              {/* Input area + line */}
               <AreaClosed
                 data={data}
                 x={(d) => xScale(new Date(d.time)) ?? 0}
                 y={(d) => yScale(d.cumulativeInput ?? 0) ?? 0}
                 yScale={yScale}
                 fill={INPUT_COLOR}
-                fillOpacity={0.25}
+                fillOpacity={0.15}
               />
-              {/* Total outline */}
-              <LinePath
-                data={data}
-                x={(d) => xScale(new Date(d.time)) ?? 0}
-                y={(d) => yScale(d.cumulativeCost) ?? 0}
-                stroke={OUTPUT_COLOR}
-                strokeWidth={1}
-                strokeOpacity={0.5}
-              />
-              {/* Input boundary line */}
               <LinePath
                 data={data}
                 x={(d) => xScale(new Date(d.time)) ?? 0}
                 y={(d) => yScale(d.cumulativeInput ?? 0) ?? 0}
                 stroke={INPUT_COLOR}
+                strokeWidth={1.5}
+              />
+              {/* Output area + line */}
+              <AreaClosed
+                data={data}
+                x={(d) => xScale(new Date(d.time)) ?? 0}
+                y={(d) => yScale(d.cumulativeOutput ?? 0) ?? 0}
+                yScale={yScale}
+                fill={OUTPUT_COLOR}
+                fillOpacity={0.15}
+              />
+              <LinePath
+                data={data}
+                x={(d) => xScale(new Date(d.time)) ?? 0}
+                y={(d) => yScale(d.cumulativeOutput ?? 0) ?? 0}
+                stroke={OUTPUT_COLOR}
                 strokeWidth={1.5}
               />
             </>
@@ -189,9 +193,9 @@ export function CostCurve({ data, width = 260, height = 210 }: CostCurveProps) {
                   />
                   <circle
                     cx={xScale(new Date(tooltipData.time)) ?? 0}
-                    cy={yScale(tooltipData.cumulativeCost) ?? 0}
+                    cy={yScale(tooltipData.cumulativeOutput ?? 0) ?? 0}
                     r={3}
-                    fill={TOTAL_FALLBACK_COLOR}
+                    fill={OUTPUT_COLOR}
                     stroke="#1a1a2e"
                     strokeWidth={1.5}
                     pointerEvents="none"
@@ -271,7 +275,7 @@ export function CostCurve({ data, width = 260, height = 210 }: CostCurveProps) {
                 <span>Input: <strong>{formatTokens(tooltipData.cumulativeInput ?? 0)}</strong></span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: TOTAL_FALLBACK_COLOR, flexShrink: 0 }} />
+                <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: OUTPUT_COLOR, flexShrink: 0 }} />
                 <span>Output: <strong>{formatTokens((tooltipData.cumulativeOutput ?? 0))}</strong></span>
               </div>
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 3, paddingTop: 3, fontSize: 10, opacity: 0.7 }}>
