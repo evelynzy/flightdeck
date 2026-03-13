@@ -523,6 +523,9 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
     if (options?.projectName) agent.projectName = options.projectName;
     if (options?.projectId) agent.projectId = options.projectId;
     if (options?.provider) agent.provider = options.provider;
+    // Default provider from ServerConfig so even queued agents show a provider in the UI.
+    // The post-ACP roster update (onSessionReady) overwrites with the final resolved value.
+    if (!agent.provider && this.config.provider) agent.provider = this.config.provider;
     if (role.id === 'lead') {
       agent.budget = { maxConcurrent: this.maxConcurrent, runningCount: this.getRunningCount() + 1 };
     }
