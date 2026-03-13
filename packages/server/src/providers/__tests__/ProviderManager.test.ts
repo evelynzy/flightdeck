@@ -481,6 +481,87 @@ describe('ProviderManager', () => {
     });
   });
 
+  // ── resolveAndPersistProvider with ConfigStore ────────────
+
+  describe('resolveAndPersistProvider with ConfigStore', () => {
+    function createMockConfigStore(overrides?: {
+      providerId?: string;
+      providerSettings?: Record<string, { enabled: boolean; models: string[] }>;
+      providerRanking?: string[];
+    }) {
+      const config = {
+        provider: { id: overrides?.providerId ?? 'copilot' },
+        providerSettings: overrides?.providerSettings ?? {},
+        providerRanking: overrides?.providerRanking ?? [],
+      };
+      return {
+        current: config,
+        writePartial: vi.fn().mockResolvedValue(undefined),
+      };
+    }
+
+    it('uses configured provider when installed (providers enabled by default)', () => {
+      const configStore = createMockConfigStore({ providerId: 'claude' });
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === 'which claude-agent-acp') return '/usr/local/bin/claude-agent-acp';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+      const result = mgr.resolveAndPersistProvider();
+      expect(result).toBe('claude');
+    });
+
+    it('treats providers as enabled when providerSettings has no entry', () => {
+      // This is the critical case: providerSettings is empty {}, so the provider
+      // has no explicit entry. isProviderEnabled should default to true.
+      const configStore = createMockConfigStore({ providerId: 'claude', providerSettings: {} });
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === 'which claude-agent-acp') return '/usr/local/bin/claude-agent-acp';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+      expect(mgr.isProviderEnabled('claude')).toBe(true);
+    });
+
+    it('respects explicit enabled: false in providerSettings', () => {
+      const configStore = createMockConfigStore({
+        providerId: 'copilot',
+        providerSettings: { copilot: { enabled: false, models: [] } },
+        providerRanking: ['copilot', 'claude'],
+      });
+      exec.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('which ')) return '/usr/local/bin/some-binary';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+      // copilot is installed but explicitly disabled — should fall back to claude
+      const result = mgr.resolveAndPersistProvider();
+      expect(result).toBe('claude');
+    });
+
+    it('falls back through ranking when configured provider not installed', () => {
+      const configStore = createMockConfigStore({
+        providerId: 'copilot',
+        providerRanking: ['copilot', 'claude', 'gemini'],
+      });
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === 'which claude-agent-acp') return '/usr/local/bin/claude-agent-acp';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+      const result = mgr.resolveAndPersistProvider();
+      expect(result).toBe('claude');
+      // Should persist the fallback
+      expect(configStore.writePartial).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: expect.objectContaining({ id: 'claude' }) }),
+      );
+    });
+  });
+
   // ── getActiveProviderId fallback ────────────────────────
 
   describe('getActiveProviderId without db or configStore', () => {

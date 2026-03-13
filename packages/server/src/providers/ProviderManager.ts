@@ -331,7 +331,7 @@ export class ProviderManager {
   isProviderEnabled(provider: ProviderId): boolean {
     if (this.configStore) {
       const settings = this.configStore.current.providerSettings[provider];
-      return settings?.enabled ?? false;
+      return settings?.enabled ?? true;
     }
     if (!this.db) return true;
     return this.db.getSetting(`${SETTING_PREFIX}${provider}:enabled`) !== 'false';
@@ -339,7 +339,7 @@ export class ProviderManager {
 
   setProviderEnabled(provider: ProviderId, enabled: boolean): void {
     if (this.configStore) {
-      const current = this.configStore.current.providerSettings[provider] ?? { enabled: false, models: [] };
+      const current = this.configStore.current.providerSettings[provider] ?? { enabled: true, models: [] };
       this.configStore.writePartial({ providerSettings: { [provider]: { ...current, enabled } } }).catch(err => logger.warn({ msg: 'Failed to persist provider enabled state', provider, error: err }));
       return;
     }
@@ -362,7 +362,7 @@ export class ProviderManager {
 
   setModelPreferences(provider: ProviderId, prefs: ModelPreferences): void {
     if (this.configStore) {
-      const current = this.configStore.current.providerSettings[provider] ?? { enabled: false, models: [] };
+      const current = this.configStore.current.providerSettings[provider] ?? { enabled: true, models: [] };
       this.configStore.writePartial({
         providerSettings: { [provider]: { ...current, models: prefs.preferredModels ?? [] } },
       }).catch(err => logger.warn({ msg: 'Failed to persist model preferences', provider, error: err }));
