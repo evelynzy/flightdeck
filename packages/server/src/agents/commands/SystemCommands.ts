@@ -122,14 +122,14 @@ function handleHaltHeartbeat(ctx: CommandHandlerContext, agent: Agent): void {
   ctx.haltHeartbeat(agent.id);
   logger.info('agent', `Heartbeat halted by ${agent.role.name} (${agent.id.slice(0, 8)})`);
   ctx.activityLedger.log(agent.id, agent.role?.id ?? 'unknown', 'heartbeat_halted', `Heartbeat halted by ${agent.role.name}`, {}, ctx.getProjectIdForAgent(agent.id) ?? '');
-  agent.sendMessage('[System] Heartbeat paused (nudges + command reminders). Use RESUME_HEARTBEAT to re-enable.');
+  agent.sendMessage('[System] Heartbeat paused (lead idle nudges). Command reminders are unaffected. Use RESUME_HEARTBEAT to re-enable nudges.');
 }
 
 function handleResumeHeartbeat(ctx: CommandHandlerContext, agent: Agent): void {
   ctx.resumeHeartbeat(agent.id);
   logger.info('agent', `Heartbeat resumed by ${agent.role.name} (${agent.id.slice(0, 8)})`);
   ctx.activityLedger.log(agent.id, agent.role?.id ?? 'unknown', 'status_change', `Heartbeat resumed by ${agent.role.name}`, {}, ctx.getProjectIdForAgent(agent.id) ?? '');
-  agent.sendMessage('[System] Heartbeat resumed. Nudges and command reminders are active again.');
+  agent.sendMessage('[System] Heartbeat resumed. Lead idle nudges are active again.');
 }
 
 function handleRequestLimitChange(ctx: CommandHandlerContext, agent: Agent, data: string): void {

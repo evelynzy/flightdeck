@@ -823,7 +823,7 @@ describe('HeartbeatMonitor', () => {
       }));
     });
 
-    it('skips halted agents in periodic reminders', () => {
+    it('sends periodic reminders even when agent has halted heartbeat (halt only controls nudges)', () => {
       const agent = makeAgent({
         id: 'dev-1',
         status: 'running',
@@ -831,11 +831,12 @@ describe('HeartbeatMonitor', () => {
       });
       ctx.getAllAgents.mockReturnValue([agent]);
 
-      // Halt heartbeat for this agent
+      // Halt heartbeat — should NOT affect command reminders
       monitor.haltHeartbeat('dev-1');
 
       triggerCheck();
-      expect(agent.queueMessage).not.toHaveBeenCalled();
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+      expect(agent.queueMessage).toHaveBeenCalledWith(expect.stringContaining('Command Reference Reminder'));
     });
 
     it('resumes periodic reminders after resumeHeartbeat()', () => {
@@ -856,20 +857,11 @@ describe('HeartbeatMonitor', () => {
     });
 
     it('HALT_HEARTBEAT persists through trackActive()', () => {
-      const agent = makeAgent({
-        id: 'dev-1',
-        status: 'running',
-        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
-      });
-      ctx.getAllAgents.mockReturnValue([agent]);
-
-      // Halt heartbeat, then trackActive (agent becomes active again)
+      // haltedAgents should NOT be cleared by trackActive — only by resumeHeartbeat
       monitor.haltHeartbeat('dev-1');
       monitor.trackActive('dev-1');
 
-      triggerCheck();
-      // Should still be halted — trackActive does NOT clear haltedAgents
-      expect(agent.queueMessage).not.toHaveBeenCalled();
+      expect(monitor.isHalted('dev-1')).toBe(true);
     });
 
     it('trackRemoved clears halted state', () => {
@@ -948,7 +940,7 @@ describe('HeartbeatMonitor', () => {
       expect(agent.queueMessage).toHaveBeenCalledTimes(1); // still 1
     });
 
-    it('respects HALT_HEARTBEAT — does not send when halted', () => {
+    it('sends on-demand reminder even when agent has halted heartbeat', () => {
       const agent = makeAgent({
         id: 'dev-1',
         status: 'running',
@@ -957,7 +949,8 @@ describe('HeartbeatMonitor', () => {
       monitor.haltHeartbeat('dev-1');
       monitor.sendCommandReminderTo(agent);
 
-      expect(agent.queueMessage).not.toHaveBeenCalled();
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+      expect(agent.queueMessage).toHaveBeenCalledWith(expect.stringContaining('Command Reference Reminder'));
     });
 
     it('does not send to terminal agents', () => {

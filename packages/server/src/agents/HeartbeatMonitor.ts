@@ -124,10 +124,9 @@ export class HeartbeatMonitor {
   /**
    * Send a command reference reminder to a specific agent on-demand
    * (e.g., when they issue an unknown/invalid command).
-   * Bypasses the 2-hour interval but respects HALT_HEARTBEAT.
+   * Bypasses the 2-hour interval. Not affected by HALT_HEARTBEAT (which only controls nudges).
    */
   sendCommandReminderTo(agent: Agent): void {
-    if (this.haltedAgents.has(agent.id)) return;
     if (isTerminalStatus(agent.status)) return;
 
     const message = buildCommandReminderMessage();
@@ -273,9 +272,6 @@ export class HeartbeatMonitor {
       // Only send periodic reminders to agents actively processing (running state).
       // Idle/waiting agents don't need nudges — they'll get one when they resume work.
       if (agent.status !== 'running') continue;
-
-      // Skip agents that have explicitly halted heartbeat
-      if (this.haltedAgents.has(agent.id)) continue;
 
       const lastReminder = this.lastCommandReminder.get(agent.id);
       const agentCreatedAt = agent.createdAt.getTime();
