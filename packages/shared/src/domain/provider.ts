@@ -96,7 +96,9 @@ export interface ProviderDefinition {
   restrictedModels?: Record<string, string[]>;
   /** Concrete model for each quality tier */
   tierModels: ProviderTierModels;
-  /** CLI-specific model name aliases (e.g. Claude: 'claude-opus-4.6' → 'opus') */
+  /** CLI-specific model name aliases (e.g. Claude: 'claude-opus-4.6' → 'opus').
+   *  Only needed when a CLI requires short names instead of full model IDs.
+   *  Other providers accept full model names directly, so they don't need aliases. */
   modelAliases?: Record<string, string>;
   /** CLI-specific model name prefix per backend (e.g. OpenCode: { anthropic: 'anthropic' }) */
   modelPrefixes?: Record<string, string>;
@@ -183,6 +185,8 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     modelArgStrategy: 'flag',
     nativeModelProviders: ['anthropic'],
     tierModels: { fast: 'haiku', standard: 'sonnet', premium: 'opus' },
+    // Claude CLI requires short model names (opus/sonnet/haiku) instead of full IDs.
+    // Other providers accept full model names directly, so they don't need aliases.
     modelAliases: {
       'claude-opus-4.6': 'opus',
       'claude-opus-4.5': 'opus',
