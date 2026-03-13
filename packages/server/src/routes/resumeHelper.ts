@@ -1,7 +1,5 @@
 /**
- * Shared session resume logic used by both:
- *   POST /projects/:id/resume  (projects.ts)
- *   POST /sessions/:id/resume  (sessions.ts)
+ * Shared session resume logic used by POST /projects/:id/resume.
  *
  * Encapsulates the core resume bootstrap:
  *   1. Atomic claim (prevents race conditions)
