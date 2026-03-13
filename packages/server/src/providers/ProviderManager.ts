@@ -438,7 +438,9 @@ export class ProviderManager {
 
   setActiveProviderId(provider: ProviderId): void {
     if (this.configStore) {
-      this.configStore.writePartial({ provider: { ...this.configStore.current.provider, id: provider } }).catch(err => logger.warn({ msg: 'Failed to persist active provider', provider, error: err }));
+      // Only update the provider id — don't spread the current provider config,
+      // which may contain overrides (binary, args, env, cloud) for a different provider.
+      this.configStore.writePartial({ provider: { id: provider } }).catch(err => logger.warn({ msg: 'Failed to persist active provider', provider, error: err }));
       return;
     }
     if (!this.db) return;
