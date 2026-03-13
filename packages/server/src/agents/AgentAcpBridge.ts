@@ -191,7 +191,7 @@ export async function startAcp(agent: Agent, config: ServerConfig, initialPrompt
   const agentCwd = agent.cwd || process.cwd();
   await writeRoleFilesForProvider(effectiveProvider, agent, agentCwd);
 
-  conn.start(startOpts).then((sessionId) => {
+  conn.start(startOpts).then(async (sessionId) => {
     agent.sessionId = sessionId;
     agent._notifySessionReady(sessionId);
     if (initialPrompt) {
@@ -200,7 +200,11 @@ export async function startAcp(agent: Agent, config: ServerConfig, initialPrompt
       return conn.prompt(initialPrompt);
     }
     // Resumed agents have no initial prompt — they're waiting for input.
-    // Transition to idle so the UI shows the correct state.
+    // The provider may be continuing an in-flight prompt from the crashed
+    // session — cancel it so the agent starts clean and idle.
+    if (conn.isPrompting) {
+      try { await conn.cancel(); } catch { /* best-effort */ }
+    }
     agent.status = 'idle';
     agent._notifyStatusChange(agent.status);
     // Clear AFTER session-ready and idle notifications have fired synchronously,
@@ -227,7 +231,7 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
     runWithAgentContext(agent.id, agent.role.name, agent.projectId, fn);
 
   conn.on('text', (text: string) => withCtx(() => {
-    if (agent._isTerminated) return;
+    if (agent._isTerminated || agent._isResuming) return;
     agent.messages.push(text);
     if (agent.messages.length > agent._maxMessages) {
       agent.messages = agent.messages.slice(-agent._maxMessages);
@@ -340,10 +344,12 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
   conn.on('prompting', (active: boolean) => withCtx(() => {
     if (agent._isTerminated) return;
     if (active) {
-      // Note: _isResuming is NOT cleared here — it's cleared in the
-      // conn.start().then() handler after session-ready and initial idle
-      // notifications have fired.  Clearing here would race with conn.start()
-      // resolution and let suppressed resume notifications leak through.
+      // If the provider resumes an in-flight prompt from the previous session,
+      // cancel it immediately — resumed agents must start idle.
+      if (agent._isResuming) {
+        conn.cancel().catch(() => { /* best-effort */ });
+        return;
+      }
       if (agent.status !== 'running') {
         agent.status = 'running';
         agent._notifyStatusChange(agent.status);

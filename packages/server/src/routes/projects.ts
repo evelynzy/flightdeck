@@ -840,8 +840,10 @@ export function projectsRoutes(ctx: AppContext): Router {
         // The crew roster is discoverable via QUERY_CREW.
       }
 
-      // Auto-spawn Secretary for DAG tracking — only if not already resumed from previous session
-      if (!secretaryResumed) {
+      // Auto-spawn Secretary for DAG tracking.
+      // Skip during resume — all agents should start idle. The lead will
+      // auto-spawn a secretary when it begins real work.
+      if (!secretaryResumed && !isResume) {
         agentManager.autoSpawnSecretary(agent);
       }
 
