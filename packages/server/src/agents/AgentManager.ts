@@ -753,7 +753,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         }
 
         if (agent.role.id === 'lead') {
-          if (status === 'idle') {
+          if (status === 'idle' && !agent._isResuming) {
             this.heartbeat.trackIdle(agent.id);
           } else if (status === 'running') {
             this.heartbeat.trackActive(agent.id);
@@ -879,7 +879,8 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       this.emit('agent:spawned', agent.toJSON());
       this.updateLeadBudgets();
       // Auto-add to groups with matching role criteria (B4: group auto-add)
-      if (parentId) {
+      // Skip during resume — agents pick up context from restored ACP session.
+      if (parentId && !agent._isResuming) {
         this.autoAddToRoleGroups(agent);
       }
     };
