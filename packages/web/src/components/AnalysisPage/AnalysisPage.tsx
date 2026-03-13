@@ -81,8 +81,22 @@ export function AnalysisPage() {
           const fPoints: FlowPoint[] = [];
           const cPoints: CostPoint[] = [];
 
-          const totalInput = currentAgents.reduce((s, a) => s + (a.inputTokens ?? 0), 0);
-          const totalOutput = currentAgents.reduce((s, a) => s + (a.outputTokens ?? 0), 0);
+          // Prefer live agent token counts; fall back to persisted DB totals for inactive sessions
+          let totalInput = currentAgents.reduce((s, a) => s + (a.inputTokens ?? 0), 0);
+          let totalOutput = currentAgents.reduce((s, a) => s + (a.outputTokens ?? 0), 0);
+
+          if (totalInput + totalOutput === 0) {
+            try {
+              const costsByAgent = await apiFetch<Array<{ totalInputTokens: number; totalOutputTokens: number }>>(
+                `/costs/by-agent?projectId=${effectiveId}`,
+              );
+              if (Array.isArray(costsByAgent)) {
+                totalInput = costsByAgent.reduce((s, c) => s + (c.totalInputTokens ?? 0), 0);
+                totalOutput = costsByAgent.reduce((s, c) => s + (c.totalOutputTokens ?? 0), 0);
+              }
+            } catch { /* costs API not available — stay at zero */ }
+          }
+
           const realTokens = totalInput + totalOutput;
 
           // Build task flow from DAG task timestamps instead of keyframe events.
