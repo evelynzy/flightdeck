@@ -378,7 +378,7 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
     vi.useRealTimers();
   });
 
-  it('sends system message to lead about excluded agents when using selective resume', async () => {
+  it('does not send system messages to lead during selective resume', async () => {
     vi.useFakeTimers();
     mockSpawn.mockClear();
     const fakeAgent = makeFakeAgent('old-lead');
@@ -401,18 +401,15 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
     const body = await res.json();
     expect(body.respawning).toBe(1);
 
-    // Advance past the team message delay (2.5s)
+    // Advance past any potential message delays
     await vi.advanceTimersByTimeAsync(3000);
 
-    // Lead should receive a system message about excluded agents
+    // During resume, NO system messages should be sent — agents pick up context from ACP session
     const sendMessageCalls = fakeAgent.sendMessage.mock.calls;
     const exclusionMsg = sendMessageCalls.find(
       (call: string[]) => call[0].includes('Resume Agent Selection')
     );
-    expect(exclusionMsg).toBeDefined();
-    expect(exclusionMsg![0]).toContain('Excluded by user: code-reviewer, architect');
-    expect(exclusionMsg![0]).toContain('Resumed: developer');
-    expect(exclusionMsg![0]).toContain('Do NOT re-create');
+    expect(exclusionMsg).toBeUndefined();
 
     vi.useRealTimers();
   });
