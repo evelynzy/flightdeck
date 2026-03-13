@@ -199,7 +199,13 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Before this fix, any stray unhandled rejection (e.g. a network hiccup in an
 // agent adapter) would kill the entire process, leaving Vite with ECONNREFUSED.
 process.on('unhandledRejection', (reason: unknown) => {
-  logger.error({ module: 'api', msg: 'Unhandled promise rejection (non-fatal)', err: String(reason) });
+  const msg = String(reason);
+  // Telegram 409 is transient — old getUpdates lingers ~30s after restart
+  if (msg.includes('409') && msg.includes('getUpdates')) {
+    logger.warn({ module: 'api', msg: 'Telegram polling conflict (transient)', err: msg });
+    return;
+  }
+  logger.error({ module: 'api', msg: 'Unhandled promise rejection (non-fatal)', err: msg });
 });
 
 // Synchronous exceptions in timer callbacks / event handlers are truly fatal —

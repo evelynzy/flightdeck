@@ -311,6 +311,16 @@ export class TelegramAdapter extends TypedEmitter<TelegramAdapterEvents> impleme
     this.bot.catch((err) => {
       // H-5: Never log bot token — sanitize all error messages
       const safeMsg = sanitizeTokenFromError(err, this.config.botToken);
+
+      // 409 Conflict from getUpdates is expected and self-resolving after
+      // restart — the old long-poll connection lingers ~30s at Telegram's
+      // servers. Log as WARN, not ERROR, to avoid false alarms.
+      const is409 = safeMsg.includes('409') || safeMsg.includes('terminated by other getUpdates');
+      if (is409) {
+        logger.warn({ module: 'telegram', msg: 'Telegram polling conflict (transient, will self-resolve)', error: safeMsg });
+        return;
+      }
+
       logger.error({ module: 'telegram', msg: 'Bot error', error: safeMsg });
       this.emit('error', { error: new Error(safeMsg), context: 'bot.catch' });
     });

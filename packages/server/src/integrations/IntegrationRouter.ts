@@ -312,6 +312,13 @@ export class IntegrationRouter {
   }
 
   private async startTelegram(config: TelegramConfig): Promise<void> {
+    // Stop any existing adapter to avoid 409 Conflict (two getUpdates)
+    const existing = this.adapters.get('telegram');
+    if (existing) {
+      await existing.stop();
+      this.adapters.delete('telegram');
+    }
+
     const adapter = new TelegramAdapter(config);
 
     // Register command handlers
