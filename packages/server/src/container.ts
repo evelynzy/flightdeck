@@ -217,12 +217,6 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   const webhookManager = new WebhookManager();
   const providerManager = new ProviderManager({ db, configStore });
 
-  // Resolve the best available provider at startup — if the configured provider
-  // (from YAML or default 'copilot') isn't installed, fall back to the first
-  // available one from the provider ranking.
-  const resolvedProvider = providerManager.resolveAvailableProvider();
-  updateConfig({ provider: resolvedProvider });
-
   // ── Tier 3: Composed Services ──────────────────────────
   const taskDecomposer = new TaskDecomposer(taskTemplateRegistry);
   const fileDependencyGraph = new FileDependencyGraph(repoRoot);
@@ -258,6 +252,13 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
   agentManager.setCollectiveMemory(collectiveMemory);
   agentManager.setConfigStore(configStore);
   agentManager.setProviderManager(providerManager);
+
+  // Resolve the best available provider at startup — if the configured provider
+  // (from YAML or default 'copilot') isn't installed, fall back to the first
+  // available one from the provider ranking.
+  const resolvedProvider = providerManager.resolveAvailableProvider();
+  updateConfig({ provider: resolvedProvider });
+
   const skillsLoader = new SkillsLoader(join(repoRoot, '.github/skills'));
   skillsLoader.loadAll();
   skillsLoader.startWatching();
