@@ -310,6 +310,13 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
 
   conn.on('prompt_complete', (_stopReason: string) => withCtx(() => {
     if (agent._isTerminated) return;
+
+    // Flush buffered system notes as a single queued message
+    const notes = conn.flushSystemNotes();
+    if (notes) {
+      agent.queueMessage(notes);
+    }
+
     if (agent.status === 'running' && !conn.isPrompting) {
       if (!agent.systemPaused && agent.pendingMessageCount > 0) {
         agent._drainOneMessage();
@@ -318,6 +325,11 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
       agent.status = 'idle';
       agent._notifyStatusChange(agent.status);
     }
+  }));
+
+  conn.on('prompt_timeout', (timeoutMs: number) => withCtx(() => {
+    if (agent._isTerminated) return;
+    logger.warn({ module: 'agent', msg: 'Prompt timed out — agent stalled', agentId: agent.id, role: agent.role.name, timeoutMs });
   }));
 
   conn.on('prompting', (active: boolean) => withCtx(() => {

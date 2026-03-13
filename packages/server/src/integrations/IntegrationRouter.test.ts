@@ -561,4 +561,107 @@ describe('IntegrationRouter', () => {
       expect(session2).not.toBeNull();
     });
   });
+
+  // ── sendToProject ──────────────────────────────────────────
+
+  describe('sendToProject', () => {
+    it('sends a message to the chat bound to the project', async () => {
+      configStore = createMockConfigStore(true);
+      agent = new IntegrationRouter(agentManager, projectRegistry, configStore, bridge);
+      await agent.start();
+
+      agent.bindSession('chat-1', 'telegram', 'project-1', 'user-1');
+
+      const result = agent.sendToProject('project-1', 'Build passed!');
+      expect(result).toBe(true);
+
+      const adapter = agent.getAdapter('telegram')!;
+      expect(adapter.sendMessage).toHaveBeenCalledWith({
+        platform: 'telegram',
+        chatId: 'chat-1',
+        text: 'Build passed!',
+      });
+    });
+
+    it('returns false when no session is bound to the project', async () => {
+      configStore = createMockConfigStore(true);
+      agent = new IntegrationRouter(agentManager, projectRegistry, configStore, bridge);
+      await agent.start();
+
+      const result = agent.sendToProject('project-1', 'Hello');
+      expect(result).toBe(false);
+    });
+
+    it('returns false for expired sessions', async () => {
+      configStore = createMockConfigStore(true);
+      agent = new IntegrationRouter(agentManager, projectRegistry, configStore, bridge);
+      await agent.start();
+
+      const session = agent.bindSession('chat-1', 'telegram', 'project-1', 'user-1');
+      session.expiresAt = Date.now() - 1000; // Force expire
+
+      const result = agent.sendToProject('project-1', 'Hello');
+      expect(result).toBe(false);
+    });
+
+    it('returns false when no adapter is available', async () => {
+      agent = new IntegrationRouter(agentManager, projectRegistry, configStore, bridge);
+      await agent.start();
+
+      // Manually add a session without an adapter
+      agent.bindSession('chat-1', 'telegram', 'project-1', 'user-1');
+
+      const result = agent.sendToProject('project-1', 'Hello');
+      expect(result).toBe(false);
+    });
+
+    it('refreshes session TTL on access', async () => {
+      configStore = createMockConfigStore(true);
+      agent = new IntegrationRouter(agentManager, projectRegistry, configStore, bridge);
+      await agent.start();
+
+      const session = agent.bindSession('chat-1', 'telegram', 'project-1', 'user-1');
+
+      // Set session to expire soon (1 second from now)
+      session.expiresAt = Date.now() + 1000;
+      const shortExpiry = session.expiresAt;
+
+      agent.sendToProject('project-1', 'Hello');
+
+      // Session TTL should have been refreshed to ~8h from now (much more than 1 second)
+      expect(session.expiresAt).toBeGreaterThan(shortExpiry);
+    });
+
+    it('truncates messages exceeding Telegram max length', async () => {
+      configStore = createMockConfigStore(true);
+      agent = new IntegrationRouter(agentManager, projectRegistry, configStore, bridge);
+      await agent.start();
+
+      agent.bindSession('chat-1', 'telegram', 'project-1', 'user-1');
+
+      const longMessage = 'x'.repeat(5000);
+      const result = agent.sendToProject('project-1', longMessage);
+      expect(result).toBe(true);
+
+      const adapter = agent.getAdapter('telegram')!;
+      const sentText = (adapter.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0].text;
+      expect(sentText.length).toBeLessThanOrEqual(4096);
+      expect(sentText).toContain('… (truncated)');
+    });
+  });
+
+  // ── Session TTL ──────────────────────────────────────────
+
+  it('session TTL is 8 hours', async () => {
+    agent = new IntegrationRouter(agentManager, projectRegistry, configStore, bridge);
+    await agent.start();
+
+    const before = Date.now();
+    const session = agent.bindSession('chat-1', 'telegram', 'project-1', 'user-1');
+    const eightHoursMs = 8 * 60 * 60 * 1000;
+
+    // Session should expire approximately 8 hours from now
+    expect(session.expiresAt).toBeGreaterThanOrEqual(before + eightHoursMs - 100);
+    expect(session.expiresAt).toBeLessThanOrEqual(before + eightHoursMs + 1000);
+  });
 });

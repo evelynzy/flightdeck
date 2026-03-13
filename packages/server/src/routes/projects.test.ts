@@ -1,7 +1,10 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 import express from 'express';
 import type { Server } from 'http';
 import type { AddressInfo } from 'net';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { projectsRoutes } from './projects.js';
 import type { AppContext } from './context.js';
 
@@ -412,5 +415,86 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
     expect(exclusionMsg![0]).toContain('Do NOT re-create');
 
     vi.useRealTimers();
+  });
+});
+
+// ── Symlink path validation ────────────────────────────────────────
+
+describe('GET /projects/:id/files — rejects symlinks resolving outside project', () => {
+  let baseUrl: string;
+  let stop: () => Promise<void>;
+  let tmpBase: string;
+  let projectDir: string;
+
+  beforeAll(async () => {
+    // External dir (simulates ~/.flightdeck/artifacts/...)
+    tmpBase = mkdtempSync(join(tmpdir(), 'fd-test-home-'));
+    projectDir = mkdtempSync(join(tmpdir(), 'fd-test-project-'));
+
+    const externalDir = join(tmpBase, 'artifacts', 'developer-abc123');
+    mkdirSync(externalDir, { recursive: true });
+    writeFileSync(join(externalDir, 'report.md'), '# Test Report\nHello');
+
+    // Project shared dir: one symlink pointing outside, one real dir
+    const sharedDir = join(projectDir, '.flightdeck', 'shared');
+    mkdirSync(sharedDir, { recursive: true });
+    symlinkSync(externalDir, join(sharedDir, 'developer-abc123'));
+
+    const realAgentDir = join(sharedDir, 'architect-def456');
+    mkdirSync(realAgentDir, { recursive: true });
+    writeFileSync(join(realAgentDir, 'design.md'), '# Design Doc');
+
+    const mockRegistry = {
+      get: vi.fn().mockReturnValue({
+        id: 'test-proj',
+        name: 'Test Project',
+        cwd: projectDir,
+        status: 'active',
+      }),
+    } as any;
+
+    const srv = createTestServer({ projectRegistry: mockRegistry });
+    baseUrl = await srv.start();
+    stop = srv.stop;
+  });
+
+  afterAll(async () => {
+    await stop?.();
+    rmSync(tmpBase, { recursive: true, force: true });
+    rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it('rejects listing a symlinked directory that resolves outside the project', async () => {
+    const res = await fetch(`${baseUrl}/projects/test-proj/files?path=.flightdeck/shared/developer-abc123`);
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Path outside project directory');
+  });
+
+  it('rejects reading a file through a symlink that resolves outside the project', async () => {
+    const res = await fetch(
+      `${baseUrl}/projects/test-proj/file-contents?path=.flightdeck/shared/developer-abc123/report.md`,
+    );
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Path outside project directory');
+  });
+
+  it('serves files from real (non-symlinked) directories within the project', async () => {
+    const res = await fetch(
+      `${baseUrl}/projects/test-proj/file-contents?path=.flightdeck/shared/architect-def456/design.md`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.content).toContain('# Design Doc');
+  });
+
+  it('rejects paths that escape the project via traversal', async () => {
+    const res = await fetch(
+      `${baseUrl}/projects/test-proj/file-contents?path=../../etc/passwd`,
+    );
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Path outside project directory');
   });
 });

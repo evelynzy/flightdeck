@@ -26,6 +26,31 @@ function paramStr(val: string | string[] | undefined): string {
   return Array.isArray(val) ? val[0] ?? '' : val ?? '';
 }
 
+/**
+ * Filter DB agents to only those belonging to currently active sessions.
+ * An agent is included if:
+ * - It is currently live in the AgentManager, OR
+ * - It shares a sessionId with a currently live agent
+ *   (e.g. terminated agents from the current session still appear)
+ * Returns empty array when no agents are live (no active session).
+ */
+function filterToActiveSession<T extends { agentId: string; sessionId?: string }>(
+  dbAgents: T[],
+  liveAgents: { id: string; sessionId?: string | null }[],
+): T[] {
+  if (liveAgents.length === 0) return [];
+
+  const liveIds = new Set(liveAgents.map(a => a.id));
+  const activeSessionIds = new Set(
+    liveAgents.map(a => a.sessionId).filter((s): s is string => !!s),
+  );
+
+  return dbAgents.filter(a =>
+    liveIds.has(a.agentId) ||
+    (a.sessionId != null && activeSessionIds.has(a.sessionId))
+  );
+}
+
 // ── Routes ──────────────────────────────────────────────────────────
 
 export function teamsRoutes(ctx: AppContext): Router {
@@ -41,7 +66,7 @@ export function teamsRoutes(ctx: AppContext): Router {
     }
 
     try {
-      const allAgents = agentRoster.getAllAgents();
+      const allAgents = filterToActiveSession(agentRoster.getAllAgents(), agentManager.getAll());
 
       // Group agents by teamId to build team list
       const teamMap = new Map<string, { teamId: string; agentCount: number; roles: Set<string> }>();
@@ -78,7 +103,10 @@ export function teamsRoutes(ctx: AppContext): Router {
     const teamId = Array.isArray(req.params.teamId) ? req.params.teamId[0] : req.params.teamId;
 
     try {
-      const agents = agentRoster.getAllAgents(undefined, teamId);
+      const agents = filterToActiveSession(
+        agentRoster.getAllAgents(undefined, teamId),
+        agentManager.getAll(),
+      );
 
       if (agents.length === 0) {
         return res.status(404).json({ error: `Team ${teamId} not found or has no agents` });
@@ -126,13 +154,16 @@ export function teamsRoutes(ctx: AppContext): Router {
     }
 
     try {
-      const agents = agentRoster.getAllAgents(
-        statusFilter as 'idle' | 'running' | 'terminated' | 'failed' | undefined,
-        teamId,
+      const allLive = agentManager.getAll();
+      const agents = filterToActiveSession(
+        agentRoster.getAllAgents(
+          statusFilter as 'idle' | 'running' | 'terminated' | 'failed' | undefined,
+          teamId,
+        ),
+        allLive,
       );
 
       // Enrich with live status from AgentManager
-      const allLive = agentManager.getAll();
       const enriched = agents.map(a => {
         const live = allLive.find(l => l.id === a.agentId);
         const liveJson = live?.toJSON();
@@ -300,8 +331,8 @@ export function teamsRoutes(ctx: AppContext): Router {
     if (!agentRoster) return res.status(503).json({ error: 'Agent roster not available' });
 
     try {
-      const allAgents = agentRoster.getAllAgents();
       const liveAgents = agentManager.getAll();
+      const allAgents = filterToActiveSession(agentRoster.getAllAgents(), liveAgents);
 
       // Group agents by their lead (parentId from metadata, or self if role is lead)
       const crewMap = new Map<string, typeof allAgents>();

@@ -18,6 +18,7 @@ import { PROVIDER_PRESETS } from '../../adapters/presets.js';
 
 const QUERY_CREW_REGEX = /⟦⟦\s*QUERY_CREW\s*⟧⟧/s;
 const HALT_HEARTBEAT_REGEX = /⟦⟦\s*HALT_HEARTBEAT\s*⟧⟧/s;
+const RESUME_HEARTBEAT_REGEX = /⟦⟦\s*RESUME_HEARTBEAT\s*⟧⟧/s;
 const REQUEST_LIMIT_CHANGE_REGEX = /⟦⟦\s*REQUEST_LIMIT_CHANGE\s*(\{.*?\})\s*⟧⟧/s;
 const QUERY_PROVIDERS_REGEX = /⟦⟦\s*QUERY_PROVIDERS\s*⟧⟧/s;
 
@@ -118,14 +119,19 @@ function handleQueryCrew(ctx: CommandHandlerContext, agent: Agent): void {
 }
 
 function handleHaltHeartbeat(ctx: CommandHandlerContext, agent: Agent): void {
-  if (agent.role.id !== 'lead') {
-    agent.sendMessage('[System] Only the Project Lead can halt heartbeat.');
-    return;
-  }
-  ctx.markHumanInterrupt(agent.id);
-  logger.info('lead', `Heartbeat halted by ${agent.role.name} (${agent.id.slice(0, 8)})`);
-  ctx.activityLedger.log(agent.id, agent.role.id, 'heartbeat_halted', `Heartbeat halted by lead`, {}, ctx.getProjectIdForAgent(agent.id) ?? '');
-  agent.sendMessage('[System] Heartbeat nudges paused. They will resume automatically when you start running again.');
+  const newlyHalted = ctx.haltHeartbeat(agent.id);
+  if (!newlyHalted) return; // Already halted — don't spam the notification
+  logger.info('agent', `Heartbeat halted by ${agent.role.name} (${agent.id.slice(0, 8)})`);
+  ctx.activityLedger.log(agent.id, agent.role?.id ?? 'unknown', 'heartbeat_halted', `Heartbeat halted by ${agent.role.name}`, {}, ctx.getProjectIdForAgent(agent.id) ?? '');
+  agent.sendMessage('[System] Heartbeat paused (lead idle nudges). Command reminders are unaffected. Use RESUME_HEARTBEAT to re-enable nudges.');
+}
+
+function handleResumeHeartbeat(ctx: CommandHandlerContext, agent: Agent): void {
+  const wasHalted = ctx.resumeHeartbeat(agent.id);
+  if (!wasHalted) return; // Wasn't halted — nothing to resume
+  logger.info('agent', `Heartbeat resumed by ${agent.role.name} (${agent.id.slice(0, 8)})`);
+  ctx.activityLedger.log(agent.id, agent.role?.id ?? 'unknown', 'status_change', `Heartbeat resumed by ${agent.role.name}`, {}, ctx.getProjectIdForAgent(agent.id) ?? '');
+  agent.sendMessage('[System] Heartbeat resumed. Lead idle nudges are active again.');
 }
 
 function handleRequestLimitChange(ctx: CommandHandlerContext, agent: Agent, data: string): void {
@@ -215,7 +221,8 @@ function handleQueryProviders(ctx: CommandHandlerContext, agent: Agent): void {
 export function getSystemCommands(ctx: CommandHandlerContext): CommandEntry[] {
   return [
     { regex: QUERY_CREW_REGEX, name: 'QUERY_CREW', handler: (a, _d) => handleQueryCrew(ctx, a), help: { description: 'Get current crew status', example: 'QUERY_CREW {}', category: 'System' } },
-    { regex: HALT_HEARTBEAT_REGEX, name: 'HALT_HEARTBEAT', handler: (a, _d) => handleHaltHeartbeat(ctx, a), help: { description: 'Stop heartbeat reminder nudges', example: 'HALT_HEARTBEAT {}', category: 'System' } },
+    { regex: HALT_HEARTBEAT_REGEX, name: 'HALT_HEARTBEAT', handler: (a, _d) => handleHaltHeartbeat(ctx, a), help: { description: 'Stop all heartbeat reminders until RESUME_HEARTBEAT', example: 'HALT_HEARTBEAT {}', category: 'System' } },
+    { regex: RESUME_HEARTBEAT_REGEX, name: 'RESUME_HEARTBEAT', handler: (a, _d) => handleResumeHeartbeat(ctx, a), help: { description: 'Resume heartbeat reminders after HALT_HEARTBEAT', example: 'RESUME_HEARTBEAT {}', category: 'System' } },
     { regex: REQUEST_LIMIT_CHANGE_REGEX, name: 'REQUEST_LIMIT_CHANGE', handler: (a, d) => handleRequestLimitChange(ctx, a, d), help: { description: 'Request a change to concurrency limits', example: 'REQUEST_LIMIT_CHANGE {"limit": 10, "reason": "need more agents"}', category: 'System', args: deriveArgs(requestLimitChangeSchema) } },
     { regex: QUERY_PROVIDERS_REGEX, name: 'QUERY_PROVIDERS', handler: (a, _d) => handleQueryProviders(ctx, a), help: { description: 'Get available providers, models, and ranking', example: 'QUERY_PROVIDERS {}', category: 'System' } },
   ];

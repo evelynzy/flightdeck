@@ -424,4 +424,113 @@ describe('NotificationBatcher', () => {
     const total = (Array.from(manager._handlers.values()) as any[][]).reduce((sum, h) => sum + h.length, 0);
     expect(total).toBe(5);
   });
+
+  // ── Critical Event Bypass ──────────────────────────────────
+
+  it('flushes agent_crashed events immediately without waiting for batch window', () => {
+    const adapter = createMockAdapter();
+    bridge.addAdapter(adapter);
+    bridge.subscribe('chat-1', 'project-1');
+
+    bridge.queueEvent(createEvent({
+      category: 'agent_crashed',
+      title: '⚠️ Agent crashed: abc12345',
+      body: 'Agent crashed with exit code 1.',
+    }));
+
+    // Should be delivered immediately — no timer advance needed
+    expect(adapter.sentMessages).toHaveLength(1);
+    expect(adapter.sentMessages[0].text).toContain('Agent crashed');
+  });
+
+  it('flushes decision_needs_approval events immediately', () => {
+    const adapter = createMockAdapter();
+    bridge.addAdapter(adapter);
+    bridge.subscribe('chat-1', 'project-1');
+
+    bridge.queueEvent(createEvent({
+      category: 'decision_needs_approval',
+      title: '🔔 Decision needs approval: Deploy v2.0',
+      body: 'Requires human confirmation.',
+    }));
+
+    // Should be delivered immediately
+    expect(adapter.sentMessages).toHaveLength(1);
+    expect(adapter.sentMessages[0].text).toContain('Decision needs approval');
+  });
+
+  it('critical events flush any pending non-critical events too', () => {
+    const adapter = createMockAdapter();
+    bridge.addAdapter(adapter);
+    bridge.subscribe('chat-1', 'project-1');
+
+    // Queue a non-critical event first (would normally wait for 5s)
+    bridge.queueEvent(createEvent({
+      category: 'agent_spawned',
+      title: 'Agent spawned',
+    }));
+    expect(adapter.sentMessages).toHaveLength(0);
+
+    // Queue a critical event — should flush everything immediately
+    bridge.queueEvent(createEvent({
+      category: 'agent_crashed',
+      title: 'Agent crashed',
+    }));
+
+    // Both events should be flushed in one batch
+    expect(adapter.sentMessages).toHaveLength(1);
+    expect(adapter.sentMessages[0].text).toContain('Agent spawned');
+    expect(adapter.sentMessages[0].text).toContain('Agent crashed');
+  });
+
+  it('non-critical events still use the batch window', () => {
+    const adapter = createMockAdapter();
+    bridge.addAdapter(adapter);
+    bridge.subscribe('chat-1', 'project-1');
+
+    bridge.queueEvent(createEvent({ category: 'agent_spawned', title: 'Spawned' }));
+
+    // Not delivered yet
+    expect(adapter.sentMessages).toHaveLength(0);
+
+    // Only delivered after batch window
+    vi.advanceTimersByTime(NotificationBatcher.BATCH_WINDOW_MS + 100);
+    expect(adapter.sentMessages).toHaveLength(1);
+  });
+
+  it('clears existing batch timer when critical event triggers immediate flush', () => {
+    const adapter = createMockAdapter();
+    bridge.addAdapter(adapter);
+    bridge.subscribe('chat-1', 'project-1');
+
+    // Queue a non-critical event — starts a batch timer
+    bridge.queueEvent(createEvent({ category: 'agent_spawned', title: 'Spawned' }));
+    expect(adapter.sentMessages).toHaveLength(0);
+
+    // Queue a critical event — should flush immediately AND clear the timer
+    bridge.queueEvent(createEvent({ category: 'agent_crashed', title: 'Crashed' }));
+    expect(adapter.sentMessages).toHaveLength(1);
+
+    // Advance past the original batch window — should NOT produce a duplicate flush
+    vi.advanceTimersByTime(NotificationBatcher.BATCH_WINDOW_MS + 100);
+    expect(adapter.sentMessages).toHaveLength(1); // still 1, no orphaned flush
+  });
+
+  it('truncates outbound messages exceeding Telegram max length', () => {
+    const adapter = createMockAdapter();
+    bridge.addAdapter(adapter);
+    bridge.subscribe('chat-1', 'project-1');
+
+    // Create an event with a very long body that exceeds 4096 chars
+    const longBody = 'x'.repeat(5000);
+    bridge.queueEvent(createEvent({
+      category: 'agent_crashed',
+      title: 'Crash',
+      body: longBody,
+    }));
+
+    expect(adapter.sentMessages).toHaveLength(1);
+    expect(adapter.sentMessages[0].text.length).toBeLessThanOrEqual(NotificationBatcher.MAX_MESSAGE_LENGTH);
+    expect(adapter.sentMessages[0].text).toContain('… (truncated)');
+  });
 });

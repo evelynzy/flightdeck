@@ -330,7 +330,11 @@ export class CommandDispatcher {
    * Detect unrecognized ⟦⟦ COMMAND ⟧⟧ blocks remaining in the buffer.
    * Sends a help message to the agent and strips the unrecognized block.
    */
-  static detectUnknownCommands(agent: Agent, buf: string, knownPatterns: CommandEntry[]): string {
+  static detectUnknownCommands(
+    agent: Agent,
+    buf: string,
+    knownPatterns: CommandEntry[],
+  ): string {
     // Match any complete ⟦⟦ WORD ... ⟧⟧ block
     const unknownRegex = /⟦⟦\s*([A-Z][A-Z0-9_]*)\s*(?:\{[\s\S]*?\})?\s*⟧⟧/;
     let match = unknownRegex.exec(buf);
@@ -346,6 +350,7 @@ export class CommandDispatcher {
       agent.sendMessage(
         `[System] Unknown command: ${cmdName}. Did you mean one of the available commands?\n\n${buildCommandHelp()}`,
       );
+
       buf = buf.slice(0, match.index) + buf.slice(match.index + match[0].length);
       match = unknownRegex.exec(buf);
     }

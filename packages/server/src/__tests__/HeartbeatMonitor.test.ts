@@ -396,6 +396,43 @@ describe('HeartbeatMonitor', () => {
     }));
   });
 
+  // ── 11b. haltHeartbeat suppresses lead nudges ──────────────────────
+
+  it('does not nudge lead when haltHeartbeat is active', () => {
+    const lead = makeAgent({ id: 'lead-1', role: { id: 'lead', name: 'Team Lead' }, status: 'idle' });
+    const child = makeAgent({ id: 'child-1', parentId: 'lead-1', status: 'idle' });
+    ctx.getAllAgents.mockReturnValue([lead, child]);
+    ctx.getDelegationsMap.mockReturnValue(
+      new Map([['d1', makeDelegation({ fromAgentId: 'lead-1', status: 'active' })]])
+    );
+    ctx.getDagSummary.mockReturnValue(null);
+
+    monitor.trackIdle('lead-1');
+    monitor.haltHeartbeat('lead-1');
+    vi.advanceTimersByTime(90_000);
+    triggerCheck();
+
+    expect(lead.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('resumes lead nudges after resumeHeartbeat', () => {
+    const lead = makeAgent({ id: 'lead-1', role: { id: 'lead', name: 'Team Lead' }, status: 'idle' });
+    const child = makeAgent({ id: 'child-1', parentId: 'lead-1', status: 'idle' });
+    ctx.getAllAgents.mockReturnValue([lead, child]);
+    ctx.getDelegationsMap.mockReturnValue(
+      new Map([['d1', makeDelegation({ fromAgentId: 'lead-1', status: 'active' })]])
+    );
+    ctx.getDagSummary.mockReturnValue(null);
+
+    monitor.trackIdle('lead-1');
+    monitor.haltHeartbeat('lead-1');
+    monitor.resumeHeartbeat('lead-1');
+    vi.advanceTimersByTime(90_000);
+    triggerCheck();
+
+    expect(lead.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   // ── 12. start/stop manages timer ──────────────────────────────────
 
   it('start creates an interval and stop clears it', () => {
@@ -635,11 +672,11 @@ describe('HeartbeatMonitor', () => {
       expect(agent.queueMessage).not.toHaveBeenCalled();
     });
 
-    it('sends reminders to ALL agents regardless of role', () => {
+    it('sends reminders to ALL running agents regardless of role', () => {
       const lead = makeAgent({
         id: 'lead-1',
         role: { id: 'lead', name: 'Team Lead' },
-        status: 'idle',
+        status: 'running',
         createdAt: new Date(Date.now() - TWO_HOURS - 1000),
       });
       const dev = makeAgent({
@@ -651,7 +688,7 @@ describe('HeartbeatMonitor', () => {
       const reviewer = makeAgent({
         id: 'rev-1',
         role: { id: 'reviewer', name: 'Reviewer' },
-        status: 'idle',
+        status: 'running',
         createdAt: new Date(Date.now() - TWO_HOURS - 1000),
       });
       ctx.getAllAgents.mockReturnValue([lead, dev, reviewer]);
@@ -661,6 +698,31 @@ describe('HeartbeatMonitor', () => {
       expect(lead.queueMessage).toHaveBeenCalledTimes(1);
       expect(dev.queueMessage).toHaveBeenCalledTimes(1);
       expect(reviewer.queueMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips idle agents — only sends to running agents', () => {
+      const idle = makeAgent({
+        id: 'idle-1',
+        status: 'idle',
+        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
+      });
+      const running = makeAgent({
+        id: 'run-1',
+        status: 'running',
+        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
+      });
+      const waiting = makeAgent({
+        id: 'wait-1',
+        status: 'waiting',
+        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
+      });
+      ctx.getAllAgents.mockReturnValue([idle, running, waiting]);
+
+      triggerCheck();
+
+      expect(idle.queueMessage).not.toHaveBeenCalled();
+      expect(running.queueMessage).toHaveBeenCalledTimes(1);
+      expect(waiting.queueMessage).not.toHaveBeenCalled();
     });
 
     it('skips terminal agents (completed, failed, terminated)', () => {
@@ -759,6 +821,160 @@ describe('HeartbeatMonitor', () => {
         to: 'dev-1',
         toRole: 'Developer',
       }));
+    });
+
+    it('sends periodic reminders even when agent has halted heartbeat (halt only controls nudges)', () => {
+      const agent = makeAgent({
+        id: 'dev-1',
+        status: 'running',
+        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
+      });
+      ctx.getAllAgents.mockReturnValue([agent]);
+
+      // Halt heartbeat — should NOT affect command reminders
+      monitor.haltHeartbeat('dev-1');
+
+      triggerCheck();
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+      expect(agent.queueMessage).toHaveBeenCalledWith(expect.stringContaining('Command Reference Reminder'));
+    });
+
+    it('resumes periodic reminders after resumeHeartbeat()', () => {
+      const agent = makeAgent({
+        id: 'dev-1',
+        status: 'running',
+        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
+      });
+      ctx.getAllAgents.mockReturnValue([agent]);
+
+      // Halt then resume
+      monitor.haltHeartbeat('dev-1');
+      monitor.resumeHeartbeat('dev-1');
+
+      triggerCheck();
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+      expect(agent.queueMessage).toHaveBeenCalledWith(expect.stringContaining('Command Reference Reminder'));
+    });
+
+    it('HALT_HEARTBEAT persists through trackActive()', () => {
+      // haltedAgents should NOT be cleared by trackActive — only by resumeHeartbeat
+      monitor.haltHeartbeat('dev-1');
+      monitor.trackActive('dev-1');
+
+      expect(monitor.isHalted('dev-1')).toBe(true);
+    });
+
+    it('trackRemoved clears halted state', () => {
+      monitor.haltHeartbeat('dev-1');
+      expect(monitor.isHalted('dev-1')).toBe(true);
+
+      monitor.trackRemoved('dev-1');
+      expect(monitor.isHalted('dev-1')).toBe(false);
+    });
+
+    it('haltHeartbeat returns true on first call, false when already halted', () => {
+      expect(monitor.haltHeartbeat('dev-1')).toBe(true);
+      expect(monitor.haltHeartbeat('dev-1')).toBe(false);
+      expect(monitor.haltHeartbeat('dev-1')).toBe(false);
+    });
+
+    it('resumeHeartbeat returns true when halted, false when not halted', () => {
+      expect(monitor.resumeHeartbeat('dev-1')).toBe(false); // not halted yet
+      monitor.haltHeartbeat('dev-1');
+      expect(monitor.resumeHeartbeat('dev-1')).toBe(true);  // was halted
+      expect(monitor.resumeHeartbeat('dev-1')).toBe(false); // already resumed
+    });
+
+    it('UI humanInterrupt auto-clears on trackActive (transient)', () => {
+      const agent = makeAgent({
+        id: 'dev-1',
+        status: 'running',
+        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
+      });
+      ctx.getAllAgents.mockReturnValue([agent]);
+
+      // UI message triggers humanInterrupt (transient)
+      monitor.trackHumanInterrupt('dev-1');
+      // Agent becomes active again — should auto-clear
+      monitor.trackActive('dev-1');
+
+      triggerCheck();
+      // Should receive reminders — humanInterrupt was cleared
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+      expect(agent.queueMessage).toHaveBeenCalledWith(expect.stringContaining('Command Reference Reminder'));
+    });
+  });
+
+  describe('sendCommandReminderTo', () => {
+    it('sends a command reminder to a specific agent', () => {
+      const agent = makeAgent({
+        id: 'dev-1',
+        role: { id: 'dev', name: 'Developer' },
+        status: 'running',
+      });
+
+      monitor.sendCommandReminderTo(agent);
+
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+      expect(agent.queueMessage).toHaveBeenCalledWith(expect.stringContaining('Command Reference Reminder'));
+    });
+
+    it('emits agent:message_sent event', () => {
+      const agent = makeAgent({
+        id: 'dev-1',
+        role: { id: 'dev', name: 'Developer' },
+        status: 'running',
+      });
+
+      monitor.sendCommandReminderTo(agent);
+
+      expect(ctx.emit).toHaveBeenCalledWith('agent:message_sent', expect.objectContaining({
+        from: 'system',
+        to: 'dev-1',
+        toRole: 'Developer',
+      }));
+    });
+
+    it('resets the 2-hour timer for subsequent periodic reminders', () => {
+      const TWO_HOURS = 2 * 60 * 60 * 1000;
+      const agent = makeAgent({
+        id: 'dev-1',
+        status: 'running',
+        createdAt: new Date(Date.now() - TWO_HOURS - 1000),
+      });
+      ctx.getAllAgents.mockReturnValue([agent]);
+
+      // On-demand reminder resets the timer
+      monitor.sendCommandReminderTo(agent);
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+
+      // Periodic check right after — should NOT send (timer was reset)
+      triggerCheck();
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1); // still 1
+    });
+
+    it('sends on-demand reminder even when agent has halted heartbeat', () => {
+      const agent = makeAgent({
+        id: 'dev-1',
+        status: 'running',
+      });
+
+      monitor.haltHeartbeat('dev-1');
+      monitor.sendCommandReminderTo(agent);
+
+      expect(agent.queueMessage).toHaveBeenCalledTimes(1);
+      expect(agent.queueMessage).toHaveBeenCalledWith(expect.stringContaining('Command Reference Reminder'));
+    });
+
+    it('does not send to terminal agents', () => {
+      const agent = makeAgent({
+        id: 'dev-1',
+        status: 'terminated',
+      });
+
+      monitor.sendCommandReminderTo(agent);
+
+      expect(agent.queueMessage).not.toHaveBeenCalled();
     });
   });
 

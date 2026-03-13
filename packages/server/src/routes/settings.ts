@@ -6,6 +6,10 @@
  * 2. Is the provider authenticated/responsive? (quick health check)
  * 3. Model preferences and enable/disable toggles.
  *
+ * Two-phase loading:
+ * - GET /settings/providers — instant config (id, name, enabled). No CLI calls.
+ * - GET /settings/providers/status — async parallel CLI detection with caching.
+ *
  * NO API keys are managed, stored, or displayed.
  */
 import { Router } from 'express';
@@ -21,51 +25,77 @@ export function settingsRoutes(ctx: AppContext): Router {
   const pm = ctx.providerManager ?? new ProviderManager({ db: ctx.db, configStore: ctx.configStore });
 
   /**
-   * GET /settings/providers — list all providers with installed/auth status.
+   * GET /settings/providers — instant provider configs (no CLI detection).
+   * Returns id, name, enabled for all providers. Used for immediate UI render.
    */
   router.get('/settings/providers', (_req, res) => {
-    const statuses = pm.getAllProviderStatuses();
-    res.json(statuses);
+    const configs = pm.getProviderConfigs();
+    res.json(configs);
+  });
+
+  /**
+   * GET /settings/providers/status — async CLI detection for all providers.
+   * Runs `which`, auth check, and version detection in parallel with caching.
+   * Returns full ProviderStatus[] with installed/authenticated/version fields.
+   */
+  router.get('/settings/providers/status', async (_req, res) => {
+    try {
+      const statuses = await pm.getAllProviderStatusesAsync();
+      res.json(statuses);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to detect provider statuses' });
+    }
   });
 
   /**
    * GET /settings/providers/:provider — single provider status + model prefs.
    */
-  router.get('/settings/providers/:provider', (req, res) => {
+  router.get('/settings/providers/:provider', async (req, res) => {
     const { provider } = req.params;
     if (!isValidProviderId(provider)) {
       return res.status(404).json({ error: `Unknown provider: ${provider}` });
     }
-    const status = pm.getProviderStatus(provider);
-    const modelPrefs = pm.getModelPreferences(provider);
-    res.json({ ...status, modelPreferences: modelPrefs });
+    try {
+      const status = await pm.getProviderStatusAsync(provider);
+      const modelPrefs = pm.getModelPreferences(provider);
+      res.json({ ...status, modelPreferences: modelPrefs });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to get provider status' });
+    }
   });
 
   /**
    * POST /settings/providers/:provider/test — run connection/auth health check.
    */
-  router.post('/settings/providers/:provider/test', (req, res) => {
+  router.post('/settings/providers/:provider/test', async (req, res) => {
     const { provider } = req.params;
     if (!isValidProviderId(provider)) {
       return res.status(404).json({ error: `Unknown provider: ${provider}` });
     }
-    const { installed } = pm.detectInstalled(provider);
-    if (!installed) {
-      return res.json({ success: false, message: `CLI binary not found on PATH` });
+    try {
+      const { installed } = await pm.detectInstalledAsync(provider);
+      if (!installed) {
+        return res.json({ success: false, message: `CLI binary not found on PATH` });
+      }
+      const auth = await pm.checkAuthenticatedAsync(provider);
+      // Invalidate cache after explicit test so next status fetch is fresh
+      pm.invalidateCache(provider);
+      res.json({
+        success: auth.authenticated,
+        message: auth.authenticated
+          ? 'Provider is installed and responsive'
+          : `Auth check failed: ${auth.error ?? 'unknown error'}`,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Test failed' });
     }
-    const auth = pm.checkAuthenticated(provider);
-    res.json({
-      success: auth.authenticated,
-      message: auth.authenticated
-        ? 'Provider is installed and responsive'
-        : `Auth check failed: ${auth.error ?? 'unknown error'}`,
-    });
   });
 
   /**
    * PUT /settings/providers/:provider — update provider config (enabled, model prefs).
+   * Returns config + cached status if available (no new CLI calls for toggle response).
    */
-  router.put('/settings/providers/:provider', (req, res) => {
+  router.put('/settings/providers/:provider', async (req, res) => {
     const { provider } = req.params;
     if (!isValidProviderId(provider)) {
       return res.status(404).json({ error: `Unknown provider: ${provider}` });
@@ -82,9 +112,13 @@ export function settingsRoutes(ctx: AppContext): Router {
       pm.setModelPreferences(provider, modelPreferences);
     }
 
-    const status = pm.getProviderStatus(provider);
-    const prefs = pm.getModelPreferences(provider);
-    res.json({ ...status, modelPreferences: prefs });
+    try {
+      const status = await pm.getProviderStatusAsync(provider);
+      const prefs = pm.getModelPreferences(provider);
+      res.json({ ...status, modelPreferences: prefs });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to get provider status' });
+    }
   });
 
   /**

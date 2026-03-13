@@ -187,6 +187,8 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
       taskDecomposer,
       maxConcurrent: this.maxConcurrent,
       markHumanInterrupt: (id) => this.markHumanInterrupt(id),
+      haltHeartbeat: (id) => this.heartbeat.haltHeartbeat(id),
+      resumeHeartbeat: (id) => this.heartbeat.resumeHeartbeat(id),
       governancePipeline,
       activeDelegationRepository,
       agentRosterRepository,
@@ -243,7 +245,7 @@ export class AgentManager extends TypedEmitter<AgentManagerEvents> {
         const fromAgent = this.agents.get(msg.from);
         const fromLabel = fromAgent ? `${fromAgent.role.name} (${msg.from.slice(0, 8)})` : msg.from.slice(0, 8);
         logger.info({ module: 'comms', msg: 'Delivering message', targetAgentId: msg.to, targetRole: target.role.name, fromAgentId: msg.from, contentPreview: msg.content.slice(0, 80) });
-        target.sendMessage(`[Message from ${fromLabel}]: ${msg.content}`);
+        target.queueMessage(`[Message from ${fromLabel}]: ${msg.content}`);
 
         // Persist DMs to the target's conversation as 'external' messages so they survive page reload
         const fromRole = fromAgent ? `${fromAgent.role.name} (${msg.from.slice(0, 8)})` : msg.from.slice(0, 8);

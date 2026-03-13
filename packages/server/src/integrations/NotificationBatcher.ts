@@ -65,6 +65,16 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
 
   static readonly BATCH_WINDOW_MS = 5_000;
 
+  /** Telegram maximum message length. Truncate with suffix if exceeded. */
+  static readonly MAX_MESSAGE_LENGTH = 4096;
+  private static readonly TRUNCATION_SUFFIX = '\n… (truncated)';
+
+  /** Categories that bypass the batch window and deliver immediately. */
+  static readonly CRITICAL_CATEGORIES: ReadonlySet<string> = new Set([
+    'agent_crashed',
+    'decision_needs_approval',
+  ]);
+
   /** Register a messaging adapter for outbound delivery. */
   addAdapter(adapter: MessagingAdapter): void {
     this.adapters.push(adapter);
@@ -197,9 +207,25 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
     logger.info({ module: 'notification-batcher', msg: 'Wired to AgentManager events' });
   }
 
-  /** Queue an event for batched delivery. */
+  /** Queue an event for batched delivery. Critical events bypass the batch window. */
   queueEvent(event: NotificationEvent): void {
     const { projectId } = event;
+
+    // Critical events (crashes, decisions needing approval) skip batching
+    if (NotificationBatcher.CRITICAL_CATEGORIES.has(event.category)) {
+      if (!this.pendingEvents.has(projectId)) {
+        this.pendingEvents.set(projectId, []);
+      }
+      this.pendingEvents.get(projectId)!.push({ event, queuedAt: Date.now() });
+      // Clear any existing batch timer — the flush below handles all pending events
+      const existingTimer = this.flushTimers.get(projectId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.flushTimers.delete(projectId);
+      }
+      this.flushProject(projectId);
+      return;
+    }
 
     if (!this.pendingEvents.has(projectId)) {
       this.pendingEvents.set(projectId, []);
@@ -292,10 +318,15 @@ export class NotificationBatcher extends TypedEmitter<NotificationBatcherEvents>
         ? formatted
         : this.formatBatch(filtered);
 
+      // Truncate to Telegram's 4096 char limit
+      const truncatedText = text.length > NotificationBatcher.MAX_MESSAGE_LENGTH
+        ? text.slice(0, NotificationBatcher.MAX_MESSAGE_LENGTH - NotificationBatcher.TRUNCATION_SUFFIX.length) + NotificationBatcher.TRUNCATION_SUFFIX
+        : text;
+
       const outbound: OutboundMessage = {
         platform: 'telegram',
         chatId: sub.chatId,
-        text,
+        text: truncatedText,
       };
 
       for (const adapter of this.adapters) {

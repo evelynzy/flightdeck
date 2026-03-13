@@ -128,6 +128,12 @@ export interface AgentAdapter extends EventEmitter {
   prompt(content: PromptContent, opts?: PromptOptions): Promise<PromptResult>;
   cancel(): Promise<void>;
   terminate(): void | Promise<void>;
+
+  /** Buffer a system note to be delivered as a single merged message after the current prompt completes. */
+  appendSystemNote(note: string): void;
+
+  /** Flush all buffered system notes into a single string. Returns null if the buffer is empty. */
+  flushSystemNotes(): string | null;
 }
 
 // ── Factory Types ───────────────────────────────────────────────────

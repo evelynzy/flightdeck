@@ -7,6 +7,7 @@ import { useAppStore } from '../../stores/appStore';
 import { MentionText } from '../../utils/markdown';
 import { classifyMessage, tierPassesFilter, TIER_CONFIG, type TierFilter, type FeedItem } from '../../utils/messageTiers';
 import { AgentReportBlock } from './AgentReportBlock';
+import { Markdown } from '../ui/Markdown';
 
 export function roleColor(role: string): string {
   const colors = [
@@ -187,9 +188,12 @@ export function CommsPanelContent({ comms, groupMessages, leadId }: { comms: Age
               {selectedComm.content.startsWith('[Agent Report]') || selectedComm.content.startsWith('[Agent ACK]')
                 ? <AgentReportBlock content={selectedComm.content} />
                 : (
-                  <pre className="text-sm font-mono text-th-text-alt whitespace-pre-wrap break-words leading-relaxed">
-                    <MentionText text={selectedComm.content} agents={useAppStore.getState().agents} onClickAgent={(id) => { useAppStore.getState().setSelectedAgent(id); setSelectedComm(null); }} />
-                  </pre>
+                  <Markdown
+                    text={selectedComm.content}
+                    mentionAgents={useAppStore.getState().agents}
+                    onMentionClick={(id) => { useAppStore.getState().setSelectedAgent(id); setSelectedComm(null); }}
+                    monospace
+                  />
                 )
               }
             </div>
@@ -224,9 +228,12 @@ export function CommsPanelContent({ comms, groupMessages, leadId }: { comms: Age
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-              <pre className="text-sm font-mono text-th-text-alt whitespace-pre-wrap break-words leading-relaxed">
-                <MentionText text={selectedGroupMsg.content} agents={useAppStore.getState().agents} onClickAgent={(id) => { useAppStore.getState().setSelectedAgent(id); setSelectedGroupMsg(null); }} />
-              </pre>
+              <Markdown
+                text={selectedGroupMsg.content}
+                mentionAgents={useAppStore.getState().agents}
+                onMentionClick={(id) => { useAppStore.getState().setSelectedAgent(id); setSelectedGroupMsg(null); }}
+                monospace
+              />
             </div>
           </div>
         </div>

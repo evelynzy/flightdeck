@@ -461,6 +461,13 @@ When you discover something important about the codebase, a pattern, a gotcha, o
 
   /** Send a message to this agent (used for inter-agent communication and completion callbacks) */
   sendMessage(message: PromptContent, opts?: { priority?: boolean }): void {
+    // Buffer non-priority messages during active prompting to prevent each
+    // system ack from triggering a separate prompt cycle (Gemini loop fix)
+    if (!opts?.priority && this.acpConnection?.isPrompting) {
+      const text = typeof message === 'string' ? message : JSON.stringify(message);
+      this.acpConnection.appendSystemNote(text);
+      return;
+    }
     this.write(message, opts);
   }
 

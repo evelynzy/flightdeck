@@ -12,66 +12,49 @@ vi.mock('../../../hooks/useApi', () => ({
 
 // ── Fixtures ──────────────────────────────────────────────
 
-const MOCK_PROVIDERS = [
-  {
-    id: 'copilot',
-    name: 'GitHub Copilot SDK',
-    installed: true,
-    authenticated: true,
-    enabled: true,
-    binaryPath: '/usr/bin/copilot',
-  },
-  {
-    id: 'claude',
-    name: 'Claude Code',
-    installed: true,
-    authenticated: true,
-    enabled: true,
-    binaryPath: '/usr/bin/claude',
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini CLI',
-    installed: false,
-    authenticated: null,
-    enabled: true,
-    binaryPath: null,
-  },
-  {
-    id: 'opencode',
-    name: 'OpenCode',
-    installed: false,
-    authenticated: null,
-    enabled: true,
-    binaryPath: null,
-  },
-  {
-    id: 'cursor',
-    name: 'Cursor',
-    installed: false,
-    authenticated: null,
-    enabled: false,
-    binaryPath: null,
-  },
-  {
-    id: 'codex',
-    name: 'Codex CLI',
-    installed: true,
-    authenticated: false,
-    enabled: true,
-    binaryPath: '/usr/bin/codex',
-  },
+/** Phase 1: instant config (no CLI calls). */
+const MOCK_CONFIGS = [
+  { id: 'copilot', name: 'GitHub Copilot SDK', enabled: true },
+  { id: 'claude', name: 'Claude Code', enabled: true },
+  { id: 'gemini', name: 'Google Gemini CLI', enabled: true },
+  { id: 'opencode', name: 'OpenCode', enabled: true },
+  { id: 'cursor', name: 'Cursor', enabled: false },
+  { id: 'codex', name: 'Codex CLI', enabled: true },
+];
+
+/** Phase 2: async CLI detection results. */
+const MOCK_STATUSES = [
+  { id: 'copilot', installed: true, authenticated: true, binaryPath: '/usr/bin/copilot', version: '1.0.0' },
+  { id: 'claude', installed: true, authenticated: true, binaryPath: '/usr/bin/claude', version: '2.1.0' },
+  { id: 'gemini', installed: false, authenticated: null, binaryPath: null, version: null },
+  { id: 'opencode', installed: false, authenticated: null, binaryPath: null, version: null },
+  { id: 'cursor', installed: false, authenticated: null, binaryPath: null, version: null },
+  { id: 'codex', installed: true, authenticated: false, binaryPath: '/usr/bin/codex', version: '0.5.0' },
 ];
 
 const MOCK_RANKING = {
   ranking: ['copilot', 'claude', 'gemini', 'opencode', 'cursor', 'codex'],
 };
 
-/** Mock both /settings/providers and /settings/provider-ranking API calls. */
+/**
+ * Mock the two-phase loading: configs + ranking (Phase 1), then statuses (Phase 2).
+ * Calls are: [0] /settings/providers, [1] /settings/provider-ranking, [2] /settings/providers/status
+ */
 function mockProviderApis() {
   mockApiFetch
-    .mockResolvedValueOnce(MOCK_PROVIDERS)
-    .mockResolvedValueOnce(MOCK_RANKING);
+    .mockResolvedValueOnce(MOCK_CONFIGS)
+    .mockResolvedValueOnce(MOCK_RANKING)
+    .mockResolvedValueOnce(MOCK_STATUSES);
+}
+
+/**
+ * Mock Phase 1 only — status never resolves. For skeleton/loading tests.
+ */
+function mockProviderApisConfigOnly() {
+  mockApiFetch
+    .mockResolvedValueOnce(MOCK_CONFIGS)
+    .mockResolvedValueOnce(MOCK_RANKING)
+    .mockReturnValueOnce(new Promise(() => {})); // status never resolves
 }
 
 // ── Tests ─────────────────────────────────────────────────
@@ -87,7 +70,7 @@ describe('ProvidersSection', () => {
     expect(screen.getByText('Loading providers…')).toBeInTheDocument();
   });
 
-  it('renders all 6 provider cards after loading', async () => {
+  it('renders all 6 provider cards after config loads', async () => {
     mockProviderApis();
     render(<ProvidersSection />);
     await waitFor(() => {
@@ -101,7 +84,26 @@ describe('ProvidersSection', () => {
     expect(screen.getByText('Codex CLI')).toBeInTheDocument();
   });
 
-  it('shows installed count', async () => {
+  it('shows skeleton badges while status is loading', async () => {
+    mockProviderApisConfigOnly();
+    render(<ProvidersSection />);
+    await waitFor(() => {
+      expect(screen.getByTestId('providers-list')).toBeInTheDocument();
+    });
+    // All 6 cards should have skeleton badges
+    const skeletons = screen.getAllByTestId('status-badge-skeleton');
+    expect(skeletons.length).toBe(6);
+  });
+
+  it('shows "N providers" count while status loads, then "X/N installed"', async () => {
+    mockProviderApisConfigOnly();
+    render(<ProvidersSection />);
+    await waitFor(() => {
+      expect(screen.getByTestId('installed-count')).toHaveTextContent('6 providers');
+    });
+  });
+
+  it('shows installed count after status loads', async () => {
     mockProviderApis();
     render(<ProvidersSection />);
     await waitFor(() => {
@@ -113,30 +115,26 @@ describe('ProvidersSection', () => {
     mockProviderApis();
     render(<ProvidersSection />);
     await waitFor(() => {
-      expect(screen.getByTestId('providers-list')).toBeInTheDocument();
+      const readyBadges = screen.getAllByText('Ready');
+      expect(readyBadges.length).toBe(2); // Copilot and Claude
     });
-    // Copilot and Claude are installed+authenticated → "Ready"
-    const readyBadges = screen.getAllByText('Ready');
-    expect(readyBadges.length).toBe(2);
   });
 
   it('shows "Not installed" for missing providers', async () => {
     mockProviderApis();
     render(<ProvidersSection />);
     await waitFor(() => {
-      expect(screen.getByTestId('providers-list')).toBeInTheDocument();
+      const notInstalled = screen.getAllByText('Not installed');
+      expect(notInstalled.length).toBe(3); // gemini, opencode, cursor
     });
-    const notInstalled = screen.getAllByText('Not installed');
-    expect(notInstalled.length).toBe(3); // gemini, opencode, cursor
   });
 
   it('shows "Not authenticated" for installed but unauthed providers', async () => {
     mockProviderApis();
     render(<ProvidersSection />);
     await waitFor(() => {
-      expect(screen.getByTestId('providers-list')).toBeInTheDocument();
+      expect(screen.getByText('Not authenticated')).toBeInTheDocument(); // codex
     });
-    expect(screen.getByText('Not authenticated')).toBeInTheDocument(); // codex
   });
 
   it('has enable/disable toggles for each provider', async () => {
@@ -155,7 +153,7 @@ describe('ProvidersSection', () => {
     await waitFor(() => {
       expect(screen.getByTestId('providers-list')).toBeInTheDocument();
     });
-    mockApiFetch.mockResolvedValueOnce({ ...MOCK_PROVIDERS[0], enabled: false });
+    mockApiFetch.mockResolvedValueOnce({ ...MOCK_CONFIGS[0], enabled: false });
     fireEvent.click(screen.getByTestId('toggle-copilot'));
     await waitFor(() => {
       expect(mockApiFetch).toHaveBeenCalledWith(
@@ -168,8 +166,9 @@ describe('ProvidersSection', () => {
   it('expands a card and shows test connection button', async () => {
     mockProviderApis();
     render(<ProvidersSection />);
+    // Wait for status to load so installed = true and test button appears
     await waitFor(() => {
-      expect(screen.getByTestId('providers-list')).toBeInTheDocument();
+      expect(screen.getAllByText('Ready').length).toBe(2);
     });
     // Expand Claude card
     const claudeCard = screen.getByTestId('provider-card-claude');
@@ -179,13 +178,15 @@ describe('ProvidersSection', () => {
 
   it('shows test connection result on click', async () => {
     mockProviderApis();
-    // Third call: test connection response
-    mockApiFetch.mockResolvedValueOnce({ success: true, message: 'Provider is installed and responsive' });
 
     render(<ProvidersSection />);
+    // Wait for status to load
     await waitFor(() => {
-      expect(screen.getByTestId('providers-list')).toBeInTheDocument();
+      expect(screen.getAllByText('Ready').length).toBe(2);
     });
+
+    // Queue the test connection response
+    mockApiFetch.mockResolvedValueOnce({ success: true, message: 'Provider is installed and responsive' });
 
     // Expand and test
     const claudeCard = screen.getByTestId('provider-card-claude');
@@ -198,13 +199,27 @@ describe('ProvidersSection', () => {
     expect(screen.getByText(/installed and responsive/)).toBeInTheDocument();
   });
 
-  it('shows error state when API fails', async () => {
+  it('shows error state when config fetch fails', async () => {
     mockApiFetch.mockRejectedValue(new Error('Network error'));
     render(<ProvidersSection />);
     await waitFor(() => {
       expect(screen.getByTestId('providers-error')).toBeInTheDocument();
     });
     expect(screen.getByText(/Network error/)).toBeInTheDocument();
+  });
+
+  it('still renders cards when status fetch fails (non-critical)', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(MOCK_CONFIGS)
+      .mockResolvedValueOnce(MOCK_RANKING)
+      .mockRejectedValueOnce(new Error('status timeout'));
+    render(<ProvidersSection />);
+    await waitFor(() => {
+      expect(screen.getByTestId('providers-list')).toBeInTheDocument();
+    });
+    // Cards render — toggles work even without status
+    expect(screen.getByText('GitHub Copilot SDK')).toBeInTheDocument();
+    expect(screen.getByTestId('toggle-copilot')).toBeInTheDocument();
   });
 
   it('does not show preview badge for Codex', async () => {

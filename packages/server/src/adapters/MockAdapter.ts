@@ -33,6 +33,7 @@ export class MockAdapter extends EventEmitter implements AgentAdapter {
   private _promptingStartedAt: number | null = null;
   private _sessionId: string | null = null;
   private responseQueue: MockPromptResponse[] = [];
+  private systemNoteBuffer: string[] = [];
 
   /** History of all prompts sent, for test assertions. */
   readonly promptHistory: PromptContent[] = [];
@@ -100,7 +101,24 @@ export class MockAdapter extends EventEmitter implements AgentAdapter {
     this._isConnected = false;
     this._isPrompting = false;
     this._promptingStartedAt = null;
+    this.systemNoteBuffer.length = 0;
     this.emit('exit', 0);
+  }
+
+  /** Buffer a system note for delivery after the current prompt completes. */
+  appendSystemNote(note: string): void {
+    if (this.systemNoteBuffer.length >= 50) {
+      this.systemNoteBuffer.shift();
+    }
+    this.systemNoteBuffer.push(note);
+  }
+
+  /** Flush all buffered system notes into a single merged string. Returns null if empty. */
+  flushSystemNotes(): string | null {
+    if (this.systemNoteBuffer.length === 0) return null;
+    const merged = this.systemNoteBuffer.join('\n');
+    this.systemNoteBuffer.length = 0;
+    return merged;
   }
 
   // ── Test Helpers ────────────────────────────────────────────────
@@ -144,6 +162,7 @@ export class MockAdapter extends EventEmitter implements AgentAdapter {
     this._sessionId = null;
     this.responseQueue.length = 0;
     this.promptHistory.length = 0;
+    this.systemNoteBuffer.length = 0;
     this.removeAllListeners();
   }
 }

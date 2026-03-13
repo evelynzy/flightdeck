@@ -40,6 +40,18 @@ function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Pro
 
 const SDK_TIMEOUT_MS = 30_000;
 
+/**
+ * Maximum time a single prompt can run before being timed out (10 minutes).
+ * Defense-in-depth: AlertEngine.checkLongRunningPrompts() fires a separate
+ * 'long_running_prompt' alert at 30 minutes for any agent (including leads)
+ * that is still prompting — this catches cases where the timeout fails or
+ * the adapter is stuck in a non-prompt state.
+ */
+const PROMPT_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** Maximum number of buffered system notes before oldest entries are dropped. */
+const MAX_SYSTEM_NOTE_BUFFER = 50;
+
 /** Extract displayable text from ACP content (single item, array, or string) */
 function extractContentText(content: unknown): string | undefined {
   if (!content) return undefined;
@@ -96,6 +108,7 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
   private _promptingStartedAt: number | null = null;
   private promptQueue: PromptContent[] = [];
   private promptQueuePriorityCount = 0;
+  private systemNoteBuffer: string[] = [];
   private agentCapabilities: acp.AgentCapabilities | null = null;
 
   constructor() {
@@ -339,10 +352,14 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
     const blocks = toSdkContentBlocks(content);
 
     try {
-      const result = await this.connection.prompt({
-        sessionId: this.sessionId,
-        prompt: blocks,
-      });
+      const result = await withTimeout(
+        this.connection.prompt({
+          sessionId: this.sessionId,
+          prompt: blocks,
+        }),
+        PROMPT_TIMEOUT_MS,
+        'Prompt execution',
+      );
 
       this._isPrompting = false;
       this._promptingStartedAt = null;
@@ -353,8 +370,10 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
         this.emit('usage', { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
       }
 
-      this.emit('prompt_complete', translateStopReason(result.stopReason));
+      // Drain adapter queue BEFORE emitting prompt_complete to prevent
+      // the perpetual deferral pattern where bridge re-enqueues items
       this.drainQueue();
+      this.emit('prompt_complete', translateStopReason(result.stopReason));
 
       const translated = translateStopReason(result.stopReason);
       return {
@@ -365,8 +384,15 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
       this._isPrompting = false;
       this._promptingStartedAt = null;
       this.emit('prompting', false);
-      this.emit('prompt_complete', 'error');
+
+      const isTimeout = err instanceof Error && err.message.includes('timed out');
+      if (isTimeout) {
+        logger.warn({ module: 'acp', msg: 'Prompt timed out — agent may be stalled', timeoutMs: PROMPT_TIMEOUT_MS });
+        this.emit('prompt_timeout', PROMPT_TIMEOUT_MS);
+      }
+
       this.drainQueue();
+      this.emit('prompt_complete', 'error');
       throw err;
     }
   }
@@ -440,6 +466,23 @@ export class AcpAdapter extends EventEmitter implements AgentAdapter {
     this._isConnected = false;
     this._isPrompting = false;
     this._promptingStartedAt = null;
+    this.systemNoteBuffer.length = 0;
     this.emit('exit', 0);
+  }
+
+  /** Buffer a system note for delivery after the current prompt completes. */
+  appendSystemNote(note: string): void {
+    if (this.systemNoteBuffer.length >= MAX_SYSTEM_NOTE_BUFFER) {
+      this.systemNoteBuffer.shift();
+    }
+    this.systemNoteBuffer.push(note);
+  }
+
+  /** Flush all buffered system notes into a single merged string. Returns null if empty. */
+  flushSystemNotes(): string | null {
+    if (this.systemNoteBuffer.length === 0) return null;
+    const merged = this.systemNoteBuffer.join('\n');
+    this.systemNoteBuffer.length = 0;
+    return merged;
   }
 }

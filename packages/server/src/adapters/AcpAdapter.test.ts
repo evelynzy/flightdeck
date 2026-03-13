@@ -1011,4 +1011,128 @@ describe('AcpAdapter', () => {
       });
     }
   });
+
+  // ── 9. System note buffer ───────────────────────────────────────
+
+  describe('system note buffer', () => {
+    it('appendSystemNote + flushSystemNotes returns merged string', () => {
+      const adapter = new AcpAdapter();
+      adapter.appendSystemNote('[System] Lock acquired');
+      adapter.appendSystemNote('[System] DAG updated');
+
+      const merged = adapter.flushSystemNotes();
+      expect(merged).toBe('[System] Lock acquired\n[System] DAG updated');
+    });
+
+    it('flushSystemNotes returns null when buffer is empty', () => {
+      const adapter = new AcpAdapter();
+      expect(adapter.flushSystemNotes()).toBeNull();
+    });
+
+    it('flushSystemNotes clears the buffer', () => {
+      const adapter = new AcpAdapter();
+      adapter.appendSystemNote('note1');
+      adapter.flushSystemNotes();
+      expect(adapter.flushSystemNotes()).toBeNull();
+    });
+
+    it('terminate clears the system note buffer', async () => {
+      setupSuccessfulStart();
+      const adapter = new AcpAdapter();
+      await adapter.start(DEFAULT_START_OPTS);
+
+      adapter.appendSystemNote('buffered note');
+      await adapter.terminate();
+      expect(adapter.flushSystemNotes()).toBeNull();
+    });
+
+    it('caps buffer at 50 entries, dropping oldest', () => {
+      const adapter = new AcpAdapter();
+      for (let i = 0; i < 60; i++) {
+        adapter.appendSystemNote(`note-${i}`);
+      }
+      const merged = adapter.flushSystemNotes()!;
+      const lines = merged.split('\n');
+      expect(lines).toHaveLength(50);
+      expect(lines[0]).toBe('note-10');
+      expect(lines[49]).toBe('note-59');
+    });
+  });
+
+  // ── 10. Prompt timeout ──────────────────────────────────────────
+
+  describe('prompt timeout', () => {
+    it('emits prompt_timeout when prompt exceeds time limit', async () => {
+      setupSuccessfulStart();
+      // Make the prompt hang until timeout fires
+      mockPrompt.mockImplementation(() => new Promise(() => {}));
+
+      const adapter = new AcpAdapter();
+      await adapter.start(DEFAULT_START_OPTS);
+
+      const timeoutEvents: number[] = [];
+      adapter.on('prompt_timeout', (ms: number) => timeoutEvents.push(ms));
+
+      // Mock timers to avoid waiting 10 real minutes
+      vi.useFakeTimers();
+      const promptPromise = adapter.prompt('test').catch(() => {});
+      // Advance past the 10-minute timeout
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 100);
+      await promptPromise;
+      vi.useRealTimers();
+
+      expect(timeoutEvents).toHaveLength(1);
+      expect(timeoutEvents[0]).toBe(10 * 60 * 1000);
+    });
+  });
+
+  // ── 11. Drain order (drainQueue before prompt_complete) ─────────
+
+  describe('drain order', () => {
+    it('fires idle before prompt_complete when queue is empty', async () => {
+      setupSuccessfulStart();
+      mockPrompt.mockResolvedValue({ stopReason: 'end_turn' });
+
+      const adapter = new AcpAdapter();
+      await adapter.start(DEFAULT_START_OPTS);
+
+      const events: string[] = [];
+      adapter.on('idle', () => events.push('idle'));
+      adapter.on('prompt_complete', (reason: string) => events.push(`complete:${reason}`));
+
+      await adapter.prompt('test');
+
+      expect(events).toEqual(['idle', 'complete:end_turn']);
+    });
+
+    it('starts draining queued items before emitting prompt_complete', async () => {
+      setupSuccessfulStart();
+
+      let resolveFirst: (val: any) => void;
+      const firstPromptPromise = new Promise((resolve) => { resolveFirst = resolve; });
+      mockPrompt.mockReturnValueOnce(firstPromptPromise);
+
+      const adapter = new AcpAdapter();
+      await adapter.start(DEFAULT_START_OPTS);
+
+      // Start first prompt (will hang)
+      const p1 = adapter.prompt('first');
+
+      // Queue a second prompt while first is active
+      adapter.prompt('second');
+
+      const events: string[] = [];
+      adapter.on('prompting', (active: boolean) => events.push(`prompting:${active}`));
+      adapter.on('prompt_complete', () => events.push('prompt_complete'));
+
+      // Resolve first prompt — drain should start before prompt_complete fires
+      mockPrompt.mockResolvedValue({ stopReason: 'end_turn' });
+      resolveFirst!({ stopReason: 'end_turn' });
+      await p1;
+
+      // prompt_complete fires AFTER drainQueue starts the second prompt
+      // (drainQueue calls prompt() which emits prompting:true)
+      expect(events.indexOf('prompting:true')).toBeLessThan(events.indexOf('prompt_complete'));
+    });
+  });
 });

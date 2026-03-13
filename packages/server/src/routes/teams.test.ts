@@ -21,9 +21,9 @@ import type { AppContext } from './context.js';
 // ── Mock Data ───────────────────────────────────────────────────────
 
 const MOCK_AGENTS = [
-  { agentId: 'a1', role: 'architect', model: 'gpt-4', status: 'idle', teamId: 'team-1' },
-  { agentId: 'a2', role: 'developer', model: 'gpt-4', status: 'running', teamId: 'team-1' },
-  { agentId: 'a3', role: 'reviewer', model: 'gpt-4', status: 'idle', teamId: 'team-2' },
+  { agentId: 'a1', role: 'architect', model: 'gpt-4', status: 'idle', teamId: 'team-1', sessionId: 'sess-current' },
+  { agentId: 'a2', role: 'developer', model: 'gpt-4', status: 'running', teamId: 'team-1', sessionId: 'sess-current' },
+  { agentId: 'a3', role: 'reviewer', model: 'gpt-4', status: 'idle', teamId: 'team-2', sessionId: 'sess-current' },
 ];
 
 const MOCK_TRAINING_SUMMARY = {
@@ -40,7 +40,11 @@ const MOCK_TRAINING_SUMMARY = {
 
 function minimalCtx(overrides: Partial<AppContext> = {}): AppContext {
   return {
-    agentManager: {} as any,
+    agentManager: {
+      getAll: vi.fn().mockReturnValue(
+        MOCK_AGENTS.map(a => ({ id: a.agentId, sessionId: a.sessionId, status: a.status })),
+      ),
+    } as any,
     roleRegistry: {} as any,
     config: {} as any,
     db: {} as any,
@@ -325,13 +329,17 @@ describe('teamsRoutes', () => {
 
     it('groups crew members using metadata parentId when available', async () => {
       const rosterAgents = [
-        { agentId: 'lead-2', role: 'lead', model: 'gpt-4', status: 'idle', teamId: 'team-1', projectId: 'proj-1', metadata: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
-        { agentId: 'dev-2', role: 'developer', model: 'gpt-4', status: 'running', teamId: 'team-1', projectId: 'proj-1', metadata: { parentId: 'lead-2' }, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        { agentId: 'lead-2', role: 'lead', model: 'gpt-4', status: 'idle', teamId: 'team-1', projectId: 'proj-1', sessionId: 'sess-meta', metadata: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+        { agentId: 'dev-2', role: 'developer', model: 'gpt-4', status: 'running', teamId: 'team-1', projectId: 'proj-1', sessionId: 'sess-meta', metadata: { parentId: 'lead-2' }, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+      ];
+      // At least one live agent with matching sessionId so the filter includes these roster entries
+      const liveAgents = [
+        { id: 'lead-2', sessionId: 'sess-meta', status: 'idle', toJSON: () => ({}) },
       ];
 
       const srv = createTestServer({
         agentRoster: { getAllAgents: vi.fn().mockReturnValue(rosterAgents) } as any,
-        agentManager: { getAll: vi.fn().mockReturnValue([]) } as any,
+        agentManager: { getAll: vi.fn().mockReturnValue(liveAgents) } as any,
         projectRegistry: { get: vi.fn().mockReturnValue(null), getSessions: vi.fn().mockReturnValue([]) } as any,
       });
 
@@ -429,19 +437,22 @@ describe('teamsRoutes', () => {
           teamId: 'team-1',
           provider: 'copilot',
           projectId: 'proj-1',
-          sessionId: 'sess-1',
+          sessionId: 'sess-active',
           createdAt: '2026-01-01T00:00:00Z',
           updatedAt: '2026-01-01T00:00:00Z',
           lastTaskSummary: null,
           metadata: {},
         },
       ];
+      // A peer agent from the same session is still live, so the terminated agent passes the session filter
       const srv = createTestServer({
         agentRoster: {
           getAllAgents: vi.fn().mockReturnValue(rosterAgents),
         } as any,
         agentManager: {
-          getAll: vi.fn().mockReturnValue([]),
+          getAll: vi.fn().mockReturnValue([
+            { id: 'live-peer', sessionId: 'sess-active', status: 'running' },
+          ]),
         } as any,
       });
 
@@ -518,6 +529,126 @@ describe('teamsRoutes', () => {
       try {
         const res = await fetch(`${base}/teams/team-1/agents`);
         expect(res.status).toBe(503);
+      } finally {
+        await srv.stop();
+      }
+    });
+  });
+
+  // ── Stale agent session filtering ─────────────────────────────────
+
+  describe('stale agent filtering', () => {
+    const staleAgent = {
+      agentId: 'stale-1', role: 'developer', model: 'gpt-4', status: 'terminated',
+      teamId: 'team-1', sessionId: 'sess-old', projectId: 'proj-1',
+      metadata: { parentId: 'old-lead' },
+      createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z',
+    };
+    const currentLead = {
+      agentId: 'lead-cur', role: 'lead', model: 'gpt-4', status: 'running',
+      teamId: 'team-1', sessionId: 'sess-new', projectId: 'proj-1',
+      metadata: null,
+      createdAt: '2026-06-01T00:00:00Z', updatedAt: '2026-06-01T00:00:00Z',
+    };
+    const currentDev = {
+      agentId: 'dev-cur', role: 'developer', model: 'gpt-4', status: 'idle',
+      teamId: 'team-1', sessionId: 'sess-new', projectId: 'proj-1',
+      metadata: { parentId: 'lead-cur' },
+      createdAt: '2026-06-01T00:00:00Z', updatedAt: '2026-06-01T00:00:00Z',
+    };
+    const terminatedCurrent = {
+      agentId: 'term-cur', role: 'reviewer', model: 'gpt-4', status: 'terminated',
+      teamId: 'team-1', sessionId: 'sess-new', projectId: 'proj-1',
+      metadata: { parentId: 'lead-cur' },
+      createdAt: '2026-06-01T00:00:00Z', updatedAt: '2026-06-01T00:00:00Z',
+    };
+
+    const allRoster = [staleAgent, currentLead, currentDev, terminatedCurrent];
+    const liveAgents = [
+      { id: 'lead-cur', sessionId: 'sess-new', status: 'running', parentId: undefined, projectId: 'proj-1', projectName: 'Test', toJSON: () => ({}) },
+      { id: 'dev-cur', sessionId: 'sess-new', status: 'idle', parentId: 'lead-cur', projectId: 'proj-1', toJSON: () => ({}) },
+    ];
+
+    it('GET /crews/summary excludes stale agents from previous sessions', async () => {
+      const srv = createTestServer({
+        agentRoster: { getAllAgents: vi.fn().mockReturnValue(allRoster) } as any,
+        agentManager: { getAll: vi.fn().mockReturnValue(liveAgents) } as any,
+        projectRegistry: { get: vi.fn().mockReturnValue(null), getSessions: vi.fn().mockReturnValue([]) } as any,
+      });
+
+      const base = await srv.start();
+      try {
+        const res = await fetch(`${base}/crews/summary`);
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        // Only the current session's crew (lead-cur) should appear; stale-1 is excluded
+        expect(data).toHaveLength(1);
+        expect(data[0].leadId).toBe('lead-cur');
+        // Should include lead-cur, dev-cur, and terminated term-cur (same session) but NOT stale-1
+        expect(data[0].agentCount).toBe(3);
+        const agentIds = data[0].agents.map((a: any) => a.agentId);
+        expect(agentIds).toContain('lead-cur');
+        expect(agentIds).toContain('dev-cur');
+        expect(agentIds).toContain('term-cur');
+        expect(agentIds).not.toContain('stale-1');
+      } finally {
+        await srv.stop();
+      }
+    });
+
+    it('GET /teams/:teamId/agents excludes stale agents from previous sessions', async () => {
+      const srv = createTestServer({
+        agentRoster: {
+          getAllAgents: vi.fn().mockReturnValue(allRoster.filter(a => a.teamId === 'team-1')),
+        } as any,
+        agentManager: { getAll: vi.fn().mockReturnValue(liveAgents) } as any,
+      });
+
+      const base = await srv.start();
+      try {
+        const res = await fetch(`${base}/teams/team-1/agents`);
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        // 3 current-session agents, stale-1 excluded
+        expect(body).toHaveLength(3);
+        const ids = body.map((a: any) => a.agentId);
+        expect(ids).not.toContain('stale-1');
+        expect(ids).toContain('term-cur');
+      } finally {
+        await srv.stop();
+      }
+    });
+
+    it('GET /teams returns empty teams list when no agents are live', async () => {
+      const srv = createTestServer({
+        agentRoster: { getAllAgents: vi.fn().mockReturnValue(allRoster) } as any,
+        agentManager: { getAll: vi.fn().mockReturnValue([]) } as any,
+      });
+
+      const base = await srv.start();
+      try {
+        const res = await fetch(`${base}/teams`);
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.teams).toHaveLength(0);
+      } finally {
+        await srv.stop();
+      }
+    });
+
+    it('GET /crews/summary returns empty when no agents are live', async () => {
+      const srv = createTestServer({
+        agentRoster: { getAllAgents: vi.fn().mockReturnValue(allRoster) } as any,
+        agentManager: { getAll: vi.fn().mockReturnValue([]) } as any,
+        projectRegistry: { get: vi.fn().mockReturnValue(null), getSessions: vi.fn().mockReturnValue([]) } as any,
+      });
+
+      const base = await srv.start();
+      try {
+        const res = await fetch(`${base}/crews/summary`);
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data).toHaveLength(0);
       } finally {
         await srv.stop();
       }

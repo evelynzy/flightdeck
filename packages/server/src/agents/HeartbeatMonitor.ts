@@ -50,6 +50,8 @@ export class HeartbeatMonitor {
   private leadNudgeCount: Map<string, number> = new Map();
   private humanInterrupted: Set<string> = new Set();
   private lastCommandReminder: Map<string, number> = new Map();
+  /** Agents that explicitly halted heartbeat — stays halted until resumeHeartbeat() */
+  private haltedAgents: Set<string> = new Set();
   private timer: ReturnType<typeof setInterval> | null = null;
   private ctx: HeartbeatContext;
 
@@ -74,11 +76,13 @@ export class HeartbeatMonitor {
     this.leadIdleSince.set(agentId, Date.now());
   }
 
-  /** Called when a lead agent becomes active — reset idle tracking */
+  /** Called when a lead agent becomes active — reset idle tracking and UI interrupt */
   trackActive(agentId: string): void {
     this.leadIdleSince.delete(agentId);
     this.leadNudgeCount.set(agentId, 0);
     this.humanInterrupted.delete(agentId);
+    // NOTE: haltedAgents is NOT cleared here — HALT_HEARTBEAT is an explicit
+    // opt-out that persists until resumeHeartbeat().
   }
 
   /** Called when a lead agent exits or is terminated — clean up all tracking */
@@ -87,11 +91,63 @@ export class HeartbeatMonitor {
     this.leadNudgeCount.delete(agentId);
     this.humanInterrupted.delete(agentId);
     this.lastCommandReminder.delete(agentId);
+    this.haltedAgents.delete(agentId);
   }
 
-  /** Called when a human interrupts a lead — suppress nudges until it resumes */
+  /**
+   * Called when a human sends a message via the UI — temporarily suppress lead nudges.
+   * Cleared automatically by trackActive() when the lead starts working again.
+   * Does NOT affect command reminders or haltedAgents.
+   */
   trackHumanInterrupt(agentId: string): void {
     this.humanInterrupted.add(agentId);
+  }
+
+  /**
+   * Called when HALT_HEARTBEAT command is issued — persistently suppress
+   * lead idle nudges until resumeHeartbeat(). Command reminders are unaffected.
+   * Returns true if newly halted, false if already halted (idempotent).
+   */
+  haltHeartbeat(agentId: string): boolean {
+    if (this.haltedAgents.has(agentId)) return false;
+    this.haltedAgents.add(agentId);
+    return true;
+  }
+
+  /**
+   * Explicitly resume heartbeat for an agent that previously issued HALT_HEARTBEAT.
+   * Returns true if actually resumed, false if wasn't halted.
+   */
+  resumeHeartbeat(agentId: string): boolean {
+    return this.haltedAgents.delete(agentId);
+  }
+
+  /** Check if an agent has halted heartbeat */
+  isHalted(agentId: string): boolean {
+    return this.haltedAgents.has(agentId);
+  }
+
+  /**
+   * Send a command reference reminder to a specific agent on-demand
+   * (e.g., when they issue an unknown/invalid command).
+   * Bypasses the 2-hour interval. Not affected by HALT_HEARTBEAT (which only controls nudges).
+   */
+  sendCommandReminderTo(agent: Agent): void {
+    if (isTerminalStatus(agent.status)) return;
+
+    const message = buildCommandReminderMessage();
+    agent.queueMessage(message);
+    this.lastCommandReminder.set(agent.id, Date.now());
+
+    logger.info('heartbeat', `Command reminder (on-demand) → ${agent.role.name} (${agent.id.slice(0, 8)})`);
+
+    this.ctx.emit('agent:message_sent', {
+      from: 'system',
+      fromRole: 'System',
+      to: agent.id,
+      toRole: agent.role.name,
+      content: message,
+    });
   }
 
   /**
@@ -112,8 +168,8 @@ export class HeartbeatMonitor {
       const idleSince = this.leadIdleSince.get(lead.id);
       if (!idleSince) continue;
 
-      // Don't nudge if the lead went idle after a human interrupt
-      if (this.humanInterrupted.has(lead.id)) continue;
+      // Don't nudge if the lead went idle after a human interrupt or has halted heartbeat
+      if (this.humanInterrupted.has(lead.id) || this.haltedAgents.has(lead.id)) continue;
 
       // Don't nudge if lead went idle less than 60s ago
       const idleDuration = Date.now() - idleSince;
@@ -219,8 +275,9 @@ export class HeartbeatMonitor {
     const allAgents = this.ctx.getAllAgents();
 
     for (const agent of allAgents) {
-      // Skip agents in terminal states
-      if (isTerminalStatus(agent.status)) continue;
+      // Only send periodic reminders to agents actively processing (running state).
+      // Idle/waiting agents don't need nudges — they'll get one when they resume work.
+      if (agent.status !== 'running') continue;
 
       const lastReminder = this.lastCommandReminder.get(agent.id);
       const agentCreatedAt = agent.createdAt.getTime();
