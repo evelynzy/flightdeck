@@ -132,6 +132,9 @@ export class DecisionLog extends EventEmitter {
     return decision;
   }
 
+  // UI-facing methods use DESC (newest-first) for the decisions panel display.
+  // Agent-facing methods (getByAgent, getByAgents) use ASC for chronological context.
+
   getAll(): Decision[] {
     return this.db.drizzle
       .select()
