@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - Unreleased
+
+### Added
+
+- **Copilot session artifacts browser** — View plan.md, checkpoints, and research files from `~/.copilot/session-state/` in the Artifacts panel
+- **New API endpoints** — `GET /projects/:id/artifact-contents` and `GET /projects/:id/session-artifact` for reading artifact files outside the project directory
+- **Collapsible system messages** — Long system messages (>200 chars) auto-collapse in chat with click-to-expand, following the existing CollapsibleReasoningBlock pattern
+- **Clickable progress items** — Recent Progress section on project overview page now uses shared ActivityFeedItem component with detail modal on click
+
+### Changed
+
+- **Decisions panel newest-first** — DecisionLog queries `getAll()`, `getByLeadId()`, and `getNeedingConfirmation()` now return DESC order with `rowid` tiebreaker for deterministic ordering
+- **Tool/text chronological interleaving** — Tool calls now flush the current agent group in `groupTimeline()`, producing text → [tool badge] → text instead of concatenated text with tools collapsed below
+- **Tool use display** — Smaller font (10px), in-place message updates on state transitions instead of duplicating messages
+- **Active session icon** — Changed from yellow AlertCircle "Active" to blue Play "Running" for clearer status indication
+- **Provider settings** — Replaced legacy "Required Environment Variables" section with friendly provider login instructions
+- **Docs landing page** — Simplified to 3 feature cards: AI Project Lead, Supported Providers, Task DAG
+
+### Fixed
+
+- **Crew page agent filtering** — Backend `/crew/agents` endpoint and frontend HealthStrip now filter by projectId instead of showing all agents globally
+- **Crew page side panel scroll** — Changed overflow-hidden to overflow-y-auto so panel content scrolls properly
+- **Doubled Command Reference Reminder** — System messages targeted at child agents no longer leak into the lead's main chat (`msg.to === leadId` guard)
+- **Tool message deduplication** — Tool state transitions (in_progress → completed) now update the existing message in-place by `toolCallId` instead of appending duplicates
+- **DecisionLog CI test** — Added `rowid DESC` tiebreaker to prevent non-deterministic ordering when decisions share the same millisecond timestamp
+- **Windows CI** — Added missing shared types build step to Windows CI workflow
+- **Artifact paths** — `FLIGHTDECK_STATE_DIR` config now respected in AgentManager, StorageManager, and project routes instead of hardcoded `homedir()`
+
+### Removed
+
+- **Legacy .ai-crew migration code** — Removed 163 lines of migration logic and 2 test files for the renamed `.ai-crew/` directory
+- **Symlink-based artifact sharing** — Removed `.flightdeck/shared/` symlink system, replaced with direct absolute artifact paths injected into agent prompts
+
+### Docs
+
+- Updated VitePress base path from `/flightdeck/` to `/` for custom domain `flightdeck.justinchuby.com`
+- Added CNAME file for GitHub Pages custom domain
+- Simplified landing page from 7 feature cards to 3 focused cards
+
 ## [0.5.0] - Unreleased
 
 ### Added
