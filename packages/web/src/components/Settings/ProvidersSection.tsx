@@ -26,6 +26,7 @@ import { EmptyState } from '../ui/EmptyState';
 interface ProviderConfig {
   id: string;
   name: string;
+  binary: string;
   enabled: boolean;
 }
 
@@ -42,6 +43,7 @@ interface ProviderStatusData {
 interface ProviderStatus {
   id: string;
   name: string;
+  binary: string;
   installed: boolean;
   authenticated: boolean | null;
   enabled: boolean;
@@ -217,7 +219,7 @@ function ProviderCard({
             <div>
               <span className="text-th-text-muted flex items-center gap-1"><Terminal className="w-3 h-3" /> Binary:</span>
               <code className="font-mono text-th-text-alt">
-                {provider.binaryPath ?? provider.id}
+                {provider.binaryPath ?? provider.binary ?? provider.id}
               </code>
             </div>
             <div>

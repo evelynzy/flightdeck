@@ -45,17 +45,24 @@ describe('ProviderManager', () => {
       );
     });
 
-    it('returns id, name, enabled only (no CLI status fields)', () => {
+    it('returns id, name, binary, enabled only (no CLI status fields)', () => {
       const configs = createManager().getProviderConfigs();
       for (const c of configs) {
         expect(c).toHaveProperty('id');
         expect(c).toHaveProperty('name');
+        expect(c).toHaveProperty('binary');
         expect(c).toHaveProperty('enabled');
         expect(c).not.toHaveProperty('installed');
         expect(c).not.toHaveProperty('authenticated');
         expect(c).not.toHaveProperty('binaryPath');
         expect(c).not.toHaveProperty('version');
       }
+    });
+
+    it('includes binary name from provider preset', () => {
+      const configs = createManager().getProviderConfigs();
+      const claude = configs.find((c) => c.id === 'claude');
+      expect(claude?.binary).toBe('claude-agent-acp');
     });
 
     it('does not make any exec calls', () => {

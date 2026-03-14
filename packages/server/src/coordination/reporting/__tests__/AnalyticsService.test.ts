@@ -8,9 +8,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Database } from '../../../db/database.js';
 import { AnalyticsService } from '../AnalyticsService.js';
 import { projects, projectSessions, dagTasks, activityLog } from '../../../db/schema.js';
-import { unlinkSync, existsSync } from 'fs';
+import { unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { randomUUID } from 'crypto';
 
-const TEST_DB = '/tmp/analytics-service-test.db';
+let TEST_DB: string;
 
 function seedTestData(db: Database) {
   // Insert projects first (FK target for project_sessions)
@@ -50,13 +53,14 @@ describe('AnalyticsService', () => {
   let service: AnalyticsService;
 
   beforeEach(() => {
-    if (existsSync(TEST_DB)) unlinkSync(TEST_DB);
+    TEST_DB = join(tmpdir(), `analytics-service-test-${randomUUID()}.db`);
     db = new Database(TEST_DB);
     service = new AnalyticsService(db);
     seedTestData(db);
   });
 
   afterEach(() => {
+    if (db) db.close();
     try { unlinkSync(TEST_DB); } catch {}
     try { unlinkSync(TEST_DB + '-wal'); } catch {}
     try { unlinkSync(TEST_DB + '-shm'); } catch {}

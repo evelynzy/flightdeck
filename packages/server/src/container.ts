@@ -411,6 +411,7 @@ export async function createContainer(opts: ContainerConfig): Promise<ServiceCon
     integrationRouter,
     providerManager,
     configStore,
+    sessionResumeManager,
 
     // Lifecycle
     async shutdown() {

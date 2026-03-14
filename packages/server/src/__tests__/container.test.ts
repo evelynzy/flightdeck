@@ -102,6 +102,9 @@ describe('createContainer', () => {
     // costTracker available both publicly and internally
     expect(container.costTracker).toBeDefined();
 
+    // sessionResumeManager available at top level (routes destructure from AppContext)
+    expect(container.sessionResumeManager).toBeDefined();
+
     // Internal services
     expect(container.internal.messageBus).toBeDefined();
     expect(container.internal.agentMemory).toBeDefined();
@@ -199,6 +202,15 @@ describe('createContainer', () => {
     expect(ctx.lockRegistry).toBeDefined();
     expect(ctx.activityLedger).toBeDefined();
     expect(ctx.decisionLog).toBeDefined();
+  });
+
+  it('exposes sessionResumeManager at top level for route destructuring', async () => {
+    container = await createContainer(createTestContainerConfig());
+
+    // sessionResumeManager must be on the top-level container (AppContext)
+    // so routes can destructure it — not only in container.internal
+    expect(container.sessionResumeManager).toBeDefined();
+    expect(container.sessionResumeManager).toBe(container.internal.sessionResumeManager);
   });
 
   it('provides shutdown lifecycle method', async () => {
