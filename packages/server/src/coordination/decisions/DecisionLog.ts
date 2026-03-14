@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { eq, asc, desc, and, inArray, lte } from 'drizzle-orm';
+import { eq, asc, desc, and, inArray, lte, sql } from 'drizzle-orm';
 import type { Database } from '../../db/database.js';
 import { decisions } from '../../db/schema.js';
 
@@ -139,7 +139,7 @@ export class DecisionLog extends EventEmitter {
     return this.db.drizzle
       .select()
       .from(decisions)
-      .orderBy(desc(decisions.createdAt))
+      .orderBy(desc(decisions.createdAt), sql`rowid DESC`)
       .all()
       .map(rowToDecision);
   }
@@ -170,7 +170,7 @@ export class DecisionLog extends EventEmitter {
       .select()
       .from(decisions)
       .where(eq(decisions.leadId, leadId))
-      .orderBy(desc(decisions.createdAt))
+      .orderBy(desc(decisions.createdAt), sql`rowid DESC`)
       .all()
       .map(rowToDecision);
   }
@@ -180,7 +180,7 @@ export class DecisionLog extends EventEmitter {
       .select()
       .from(decisions)
       .where(and(eq(decisions.needsConfirmation, 1), eq(decisions.status, 'recorded')))
-      .orderBy(desc(decisions.createdAt))
+      .orderBy(desc(decisions.createdAt), sql`rowid DESC`)
       .all()
       .map(rowToDecision);
   }
