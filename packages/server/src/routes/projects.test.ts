@@ -258,6 +258,7 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
   const mockGetSessions = vi.fn().mockReturnValue([]);
   const mockGetAllAgents = vi.fn().mockReturnValue([]);
   const mockGetMessageHistory = vi.fn().mockReturnValue([]);
+  const mockResumeLeadSession = vi.fn();
 
   // Mock spawn returns an agent with the requested ID (8th arg) to honor the invariant
   const makeFakeAgent = (id: string) => ({
@@ -273,6 +274,11 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
       (_role: any, _task: any, _parentId: any, _model: any, _cwd: any, _resumeSession: any, id?: string) =>
         makeFakeAgent(id ?? 'new-lead-1'),
     );
+    mockResumeLeadSession.mockImplementation((opts: any) => {
+      const agent = makeFakeAgent(opts.session.leadId);
+      mockSpawn(null, opts.task, null, opts.model, null, opts.session.sessionId, opts.session.leadId);
+      return { agent, task: opts.task };
+    });
     mockGet.mockReturnValue({ id: 'proj-1', name: 'Test', cwd: '/tmp/test' });
 
     const srv = createTestServer({
@@ -299,6 +305,9 @@ describe('POST /projects/:id/resume — enhanced with team respawn', () => {
       agentRoster: {
         getAllAgents: mockGetAllAgents,
         getByProject: mockGetAllAgents,
+      } as any,
+      sessionResumeManager: {
+        resumeLeadSession: mockResumeLeadSession,
       } as any,
     });
     baseUrl = await srv.start();
