@@ -44,6 +44,7 @@ export interface ProviderStatus {
 export interface ProviderConfig {
   id: ProviderId;
   name: string;
+  binary: string;
   enabled: boolean;
 }
 
@@ -125,6 +126,7 @@ export class ProviderManager {
     return (Object.keys(PROVIDER_PRESETS) as ProviderId[]).map((id) => ({
       id,
       name: PROVIDER_PRESETS[id].name,
+      binary: PROVIDER_PRESETS[id].binary,
       enabled: this.isProviderEnabled(id),
     }));
   }
