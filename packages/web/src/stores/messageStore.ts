@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import type { AcpTextChunk } from '../types';
 import { hasUnclosedCommandBlock } from '../utils/commandParser';
 
+/**
+ * Stable empty array for Zustand selectors.
+ * NEVER use `?? []` in a selector — each call creates a new reference,
+ * defeating Zustand's strict-equality check and causing infinite re-renders.
+ */
+export const EMPTY_MESSAGES: readonly AcpTextChunk[] = Object.freeze([]);
+
 /** Generate a deterministic message ID for dedup */
 export function messageId(msg: AcpTextChunk): string {
   const ts = msg.timestamp ?? 0;
@@ -165,10 +172,10 @@ export const useMessageStore = create<MessageStoreState>((set, get) => ({
       let agentIdx = -1;
       for (let k = msgs.length - 1; k >= 0; k--) {
         if (msgs[k].sender === 'agent') { agentIdx = k; break; }
-        // Look past thinking messages and system notification messages (📨/📤/⚙️)
+        // Look past thinking messages and external/system DM notifications
         if (msgs[k].sender === 'thinking') continue;
-        const t = msgs[k].text || '';
-        if (msgs[k].sender === 'system' && (t.startsWith('📨') || t.startsWith('📤') || t.startsWith('⚙️'))) continue;
+        if (msgs[k].sender === 'external') continue;
+        if (msgs[k].sender === 'system' && (msgs[k].text || '').startsWith('⚙️')) continue;
         break; // stop at user/other boundaries
       }
       const agentText = agentIdx >= 0 ? msgs[agentIdx].text : '';

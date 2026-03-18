@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useMessageStore, messageId } from '../messageStore';
+import { useMessageStore, messageId, EMPTY_MESSAGES } from '../messageStore';
 import type { AcpTextChunk } from '../../types';
 
 const CH = 'lead-test-001';
@@ -406,11 +406,11 @@ describe('messageStore', () => {
       expect(ch.messages[0].sender).toBe('agent');
     });
 
-    it('looks past interleaved system messages with 📨/📤/⚙️ prefixes', () => {
+    it('looks past interleaved external and system notification messages', () => {
       useMessageStore.getState().appendToLastAgentMessage(CH, 'agent text');
-      // Add system messages that should be looked past
-      useMessageStore.getState().addMessage(CH, { type: 'text', text: '📨 [From Dev] hello', sender: 'system', timestamp: Date.now() });
-      useMessageStore.getState().addMessage(CH, { type: 'text', text: '📤 [To Dev] reply', sender: 'system', timestamp: Date.now() + 1 });
+      // Add external/system messages that should be looked past
+      useMessageStore.getState().addMessage(CH, { type: 'text', text: '📨 [From Dev] hello', sender: 'external', timestamp: Date.now() });
+      useMessageStore.getState().addMessage(CH, { type: 'text', text: '📤 [To Dev] reply', sender: 'external', timestamp: Date.now() + 1 });
       useMessageStore.getState().addMessage(CH, { type: 'text', text: '⚙️ [System] notice', sender: 'system', timestamp: Date.now() + 2 });
       // Append more agent text — should find the original agent message
       useMessageStore.getState().appendToLastAgentMessage(CH, ' more');
@@ -480,6 +480,28 @@ describe('messageStore', () => {
       useMessageStore.getState().appendToLastAgentMessage(CH, 'text');
       const ts = useMessageStore.getState().getLastTextAt(CH);
       expect(ts).toBeGreaterThanOrEqual(before);
+    });
+  });
+
+  describe('EMPTY_MESSAGES stability', () => {
+    it('is a frozen empty array', () => {
+      expect(EMPTY_MESSAGES).toEqual([]);
+      expect(Object.isFrozen(EMPTY_MESSAGES)).toBe(true);
+    });
+
+    it('returns the same reference on repeated access', () => {
+      // This is the key invariant — Zustand selectors using `?? EMPTY_MESSAGES`
+      // must return the same ref to avoid infinite re-render loops
+      const a = EMPTY_MESSAGES;
+      const b = EMPTY_MESSAGES;
+      expect(a).toBe(b);
+    });
+
+    it('selector returns stable ref for missing channel', () => {
+      const s1 = useMessageStore.getState().channels['nonexistent']?.messages ?? EMPTY_MESSAGES;
+      const s2 = useMessageStore.getState().channels['nonexistent']?.messages ?? EMPTY_MESSAGES;
+      expect(s1).toBe(s2);
+      expect(s1).toBe(EMPTY_MESSAGES);
     });
   });
 });
