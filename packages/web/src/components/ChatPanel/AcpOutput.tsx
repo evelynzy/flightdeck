@@ -1,5 +1,5 @@
 import { apiFetch } from '../../hooks/useApi';
-import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useAppStore } from '../../stores/appStore';
 import { useMessageStore, EMPTY_MESSAGES } from '../../stores/messageStore';
@@ -9,7 +9,11 @@ import { ChevronDown, ChevronUp, ChevronRight, FolderOpen, Clock, Loader2, X, Me
 import { InlineMarkdownWithMentions, MentionText } from '../../utils/markdown';
 import { splitCommandBlocks } from '../../utils/commandParser';
 import { PromptNav, hasUserMention } from '../PromptNav';
+import { splitToolOutput, CollapsibleToolOutput } from '../Shared/toolOutput';
 import { groupTimeline, type TimelineItem, type GroupedTimelineItem } from './groupTimeline';
+
+/** Context providing the current agentId to nested components (avoids O(agents) scans) */
+const AgentIdContext = createContext<string>('');
 
 interface Props {
   agentId: string;
@@ -330,6 +334,7 @@ export function AcpOutput({ agentId }: Props) {
   }), [plan, planOpen, setPlanOpen, queuedMessages, reorderQueuedMessage, removeQueuedMessage]);
 
   return (
+    <AgentIdContext.Provider value={agentId}>
     <div className="flex-1 relative min-h-0">
     <div ref={containerRef} className="absolute inset-0">
       <Virtuoso
@@ -387,6 +392,7 @@ export function AcpOutput({ agentId }: Props) {
     )}
     <PromptNav containerRef={containerRef} messages={messages} useOriginalIndices onJump={handlePromptJump} />
     </div>
+    </AgentIdContext.Provider>
   );
 }
 
@@ -588,12 +594,21 @@ const TimelineRow = memo(function TimelineRow({ item }: { item: GroupedTimelineI
   );
 });
 
-/** Styled tool call badge — renders with proper icon, status color, and tool kind */
+/** Styled tool call badge — renders with proper icon, status color, and tool kind.
+ *  Collapsible via <details> when tool call content is available. */
 function ToolCallBadge({ msg }: { msg: AcpTextChunk }) {
   const status = msg.toolStatus ?? 'in_progress';
   const kind = msg.toolKind ?? '';
   const title = typeof msg.text === 'string' ? msg.text : String(msg.text);
   const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+  // Narrow lookup to the current agent's toolCalls — O(agents) find + O(toolCalls) find
+  const agentId = useContext(AgentIdContext);
+  const toolCalls = useAppStore((s) => s.agents.find((a) => a.id === agentId)?.toolCalls);
+  const content = useMemo(() => {
+    if (!msg.toolCallId || !toolCalls) return undefined;
+    return toolCalls.find((t) => t.toolCallId === msg.toolCallId)?.content;
+  }, [toolCalls, msg.toolCallId]);
 
   const statusColors: Record<string, string> = {
     pending: 'text-yellow-500',
@@ -603,13 +618,25 @@ function ToolCallBadge({ msg }: { msg: AcpTextChunk }) {
   };
   const color = statusColors[status] || 'text-th-text-muted';
 
-  return (
-    <div className="flex items-center gap-1.5 py-0.5 px-1">
+  const badge = (
+    <span className="flex items-center gap-1.5 py-0.5 px-1">
+      {content && <ChevronRight className="w-3 h-3 shrink-0 text-th-text-muted group-open:rotate-90 transition-transform" />}
       <Wrench size={11} className={`shrink-0 ${color}`} />
       <span className={`text-[10px] font-mono ${color}`}>{title}</span>
       {kind && <span className="text-[9px] text-th-text-muted bg-th-bg-alt px-1 rounded">{kind}</span>}
       {ts && <span className="text-[10px] text-th-text-muted ml-auto shrink-0">{ts}</span>}
-    </div>
+    </span>
+  );
+
+  if (!content) return badge;
+
+  return (
+    <details className="group text-[11px]">
+      <summary className="cursor-pointer select-none list-none">{badge}</summary>
+      <pre className="ml-5 mt-0.5 mb-1 text-[10px] text-th-text-muted font-mono whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+        {content}
+      </pre>
+    </details>
   );
 }
 
@@ -771,27 +798,38 @@ function isRealCommandBlock(text: string): boolean {
 
 /** Render agent text with ⟦⟦ ⟧⟧ blocks separated and inline markdown + tables */
 function AgentTextBlockSimple({ text }: { text: string }) {
-  // Depth-aware split handles nested ⟦⟦ ⟧⟧ inside command JSON payloads
+  // First: split out consecutive "Info:" / path-only line groups
+  const topParts = splitToolOutput(text);
+  return (
+    <>
+      {topParts.map((part, pi) => {
+        if (part.type === 'tool-output') {
+          return <CollapsibleToolOutput key={`to-${pi}`} lines={part.lines} />;
+        }
+        return <AgentTextSegment key={`ts-${pi}`} text={part.text} />;
+      })}
+    </>
+  );
+}
+
+/** Render a text segment with ⟦⟦ ⟧⟧ command blocks, tables, and inline markdown */
+function AgentTextSegment({ text }: { text: string }) {
   const segments = splitCommandBlocks(text);
   return (
     <>
       {segments.map((seg, i) => {
-        // Complete ⟦⟦ ⟧⟧ block — only collapse if it looks like a real command
         if (seg.startsWith('⟦⟦') && seg.endsWith('⟧⟧')) {
           if (isRealCommandBlock(seg)) {
             return <CollapsibleCommandBlockSimple key={i} text={seg} />;
           }
-          // Not a real command — render as plain text
           return <BlockMarkdownSimple key={i} text={seg} />;
         }
-        // Unclosed ⟦⟦ block (still streaming or split across messages)
         if (seg.startsWith('⟦⟦')) {
           if (isRealCommandBlock(seg)) {
             return <CollapsibleCommandBlockSimple key={i} text={seg} />;
           }
           return seg.trim() ? <BlockMarkdownSimple key={i} text={seg} /> : null;
         }
-        // Dangling ⟧⟧ from a block that started in a previous message
         if (seg.includes('⟧⟧') && !seg.includes('⟦⟦')) {
           const idx = seg.indexOf('⟧⟧') + 2;
           const cmdBlock = seg.slice(0, idx);
@@ -804,7 +842,6 @@ function AgentTextBlockSimple({ text }: { text: string }) {
           );
         }
         if (!seg.trim()) return null;
-        // Check for tables
         const TABLE_RE = /((?:^|\n)\|[^\n]+\|[ \t]*(?:\n\|[^\n]+\|[ \t]*)+)/g;
         const parts = seg.split(TABLE_RE);
         return (

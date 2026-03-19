@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, AlertCircle, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Send, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useMessageStore, EMPTY_MESSAGES } from '../../stores/messageStore';
 import { useToastStore } from '../Toast';
 import { apiFetch } from '../../hooks/useApi';
 import { AgentIdBadge } from '../../utils/markdown';
 import { Markdown } from '../ui/Markdown';
+import { splitToolOutput, CollapsibleToolOutput } from '../Shared/toolOutput';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import type { AcpTextChunk, AgentInfo } from '../../types';
 
@@ -288,32 +289,9 @@ function ChatBubble({ msg, agent, compact }: { msg: AcpTextChunk; agent?: AgentI
     );
   }
 
-  // Tool call messages render as compact inline indicators with status colors
+  // Tool call messages render via dedicated component (hooks must be unconditional)
   if (sender === 'tool') {
-    const text = typeof msg.text === 'string' ? msg.text : '';
-    const status = msg.toolStatus ?? 'in_progress';
-    const statusColors: Record<string, string> = {
-      pending: 'text-yellow-500',
-      in_progress: 'text-blue-400',
-      completed: 'text-emerald-500',
-      cancelled: 'text-gray-400',
-    };
-    const color = statusColors[status] || 'text-sky-400';
-    return (
-      <div className="flex items-center gap-1.5 py-0.5">
-        <span className={`text-[10px] ${color} truncate`}>
-          🔧 {text.slice(0, 200)}
-        </span>
-        {msg.toolKind && (
-          <span className="text-[9px] text-th-text-muted bg-th-bg-alt px-1 rounded">{msg.toolKind}</span>
-        )}
-        {msg.timestamp && (
-          <span className="text-[10px] text-th-text-muted shrink-0">
-            {formatRelativeTime(new Date(msg.timestamp).toISOString())}
-          </span>
-        )}
-      </div>
-    );
+    return <ToolMessageBubble msg={msg} agentId={agent?.id ?? ''} />;
   }
 
   const text = typeof msg.text === 'string' ? msg.text : '';
@@ -344,9 +322,75 @@ function ChatBubble({ msg, agent, compact }: { msg: AcpTextChunk; agent?: AgentI
           isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'
         } ${compact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
       >
-        <Markdown text={text} monospace />
+        <AgentTextWithToolOutput text={text} />
       </div>
     </div>
+  );
+}
+
+/** Tool call message bubble — extracted so hooks are called unconditionally */
+function ToolMessageBubble({ msg, agentId }: { msg: AcpTextChunk; agentId: string }) {
+  const text = typeof msg.text === 'string' ? msg.text : '';
+  const status = msg.toolStatus ?? 'in_progress';
+  const statusColors: Record<string, string> = {
+    pending: 'text-yellow-500',
+    in_progress: 'text-blue-400',
+    completed: 'text-emerald-500',
+    cancelled: 'text-gray-400',
+  };
+  const color = statusColors[status] || 'text-sky-400';
+
+  // Narrow lookup to the current agent's toolCalls — O(agents) find + O(toolCalls) find
+  const toolCalls = useAppStore((s) => s.agents.find((a) => a.id === agentId)?.toolCalls);
+  const content = useMemo(() => {
+    if (!msg.toolCallId || !toolCalls) return undefined;
+    return toolCalls.find((t) => t.toolCallId === msg.toolCallId)?.content;
+  }, [toolCalls, msg.toolCallId]);
+
+  const badge = (
+    <span className="flex items-center gap-1.5 py-0.5">
+      {content && <ChevronRight className="w-3 h-3 shrink-0 text-th-text-muted group-open:rotate-90 transition-transform" />}
+      <span className={`text-[10px] ${color} truncate`}>
+        🔧 {text.slice(0, 200)}
+      </span>
+      {msg.toolKind && (
+        <span className="text-[9px] text-th-text-muted bg-th-bg-alt px-1 rounded">{msg.toolKind}</span>
+      )}
+      {msg.timestamp && (
+        <span className="text-[10px] text-th-text-muted shrink-0">
+          {formatRelativeTime(new Date(msg.timestamp).toISOString())}
+        </span>
+      )}
+    </span>
+  );
+
+  if (!content) return badge;
+
+  return (
+    <details className="group text-[11px]">
+      <summary className="cursor-pointer select-none list-none">{badge}</summary>
+      <pre className="ml-5 mt-0.5 mb-1 text-[10px] text-th-text-muted font-mono whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+        {content}
+      </pre>
+    </details>
+  );
+}
+
+/** Renders agent text with Info:/path lines collapsed, regular text via Markdown */
+function AgentTextWithToolOutput({ text }: { text: string }) {
+  const parts = splitToolOutput(text);
+  // If no tool output detected, render directly (fast path)
+  if (parts.length === 1 && parts[0].type === 'text') {
+    return <Markdown text={text} monospace />;
+  }
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.type === 'tool-output'
+          ? <CollapsibleToolOutput key={i} lines={part.lines} />
+          : <Markdown key={i} text={part.text} monospace />
+      )}
+    </>
   );
 }
 
