@@ -214,8 +214,6 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
     if (agent.messages.length > agent._maxMessages) {
       agent.messages = agent.messages.slice(-agent._maxMessages);
     }
-    // Estimate tokens from content length when ACP doesn't provide usage events
-    agent.estimateTokensFromContent(text);
     agent._notifyData(text);
   }));
 
@@ -267,7 +265,9 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
     // Not suppressed during resume — usage/cost data should always be recorded
     agent.inputTokens = usage.inputTokens;
     agent.outputTokens = usage.outputTokens;
-    agent.hasRealUsageData = true;
+    // TODO: AcpAdapter emits thoughtTokens and totalTokens from the provider,
+    // but they are not wired through here because UsageInfo/CostTracker/DB schema
+    // don't support them yet. Wire them when we add extended token breakdowns.
     agent._notifyUsage({
       agentId: agent.id,
       inputTokens: usage.inputTokens,
@@ -281,7 +281,7 @@ export function wireAcpEvents(agent: Agent, conn: AgentAdapter): void {
     });
   }));
 
-  conn.on('usage_update', (info: { size: number; used: number }) => withCtx(() => {
+  conn.on('usage_update', (info: { size: number; used: number; cost?: number | null }) => withCtx(() => {
     const previousUsed = agent.contextWindowUsed;
     agent.contextWindowSize = info.size;
     agent.contextWindowUsed = info.used;
