@@ -17,6 +17,7 @@ const mockExecFileSync = vi.fn();
 vi.mock('child_process', () => ({
   spawn: (...args: any[]) => mockSpawn(...args),
   execFileSync: (...args: any[]) => mockExecFileSync(...args),
+  execFile: vi.fn(),
   ChildProcess: EventEmitter,
 }));
 
