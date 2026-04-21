@@ -23,6 +23,8 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { apiFetch } from '../hooks/useApi';
+import { useAppStore } from '../stores/appStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { getProvider } from '@flightdeck/shared';
 import { ProviderIcon } from './ui/ProviderIcon';
 
@@ -209,13 +211,16 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const applyPreferences = useCallback(async (type: UserType, oversight: OversightLevel) => {
+    const maxConcurrentAgents = USER_TYPE_CONFIG[type].defaultAgents;
+    useSettingsStore.getState().setOversightLevel(oversight);
+    const currentConfig = useAppStore.getState().config;
+    if (currentConfig) {
+      useAppStore.getState().setConfig({ ...currentConfig, maxConcurrentAgents });
+    }
     try {
       await apiFetch('/config', {
         method: 'PATCH',
-        body: JSON.stringify({
-          maxConcurrentAgents: USER_TYPE_CONFIG[type].defaultAgents,
-          oversightLevel: oversight,
-        }),
+        body: JSON.stringify({ maxConcurrentAgents, oversightLevel: oversight }),
         headers: { 'Content-Type': 'application/json' },
       });
     } catch { /* non-blocking — user can adjust in Settings */ }
