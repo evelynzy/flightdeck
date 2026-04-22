@@ -330,12 +330,10 @@ export class ProviderManager {
     return this.configStore ? this.configStore.current as FlightdeckConfig : null;
   }
 
-  private clearResolvedProviderOverrideIfAligned(providerId?: ProviderId): void {
+  private clearResolvedProviderOverride(providerId?: ProviderId): void {
     if (!this.configStore || !this.resolvedProviderOverride) return;
-    if (providerId && this.resolvedProviderOverride !== providerId) return;
-    if (this.configStore.current.provider.id === this.resolvedProviderOverride) {
-      this.resolvedProviderOverride = null;
-    }
+    if (providerId && this.configStore.current.provider.id !== providerId) return;
+    this.resolvedProviderOverride = null;
   }
 
   private buildProviderSwitchPatch(provider: ProviderId): { provider: Partial<FlightdeckConfig['provider']> } {
@@ -361,7 +359,7 @@ export class ProviderManager {
     if (patch.provider) {
       config.provider = { ...config.provider, ...patch.provider };
       if (patch.provider.id) {
-        this.clearResolvedProviderOverrideIfAligned(patch.provider.id as ProviderId);
+        this.clearResolvedProviderOverride(patch.provider.id as ProviderId);
       }
     }
     if (patch.providerSettings) {

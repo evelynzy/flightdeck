@@ -749,6 +749,38 @@ describe('ProviderManager', () => {
       expect(configStore.current.provider.id).toBe('copilot');
       expect(configStore.current.providerSettings.copilot.enabled).toBe(true);
     });
+
+    it('clears a stale fallback override after a later successful provider change', async () => {
+      const configStore = createMockConfigStore({
+        providerId: 'copilot',
+        providerSettings: {
+          copilot: { enabled: true, models: [] },
+          claude: { enabled: true, models: [] },
+          gemini: { enabled: true, models: [] },
+        },
+        providerRanking: ['copilot', 'claude', 'gemini'],
+      });
+      configStore.writePartial = vi.fn()
+        .mockRejectedValueOnce(new Error('write failed'))
+        .mockResolvedValueOnce(undefined);
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === `${WHICH_COMMAND} copilot`) return '/usr/local/bin/copilot';
+        if (cmd === `${WHICH_COMMAND} claude-agent-acp`) return '/usr/local/bin/claude-agent-acp';
+        if (cmd === `${WHICH_COMMAND} gemini`) return '/usr/local/bin/gemini';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+
+      await expect(mgr.setProviderEnabledPersisted('copilot', false)).rejects.toThrow('write failed');
+      expect(mgr.getActiveProviderId()).toBe('claude');
+      expect(configStore.current.provider.id).toBe('copilot');
+
+      await expect(mgr.setActiveProviderIdPersisted('gemini')).resolves.toBe('gemini');
+
+      expect(mgr.getActiveProviderId()).toBe('gemini');
+      expect(configStore.current.provider.id).toBe('gemini');
+    });
   });
 
   // ── getActiveProviderId fallback ────────────────────────
