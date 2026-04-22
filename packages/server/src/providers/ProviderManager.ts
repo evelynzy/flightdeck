@@ -451,7 +451,7 @@ export class ProviderManager extends EventEmitter {
         provider?: Partial<FlightdeckConfig['provider']>;
       };
       if (fallbackProvider) {
-        patch.provider = { id: fallbackProvider };
+        patch.provider = this.buildProviderSwitchPatch(fallbackProvider).provider;
       }
       this.configStore.writePartial(patch)
         .then(() => this.applyConfigStorePatchAfterWrite(patch))

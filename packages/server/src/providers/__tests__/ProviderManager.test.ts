@@ -372,6 +372,57 @@ describe('ProviderManager', () => {
       expect(mgr.isProviderEnabled('claude')).toBe(true);
     });
 
+    it('clears provider overrides when config-store fallback disables the active provider', async () => {
+      const emitter = new EventEmitter();
+      const configStore = {
+        current: {
+          provider: {
+            id: 'copilot',
+            binaryOverride: '/custom/copilot',
+            argsOverride: ['--copilot-only'],
+            envOverride: { COPILOT_ONLY: '1' },
+          },
+          providerSettings: {
+            copilot: { enabled: true, models: [] },
+            claude: { enabled: true, models: [] },
+          },
+          providerRanking: ['copilot', 'claude'],
+        },
+        writePartial: vi.fn().mockResolvedValue(undefined),
+        on: emitter.on.bind(emitter),
+        emit: emitter.emit.bind(emitter),
+      };
+
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === `${WHICH_COMMAND} copilot`) return '/usr/local/bin/copilot';
+        if (cmd === `${WHICH_COMMAND} claude-agent-acp`) return '/usr/local/bin/claude-agent-acp';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+
+      mgr.setProviderEnabled('copilot', false);
+      await Promise.resolve();
+
+      expect(configStore.writePartial).toHaveBeenCalledWith({
+        providerSettings: { copilot: { enabled: false, models: [] } },
+        provider: {
+          id: 'claude',
+          binaryOverride: undefined,
+          argsOverride: undefined,
+          envOverride: undefined,
+          cloudProvider: undefined,
+        },
+      });
+      expect(configStore.current.provider).toEqual({
+        id: 'claude',
+        binaryOverride: undefined,
+        argsOverride: undefined,
+        envOverride: undefined,
+        cloudProvider: undefined,
+      });
+    });
+
     it('falls back to another usable provider when disabling the active provider', () => {
       const mgr = createManager();
       mgr.setActiveProviderId('copilot');
