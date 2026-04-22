@@ -576,7 +576,10 @@ describe('ProviderManager', () => {
       const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
       // copilot is installed but explicitly disabled — should fall back to claude
       const result = mgr.resolveAndPersistProvider();
-      expect(result).toBe('claude');
+      expect(result).toBe('copilot');
+      expect(configStore.writePartial).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: expect.objectContaining({ id: 'claude' }) }),
+      );
     });
 
     it('falls back through ranking when configured provider not installed', () => {
@@ -591,11 +594,42 @@ describe('ProviderManager', () => {
 
       const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
       const result = mgr.resolveAndPersistProvider();
-      expect(result).toBe('claude');
+      expect(result).toBe('copilot');
       // Should persist the fallback
       expect(configStore.writePartial).toHaveBeenCalledWith(
         expect.objectContaining({ provider: expect.objectContaining({ id: 'claude' }) }),
       );
+    });
+
+    it('keeps resolveAndPersistProvider aligned with current active provider until fallback persistence completes', async () => {
+      let resolveWrite: (() => void) | undefined;
+      const configStore = createMockConfigStore({
+        providerId: 'copilot',
+        providerSettings: {
+          copilot: { enabled: true, models: [] },
+          claude: { enabled: true, models: [] },
+        },
+        providerRanking: ['copilot', 'claude', 'gemini'],
+      });
+      configStore.writePartial = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+        resolveWrite = resolve;
+      }));
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === `${WHICH_COMMAND} claude-agent-acp`) return '/usr/local/bin/claude-agent-acp';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+
+      expect(mgr.getActiveProviderId()).toBe('copilot');
+      expect(mgr.resolveAndPersistProvider()).toBe('copilot');
+      expect(mgr.getActiveProviderId()).toBe('copilot');
+
+      resolveWrite?.();
+      await Promise.resolve();
+
+      expect(mgr.getActiveProviderId()).toBe('claude');
+      expect(mgr.resolveAndPersistProvider()).toBe('claude');
     });
 
     it('updates config-store reads after a successful persisted provider write', async () => {

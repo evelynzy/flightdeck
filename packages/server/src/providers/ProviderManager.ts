@@ -467,7 +467,7 @@ export class ProviderManager {
     if (fallbackProvider) {
       logger.info({ module: 'provider', msg: 'Falling back to available provider', from: configured, to: fallbackProvider });
       this.persistActiveProvider(fallbackProvider);
-      return fallbackProvider;
+      return this.configStore ? this.getActiveProviderId() : fallbackProvider;
     }
 
     // No provider found — keep the configured one and let downstream handle the error
