@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProviderManager } from '../ProviderManager.js';
 import { WHICH_COMMAND } from '../../utils/platform.js';
@@ -526,6 +527,7 @@ describe('ProviderManager', () => {
       providerSettings?: Record<string, { enabled: boolean; models: string[] }>;
       providerRanking?: string[];
     }) {
+      const emitter = new EventEmitter();
       const config = {
         provider: { id: overrides?.providerId ?? 'copilot' },
         providerSettings: overrides?.providerSettings ?? {},
@@ -534,6 +536,8 @@ describe('ProviderManager', () => {
       return {
         current: config,
         writePartial: vi.fn().mockResolvedValue(undefined),
+        on: emitter.on.bind(emitter),
+        emit: emitter.emit.bind(emitter),
       };
     }
 
@@ -726,7 +730,7 @@ describe('ProviderManager', () => {
       expect(configStore.current.providerSettings.copilot.enabled).toBe(false);
     });
 
-    it('keeps config-store reads aligned with persisted state when provider write fails', async () => {
+    it('rolls back runtime override state when provider write fails', async () => {
       const configStore = createMockConfigStore({
         providerId: 'copilot',
         providerSettings: {
@@ -745,7 +749,8 @@ describe('ProviderManager', () => {
       const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
 
       await expect(mgr.setProviderEnabledPersisted('copilot', false)).rejects.toThrow('write failed');
-      expect(mgr.getActiveProviderId()).toBe('claude');
+      expect(mgr.getActiveProviderId()).toBe('copilot');
+      expect(mgr.resolveAndPersistProvider()).toBe('copilot');
       expect(configStore.current.provider.id).toBe('copilot');
       expect(configStore.current.providerSettings.copilot.enabled).toBe(true);
     });
@@ -773,13 +778,52 @@ describe('ProviderManager', () => {
       const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
 
       await expect(mgr.setProviderEnabledPersisted('copilot', false)).rejects.toThrow('write failed');
-      expect(mgr.getActiveProviderId()).toBe('claude');
+      expect(mgr.getActiveProviderId()).toBe('copilot');
       expect(configStore.current.provider.id).toBe('copilot');
+      expect(mgr.resolveAndPersistProvider()).toBe('copilot');
 
       await expect(mgr.setActiveProviderIdPersisted('gemini')).resolves.toBe('gemini');
 
       expect(mgr.getActiveProviderId()).toBe('gemini');
       expect(configStore.current.provider.id).toBe('gemini');
+    });
+
+    it('clears stale runtime override state on external config reloads', async () => {
+      let resolveWrite: (() => void) | undefined;
+      const configStore = createMockConfigStore({
+        providerId: 'copilot',
+        providerSettings: {
+          copilot: { enabled: true, models: [] },
+          claude: { enabled: true, models: [] },
+          gemini: { enabled: true, models: [] },
+        },
+        providerRanking: ['copilot', 'claude', 'gemini'],
+      });
+      configStore.writePartial = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+        resolveWrite = resolve;
+      }));
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === `${WHICH_COMMAND} claude-agent-acp`) return '/usr/local/bin/claude-agent-acp';
+        if (cmd === `${WHICH_COMMAND} gemini`) return '/usr/local/bin/gemini';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+
+      expect(mgr.resolveAndPersistProvider()).toBe('claude');
+      expect(mgr.getActiveProviderId()).toBe('claude');
+
+      configStore.current.provider.id = 'gemini';
+      configStore.emit('config:provider:changed', { config: configStore.current.provider, diffs: [] });
+      configStore.emit('config:reloaded', { config: configStore.current, diffs: [], previous: configStore.current });
+
+      expect(mgr.getActiveProviderId()).toBe('gemini');
+      expect(mgr.resolveAndPersistProvider()).toBe('gemini');
+
+      resolveWrite?.();
+      await Promise.resolve();
+
+      expect(mgr.getActiveProviderId()).toBe('gemini');
     });
   });
 
