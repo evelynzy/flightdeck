@@ -412,7 +412,21 @@ describe('ProvidersSection', () => {
   });
 
   it('hides "Use this provider" for disabled installed providers', async () => {
-    mockProviderApis();
+    const configs = MOCK_CONFIGS.map((provider) => (
+      provider.id === 'cursor' ? { ...provider, enabled: false } : provider
+    ));
+    const statuses = MOCK_STATUSES.map((provider) => (
+      provider.id === 'cursor'
+        ? { ...provider, installed: true, authenticated: true, binaryPath: '/usr/bin/cursor', version: '1.2.3' }
+        : provider
+    ));
+
+    mockApiFetch
+      .mockResolvedValueOnce(configs)
+      .mockResolvedValueOnce(MOCK_RANKING)
+      .mockResolvedValueOnce(MOCK_ACTIVE_PROVIDER)
+      .mockResolvedValueOnce(statuses);
+
     render(<ProvidersSection />);
 
     await waitFor(() => {
@@ -421,6 +435,10 @@ describe('ProvidersSection', () => {
 
     const cursorCard = screen.getByTestId('provider-card-cursor');
     fireEvent.click(cursorCard.querySelector('[role="button"]')!);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('test-connection-cursor')).toBeInTheDocument();
+    });
 
     expect(screen.queryByTestId('set-active-cursor')).not.toBeInTheDocument();
   });
