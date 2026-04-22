@@ -108,8 +108,7 @@ export function settingsRoutes(ctx: AppContext): Router {
     let activeProvider = pm.getActiveProviderId();
     if (enabled !== undefined) {
       try {
-        pm.setProviderEnabled(provider, enabled);
-        activeProvider = pm.getActiveProviderId();
+        activeProvider = await pm.setProviderEnabledPersisted(provider, enabled);
       } catch (err: any) {
         return res.status(409).json({ error: err.message || 'Failed to update provider enabled state' });
       }
@@ -137,14 +136,14 @@ export function settingsRoutes(ctx: AppContext): Router {
   /**
    * PUT /settings/provider — set the active provider.
    */
-  router.put('/settings/provider', (req, res) => {
+  router.put('/settings/provider', async (req, res) => {
     const { id } = req.body as { id?: string };
     if (!id || !isValidProviderId(id)) {
       return res.status(400).json({ error: `Invalid provider: ${id}` });
     }
     try {
-      pm.setActiveProviderId(id as ProviderId);
-      res.json({ activeProvider: pm.getActiveProviderId() });
+      const activeProvider = await pm.setActiveProviderIdPersisted(id as ProviderId);
+      res.json({ activeProvider });
     } catch (err: any) {
       res.status(409).json({ error: err.message || 'Failed to set active provider' });
     }

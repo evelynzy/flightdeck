@@ -27,9 +27,11 @@ const mockInvalidateCache = vi.fn();
 const mockGetModelPrefs = vi.fn();
 const mockSetModelPrefs = vi.fn();
 const mockSetEnabled = vi.fn();
+const mockSetEnabledPersisted = vi.fn();
 const mockResolveAndPersistProvider = vi.fn();
 const mockGetActiveProviderId = vi.fn();
 const mockSetActiveProviderId = vi.fn();
+const mockSetActiveProviderIdPersisted = vi.fn();
 const mockGetProviderRanking = vi.fn();
 const mockSetProviderRanking = vi.fn();
 
@@ -44,10 +46,12 @@ vi.mock('../providers/ProviderManager.js', () => ({
     getModelPreferences(id: string) { return mockGetModelPrefs(id); }
     setModelPreferences(id: string, prefs: any) { return mockSetModelPrefs(id, prefs); }
     setProviderEnabled(id: string, enabled: boolean) { return mockSetEnabled(id, enabled); }
+    setProviderEnabledPersisted(id: string, enabled: boolean) { return mockSetEnabledPersisted(id, enabled); }
     isProviderEnabled() { return true; }
     resolveAndPersistProvider() { return mockResolveAndPersistProvider(); }
     getActiveProviderId() { return mockGetActiveProviderId(); }
     setActiveProviderId(id: string) { return mockSetActiveProviderId(id); }
+    setActiveProviderIdPersisted(id: string) { return mockSetActiveProviderIdPersisted(id); }
     getProviderRanking() { return mockGetProviderRanking(); }
     setProviderRanking(ranking: string[]) { return mockSetProviderRanking(ranking); }
   },
@@ -136,9 +140,11 @@ describe('settings routes', () => {
     mockResolveAndPersistProvider.mockReturnValue('copilot');
     mockGetActiveProviderId.mockReturnValue('copilot');
     mockSetActiveProviderId.mockImplementation(() => {});
+    mockSetActiveProviderIdPersisted.mockResolvedValue('copilot');
     mockGetProviderRanking.mockReturnValue(['copilot', 'claude', 'gemini', 'opencode', 'cursor', 'codex']);
     mockSetProviderRanking.mockImplementation(() => {});
     mockSetEnabled.mockImplementation(() => {});
+    mockSetEnabledPersisted.mockResolvedValue('copilot');
     baseUrl = await srv.start();
   });
 
@@ -289,14 +295,14 @@ describe('settings routes', () => {
   describe('PUT /settings/providers/:provider', () => {
     it('updates enabled state', async () => {
       mockGetStatusAsync.mockResolvedValue(MOCK_STATUSES[0]);
-      mockResolveAndPersistProvider.mockReturnValue('claude');
+      mockSetEnabledPersisted.mockResolvedValue('claude');
       const res = await fetch(`${baseUrl}/settings/providers/copilot`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: false }),
       });
       expect(res.status).toBe(200);
-      expect(mockSetEnabled).toHaveBeenCalledWith('copilot', false);
+      expect(mockSetEnabledPersisted).toHaveBeenCalledWith('copilot', false);
     });
 
     it('updates model preferences', async () => {
@@ -314,7 +320,7 @@ describe('settings routes', () => {
     it('returns updated status in response', async () => {
       mockGetStatusAsync.mockResolvedValue({ ...MOCK_STATUSES[0], enabled: false });
       mockGetModelPrefs.mockReturnValue({ defaultModel: 'gpt-5' });
-      mockGetActiveProviderId.mockReturnValue('claude');
+      mockSetEnabledPersisted.mockResolvedValue('claude');
       const res = await fetch(`${baseUrl}/settings/providers/copilot`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -327,10 +333,7 @@ describe('settings routes', () => {
     });
 
     it('returns the immediately updated active provider after disabling the current one', async () => {
-      mockSetEnabled.mockImplementation(() => {
-        mockGetActiveProviderId.mockReturnValue('claude');
-      });
-      mockResolveAndPersistProvider.mockReturnValue('copilot');
+      mockSetEnabledPersisted.mockResolvedValue('claude');
       mockGetStatusAsync.mockResolvedValue({ ...MOCK_STATUSES[0], enabled: false });
 
       const res = await fetch(`${baseUrl}/settings/providers/copilot`, {
@@ -354,7 +357,7 @@ describe('settings routes', () => {
     });
 
     it('returns 409 when disabling the active provider would leave no fallback', async () => {
-      mockSetEnabled.mockImplementation(() => { throw new Error('Cannot disable active provider'); });
+      mockSetEnabledPersisted.mockRejectedValue(new Error('Cannot disable active provider'));
       const res = await fetch(`${baseUrl}/settings/providers/copilot`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -380,7 +383,7 @@ describe('settings routes', () => {
 
   describe('PUT /settings/provider', () => {
     it('sets the active provider when it is usable', async () => {
-      mockGetActiveProviderId.mockReturnValue('claude');
+      mockSetActiveProviderIdPersisted.mockResolvedValue('claude');
       const res = await fetch(`${baseUrl}/settings/provider`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -389,13 +392,11 @@ describe('settings routes', () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ activeProvider: 'claude' });
-      expect(mockSetActiveProviderId).toHaveBeenCalledWith('claude');
+      expect(mockSetActiveProviderIdPersisted).toHaveBeenCalledWith('claude');
     });
 
     it('returns 409 when the provider is unusable', async () => {
-      mockSetActiveProviderId.mockImplementation(() => {
-        throw new Error("Provider 'gemini' is not installed");
-      });
+      mockSetActiveProviderIdPersisted.mockRejectedValue(new Error("Provider 'gemini' is not installed"));
       const res = await fetch(`${baseUrl}/settings/provider`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -404,6 +405,20 @@ describe('settings routes', () => {
       expect(res.status).toBe(409);
       const body = await res.json();
       expect(body.error).toContain("Provider 'gemini' is not installed");
+    });
+
+    it('does not report a new active provider when persistence fails', async () => {
+      mockSetActiveProviderIdPersisted.mockRejectedValue(new Error('write failed'));
+      mockGetActiveProviderId.mockReturnValue('copilot');
+      const res = await fetch(`${baseUrl}/settings/provider`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: 'claude' }),
+      });
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error).toContain('write failed');
+      expect(mockGetActiveProviderId).not.toHaveBeenCalled();
     });
   });
 

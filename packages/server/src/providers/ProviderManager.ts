@@ -328,6 +328,28 @@ export class ProviderManager {
     return this.configStore ? this.configStore.current as FlightdeckConfig : null;
   }
 
+  private applyConfigStorePatchAfterWrite(patch: {
+    provider?: Partial<FlightdeckConfig['provider']>;
+    providerSettings?: FlightdeckConfig['providerSettings'];
+    providerRanking?: FlightdeckConfig['providerRanking'];
+  }): void {
+    const config = this.getMutableConfigStoreCurrent();
+    if (!config) return;
+
+    if (patch.provider) {
+      config.provider = { ...config.provider, ...patch.provider };
+    }
+    if (patch.providerSettings) {
+      config.providerSettings = {
+        ...config.providerSettings,
+        ...patch.providerSettings,
+      };
+    }
+    if (patch.providerRanking) {
+      config.providerRanking = patch.providerRanking;
+    }
+  }
+
   /** Extract version-like pattern from CLI output. */
   private parseVersion(raw: string): string {
     const match = raw.match(/v?(\d+\.\d+(?:\.\d+)?(?:[-.]\w+)*)/);
@@ -356,25 +378,20 @@ export class ProviderManager {
     }
 
     if (this.configStore) {
-      const config = this.getMutableConfigStoreCurrent();
       const current = this.configStore.current.providerSettings[provider] ?? { enabled: true, models: [] };
       const nextProviderSettings = { ...current, enabled };
-      if (config) {
-        config.providerSettings = {
-          ...config.providerSettings,
-          [provider]: nextProviderSettings,
-        };
-        if (fallbackProvider) {
-          config.provider = { ...config.provider, id: fallbackProvider };
-        }
-      }
-      const patch: Record<string, unknown> = {
+      const patch = {
         providerSettings: { [provider]: nextProviderSettings },
+      } as {
+        providerSettings: FlightdeckConfig['providerSettings'];
+        provider?: Partial<FlightdeckConfig['provider']>;
       };
       if (fallbackProvider) {
         patch.provider = { id: fallbackProvider };
       }
-      this.configStore.writePartial(patch).catch(err => logger.warn({ msg: 'Failed to persist provider enabled state', provider, error: err }));
+      this.configStore.writePartial(patch)
+        .then(() => this.applyConfigStorePatchAfterWrite(patch))
+        .catch(err => logger.warn({ msg: 'Failed to persist provider enabled state', provider, error: err }));
       return;
     }
     if (!this.db) return;
@@ -399,18 +416,14 @@ export class ProviderManager {
 
   setModelPreferences(provider: ProviderId, prefs: ModelPreferences): void {
     if (this.configStore) {
-      const config = this.getMutableConfigStoreCurrent();
       const current = this.configStore.current.providerSettings[provider] ?? { enabled: true, models: [] };
       const nextModels = prefs.preferredModels ?? [];
-      if (config) {
-        config.providerSettings = {
-          ...config.providerSettings,
-          [provider]: { ...current, models: nextModels },
-        };
-      }
-      this.configStore.writePartial({
+      const patch = {
         providerSettings: { [provider]: { ...current, models: nextModels } },
-      }).catch(err => logger.warn({ msg: 'Failed to persist model preferences', provider, error: err }));
+      } satisfies { providerSettings: FlightdeckConfig['providerSettings'] };
+      this.configStore.writePartial(patch)
+        .then(() => this.applyConfigStorePatchAfterWrite(patch))
+        .catch(err => logger.warn({ msg: 'Failed to persist model preferences', provider, error: err }));
       return;
     }
     if (!this.db) return;
@@ -491,13 +504,12 @@ export class ProviderManager {
 
   private persistActiveProvider(provider: ProviderId): void {
     if (this.configStore) {
-      const config = this.getMutableConfigStoreCurrent();
-      if (config) {
-        config.provider = { ...config.provider, id: provider };
-      }
+      const patch = { provider: { id: provider } } satisfies { provider: Partial<FlightdeckConfig['provider']> };
       // Only update the provider id — don't spread the current provider config,
       // which may contain overrides (binary, args, env, cloud) for a different provider.
-      this.configStore.writePartial({ provider: { id: provider } }).catch(err => logger.warn({ msg: 'Failed to persist active provider', provider, error: err }));
+      this.configStore.writePartial(patch)
+        .then(() => this.applyConfigStorePatchAfterWrite(patch))
+        .catch(err => logger.warn({ msg: 'Failed to persist active provider', provider, error: err }));
       return;
     }
     if (!this.db) return;
@@ -515,6 +527,55 @@ export class ProviderManager {
     }
 
     this.persistActiveProvider(provider);
+  }
+
+  async setProviderEnabledPersisted(provider: ProviderId, enabled: boolean): Promise<ProviderId> {
+    const activeProvider = this.getActiveProviderId();
+    let fallbackProvider: ProviderId | null = null;
+    if (!enabled && activeProvider === provider) {
+      fallbackProvider = this.findFirstUsableProvider(provider);
+      if (!fallbackProvider) {
+        throw new Error(`Cannot disable active provider '${provider}' without another installed and enabled provider`);
+      }
+    }
+
+    if (this.configStore) {
+      const current = this.configStore.current.providerSettings[provider] ?? { enabled: true, models: [] };
+      const patch = {
+        providerSettings: { [provider]: { ...current, enabled } },
+        ...(fallbackProvider ? { provider: { id: fallbackProvider } } : {}),
+      } satisfies {
+        providerSettings: FlightdeckConfig['providerSettings'];
+        provider?: Partial<FlightdeckConfig['provider']>;
+      };
+      await this.configStore.writePartial(patch);
+      this.applyConfigStorePatchAfterWrite(patch);
+      return fallbackProvider ?? activeProvider;
+    }
+
+    this.setProviderEnabled(provider, enabled);
+    return this.getActiveProviderId();
+  }
+
+  async setActiveProviderIdPersisted(provider: ProviderId): Promise<ProviderId> {
+    if (!this.isProviderEnabled(provider)) {
+      throw new Error(`Provider '${provider}' is disabled`);
+    }
+
+    const { installed } = this.detectInstalled(provider);
+    if (!installed) {
+      throw new Error(`Provider '${provider}' is not installed`);
+    }
+
+    if (this.configStore) {
+      const patch = { provider: { id: provider } } satisfies { provider: Partial<FlightdeckConfig['provider']> };
+      await this.configStore.writePartial(patch);
+      this.applyConfigStorePatchAfterWrite(patch);
+      return provider;
+    }
+
+    this.persistActiveProvider(provider);
+    return provider;
   }
 
   // ── Provider Ranking ───────────────────────────────────────
@@ -541,13 +602,10 @@ export class ProviderManager {
 
   setProviderRanking(ranking: ProviderId[]): void {
     if (this.configStore) {
-      const config = this.getMutableConfigStoreCurrent();
-      if (config) {
-        config.providerRanking = ranking;
-      }
-      this.configStore.writePartial({ providerRanking: ranking }).catch(err =>
-        logger.warn({ msg: 'Failed to persist provider ranking', error: err }),
-      );
+      const patch = { providerRanking: ranking } satisfies { providerRanking: FlightdeckConfig['providerRanking'] };
+      this.configStore.writePartial(patch)
+        .then(() => this.applyConfigStorePatchAfterWrite(patch))
+        .catch(err => logger.warn({ msg: 'Failed to persist provider ranking', error: err }));
       return;
     }
     if (!this.db) return;

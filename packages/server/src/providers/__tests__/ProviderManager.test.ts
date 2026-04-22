@@ -598,7 +598,7 @@ describe('ProviderManager', () => {
       );
     });
 
-    it('updates config-store reads immediately when disabling the active provider', () => {
+    it('updates config-store reads after a successful persisted provider write', async () => {
       const configStore = createMockConfigStore({
         providerId: 'copilot',
         providerSettings: {
@@ -614,7 +614,7 @@ describe('ProviderManager', () => {
       });
 
       const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
-      mgr.setProviderEnabled('copilot', false);
+      await expect(mgr.setProviderEnabledPersisted('copilot', false)).resolves.toBe('claude');
 
       expect(mgr.getActiveProviderId()).toBe('claude');
       expect(configStore.current.provider.id).toBe('claude');
@@ -623,6 +623,63 @@ describe('ProviderManager', () => {
         providerSettings: { copilot: { enabled: false, models: [] } },
         provider: { id: 'claude' },
       });
+    });
+
+    it('does not mutate config-store reads before a provider write succeeds', async () => {
+      let resolveWrite: (() => void) | undefined;
+      const configStore = createMockConfigStore({
+        providerId: 'copilot',
+        providerSettings: {
+          copilot: { enabled: true, models: [] },
+          claude: { enabled: true, models: [] },
+        },
+        providerRanking: ['copilot', 'claude', 'gemini'],
+      });
+      configStore.writePartial = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+        resolveWrite = resolve;
+      }));
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === `${WHICH_COMMAND} copilot`) return '/usr/local/bin/copilot';
+        if (cmd === `${WHICH_COMMAND} claude-agent-acp`) return '/usr/local/bin/claude-agent-acp';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+      const writePromise = mgr.setProviderEnabledPersisted('copilot', false);
+
+      expect(mgr.getActiveProviderId()).toBe('copilot');
+      expect(configStore.current.provider.id).toBe('copilot');
+      expect(configStore.current.providerSettings.copilot.enabled).toBe(true);
+
+      resolveWrite?.();
+      await expect(writePromise).resolves.toBe('claude');
+      expect(mgr.getActiveProviderId()).toBe('claude');
+      expect(configStore.current.provider.id).toBe('claude');
+      expect(configStore.current.providerSettings.copilot.enabled).toBe(false);
+    });
+
+    it('keeps config-store reads aligned with persisted state when provider write fails', async () => {
+      const configStore = createMockConfigStore({
+        providerId: 'copilot',
+        providerSettings: {
+          copilot: { enabled: true, models: [] },
+          claude: { enabled: true, models: [] },
+        },
+        providerRanking: ['copilot', 'claude', 'gemini'],
+      });
+      configStore.writePartial = vi.fn().mockRejectedValue(new Error('write failed'));
+      exec.mockImplementation((cmd: string) => {
+        if (cmd === `${WHICH_COMMAND} copilot`) return '/usr/local/bin/copilot';
+        if (cmd === `${WHICH_COMMAND} claude-agent-acp`) return '/usr/local/bin/claude-agent-acp';
+        throw new Error('not found');
+      });
+
+      const mgr = new ProviderManager({ configStore: configStore as any, execCommand: exec as any });
+
+      await expect(mgr.setProviderEnabledPersisted('copilot', false)).rejects.toThrow('write failed');
+      expect(mgr.getActiveProviderId()).toBe('copilot');
+      expect(configStore.current.provider.id).toBe('copilot');
+      expect(configStore.current.providerSettings.copilot.enabled).toBe(true);
     });
   });
 
