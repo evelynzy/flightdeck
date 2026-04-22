@@ -14,6 +14,7 @@
 
 import { execSync } from 'node:child_process';
 import { execFile as execFileCb } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { promisify } from 'node:util';
 import type { Database } from '../db/database.js';
 import type { ConfigStore } from '../config/ConfigStore.js';
@@ -89,7 +90,7 @@ const ASYNC_EXEC_TIMEOUT_MS = 5_000;
 
 // ── ProviderManager ──────────────────────────────────────────────
 
-export class ProviderManager {
+export class ProviderManager extends EventEmitter {
   private readonly db: Database | undefined;
   private readonly configStore: ConfigStore | undefined;
   private readonly exec: (cmd: string) => string;
@@ -114,6 +115,7 @@ export class ProviderManager {
     execCommandAsync?: (cmd: string, args: string[]) => Promise<string>;
     cacheTtlMs?: number;
   } = {}) {
+    super();
     this.db = opts.db;
     this.configStore = opts.configStore;
     this.exec = opts.execCommand ?? ((cmd) => execSync(cmd, { encoding: 'utf8', timeout: 5_000 }).trim());
@@ -343,6 +345,7 @@ export class ProviderManager {
     this.providerResolutionVersion += 1;
     this.resolvedProviderOverride = null;
     this.failedProviderPersistenceConfiguredId = null;
+    this.emit('provider:runtime-changed');
   }
 
   private beginProviderResolutionTransition(): number {
@@ -535,6 +538,7 @@ export class ProviderManager {
       logger.info({ module: 'provider', msg: 'Falling back to available provider', from: configured, to: fallbackProvider });
       const transitionVersion = this.beginProviderResolutionTransition();
       this.resolvedProviderOverride = fallbackProvider;
+      this.emit('provider:runtime-changed');
       this.persistActiveProvider(fallbackProvider, configured, transitionVersion);
       return fallbackProvider;
     }
@@ -629,6 +633,7 @@ export class ProviderManager {
       const transitionVersion = fallbackProvider ? this.beginProviderResolutionTransition() : 0;
       if (fallbackProvider) {
         this.resolvedProviderOverride = fallbackProvider;
+        this.emit('provider:runtime-changed');
       }
       try {
         await this.configStore.writePartial(patch);
